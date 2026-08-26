@@ -1,0 +1,54 @@
+# ─── Secretos: NUNCA suben al repo ───────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+secrets.json
+credentials.json
+
+# ─── Referencias de apps ajenas: se miran, no se publican ────────────────────
+ideas/imagenes/referencias/
+
+# ─── Node / Next.js ──────────────────────────────────────────────────────────
+node_modules/
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+.vercel/
+
+# ─── Python (backend del bot, más adelante) ──────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# ─── Modelos y datos de entrenamiento (pesan demasiado para git) ─────────────
+*.gguf
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.onnx
+/modelos/
+/checkpoints/
+/datasets/
+
+# ─── Editor y sistema operativo ──────────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# ─── Logs, cachés y cobertura ────────────────────────────────────────────────
+*.log
+npm-debug.log*
+coverage/
+.cache/
