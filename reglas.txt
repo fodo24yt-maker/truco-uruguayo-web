@@ -1,0 +1,961 @@
+================================================================================
+                    REGLAS DEL TRUCO URUGUAYO
+        Documento de referencia del proyecto truco-uruguayo-web
+================================================================================
+
+Versión: 1.0  ·  Última actualización: 26/08/2026
+
+QUÉ ES ESTE ARCHIVO
+-------------------
+Es la fuente de verdad de las reglas para todo el proyecto: de acá salen los
+textos de la sección "Aprender", la lógica del motor del juego y el
+comportamiento de los bots. Si una regla no está acá, no está implementada.
+
+Está ordenado en el mismo orden en que pasan las cosas en una mano real, de
+manera que se pueda leer de arriba a abajo sin saber nada de truco.
+
+Fuentes consultadas y reconciliadas:
+  - Guía de reglas de la app Truqui (truco uruguayo)
+  - Guía "Cómo jugar al truco uruguayo" (fuente web)
+  - Ludoteka: https://www.ludoteka.com/juegos/truco-uruguayo/reglas
+
+Las tres no coinciden en todo. Cuando hay discrepancia, el APÉNDICE A dice qué
+versión toma este proyecto y por qué. Nada quedó "a criterio del programador".
+
+
+================================================================================
+ 0. CÓMO LEER ESTE DOCUMENTO
+================================================================================
+
+Glosario mínimo para poder arrancar (el glosario completo está en el APÉNDICE B):
+
+  MANO (la partida chica) .... El conjunto de 3 bazas que se juega con las 3
+                               cartas repartidas. También se le dice "ronda".
+  MANO (el jugador) .......... El jugador que tira primero. Ojo con la doble
+                               acepción: acá siempre se aclara cuál es cuál.
+  BAZA .......................  Cada una de las 3 vueltas dentro de una mano.
+                               Cada jugador tira UNA carta y la más alta gana.
+  MUESTRA ....................  La carta que se da vuelta al repartir y que
+                               define qué palo manda esa mano.
+  PIEZA ......................  Las cartas del palo de la muestra que se vuelven
+                               las más fuertes del juego (2, 4, 5, 11 y 10).
+  CANTAR .....................  Apostar puntos de viva voz (flor, envido, truco).
+  QUIERO / NO QUIERO .........  Aceptar o rechazar una apuesta.
+  PARDA ......................  Baza empatada.
+  ÍNDICE .....................  El número de la carta (1 a 7). Las figuras
+                               (10, 11, 12) tienen índice 0 para contar puntos.
+
+Convención de notación usada en los ejemplos:
+
+  1E = as/ancho de espada     10 = sota      Palos: E = espada   O = oro
+  7O = siete de oro           11 = caballo          B = basto    C = copa
+  2O = dos de oro             12 = rey
+
+  Ejemplo: "muestra 5O · mano: 2O, 7E, 12C" se lee "la muestra es el cinco de
+  oro; tengo el dos de oro, el siete de espada y el rey de copa".
+
+
+================================================================================
+ 1. QUÉ NECESITÁS PARA JUGAR
+================================================================================
+
+1.1 LA BARAJA
+    Baraja española de 40 cartas. Cuatro palos: espada, basto, oro y copa.
+    De cada palo hay 10 cartas: 1, 2, 3, 4, 5, 6, 7, 10 (sota), 11 (caballo)
+    y 12 (rey). NO se usan los ochos, los nueves ni los comodines.
+
+1.2 CUÁNTOS JUGAN
+    - 2 jugadores: mano a mano (uno contra uno).
+    - 4 jugadores: 2 contra 2, en parejas.
+    - 6 jugadores: 3 contra 3, en equipos.
+
+1.3 CÓMO SE SIENTAN
+    Los compañeros se sientan cruzados, alternándose con los rivales alrededor
+    de la mesa. Nunca dos del mismo equipo uno al lado del otro.
+
+    4 jugadores (A y B son equipos):     6 jugadores:
+             A1                                A1   B3
+        B2        B1                       B1          A3
+             A2                                A2   B2
+
+1.4 LAS SEÑAS
+    A partir de 4 jugadores entran a jugar las señas: los gestos con los que le
+    avisás a tu compañero qué tenés sin que el rival se dé cuenta (sección 13).
+    Mano a mano no existen, porque no hay a quién avisarle.
+
+
+================================================================================
+ 2. EL OBJETIVO
+================================================================================
+
+2.1 GANA EL PRIMERO QUE LLEGA A 30 PUNTOS.
+
+2.2 LA PARTIDA SE DIVIDE EN DOS MITADES:
+    - MALAS: los primeros 15 puntos.
+    - BUENAS: los 15 siguientes, hasta 30.
+
+    No cambian las reglas al pasar de malas a buenas: es una forma tradicional
+    de anotar (se anotan en dos columnas o con porotos de un lado y del otro),
+    y sirve para saber de un vistazo cómo va la partida.
+
+2.3 LOS PUNTOS SE CONSIGUEN DE TRES MANERAS:
+    - Ganando el TRUCO, es decir 2 de las 3 bazas de la mano (sección 10).
+    - Ganando el ENVIDO, la apuesta al mejor tanto (sección 9).
+    - Con la FLOR, cuando te tocan tres cartas que ligan (sección 8).
+
+    Una mano donde nadie canta nada vale 1 punto para el que gane 2 bazas.
+    Todo lo demás lo suben los cantos: por eso el truco es tanto un juego de
+    cartas como de audacia.
+
+
+================================================================================
+ 3. LAS POSICIONES: MANO, PIE Y REPARTIDOR
+================================================================================
+
+3.1 EL MANO
+    Es el jugador que está a la derecha del que reparte. Es el primero en tirar
+    carta y el primero que puede cantar.
+
+3.2 EL PIE
+    Es el último jugador del equipo en tirar en la ronda. Juega con la ventaja
+    de haber visto todo lo anterior. Mano a mano, el que no es mano es pie.
+
+3.3 POR QUÉ IMPORTA SER MANO
+    Ser mano NO es un detalle de protocolo: EN CASO DE EMPATE, GANA EL MANO.
+      - Si empatan los tantos del envido, el envido se lo lleva el mano.
+      - Si empatan las flores, la flor se la lleva el mano.
+      - Si se pardan las tres bazas, la mano es del mano.
+    La misma mano de cartas se juega distinto según dónde estés sentado.
+
+3.4 LA ROTACIÓN
+    Terminada cada mano, el reparto pasa al jugador de la derecha, y con él
+    pasa también la condición de mano.
+
+
+================================================================================
+ 4. LA MUESTRA Y LAS PIEZAS
+================================================================================
+
+Esto es el corazón del truco uruguayo y lo que lo diferencia del argentino.
+Si sólo vas a leer una sección, que sea ésta.
+
+4.1 QUÉ ES LA MUESTRA
+    Después de repartir 3 cartas a cada jugador, se da vuelta UNA carta más:
+    esa es la muestra. Queda a la vista de todos durante toda la mano y NO se
+    juega. Su palo pasa a mandar esa mano.
+
+4.2 LAS PIEZAS
+    Las cartas del PALO DE LA MUESTRA que sean 2, 4, 5, 11 o 10 se convierten
+    en PIEZAS: las cartas más fuertes del juego, por encima incluso del ancho
+    de espada. Su orden de fuerza, de mayor a menor:
+
+      +-------+---------------------------+-----------------+-------------+
+      | Orden | Pieza                     | Cómo se le dice | Vale para   |
+      |       |                           |                 | el envido   |
+      +-------+---------------------------+-----------------+-------------+
+      |   1   | 2 del palo de la muestra  | la más fuerte   |     30      |
+      |   2   | 4 del palo de la muestra  |                 |     29      |
+      |   3   | 5 del palo de la muestra  |                 |     28      |
+      |   4   | 11 del palo de la muestra | el caballo      |     27      |
+      |   5   | 10 del palo de la muestra | la sota         |     27      |
+      +-------+---------------------------+-----------------+-------------+
+
+    Las cinco le ganan a cualquier carta común, incluidas las cuatro matas.
+    Además valen muchísimo para el envido y la flor (secciones 8 y 9).
+
+    Regla para acordarse del orden: 2, 4, 5, caballo, sota.
+
+4.3 CASO ESPECIAL: LA MUESTRA ES UNA PIEZA
+    ¿Y si la carta que se dio vuelta es justo un 2, un 4, un 5, un 11 o un 10?
+    Esa pieza no puede jugarse (está sobre la mesa como muestra), así que:
+
+      >> EL 12 (REY) DE ESE MISMO PALO OCUPA SU LUGAR COMO PIEZA. <<
+
+    El rey toma la posición exacta de la pieza que reemplaza: su lugar en la
+    jerarquía y su valor para el envido y la flor.
+
+    Ejemplo: muestra 5O (cinco de oro).
+      - Las piezas de esa mano son: 2O, 4O, 12O (haciendo de 5, vale 28), 11O y 10O.
+      - El 12O deja de ser un rey común y pasa a valer más que el ancho de espada.
+      - Los otros tres reyes (12E, 12B, 12C) siguen siendo reyes comunes.
+
+    Si la muestra es un 1, 3, 6, 7 o 12, no hay reemplazo: las cinco piezas
+    normales están todas en juego.
+
+4.4 EJEMPLOS COMPLETOS
+    a) Muestra 3B (tres de basto).
+       Piezas: 2B, 4B, 5B, 11B, 10B. Sin reemplazos.
+       El 4B, que fuera de esta mano es la carta más floja de la baraja, acá le
+       gana al ancho de espada.
+
+    b) Muestra 11O (caballo de oro).
+       Piezas: 2O, 4O, 5O, 12O (haciendo de caballo, vale 27) y 10O.
+
+    c) Muestra 12C (rey de copa).
+       Piezas: 2C, 4C, 5C, 11C, 10C. Sin reemplazos (el rey no es pieza).
+
+
+================================================================================
+ 5. JERARQUÍA COMPLETA DE LAS CARTAS
+================================================================================
+
+En el truco no gana la carta con el número más alto: manda una jerarquía propia.
+
+5.1 CON MUESTRA (el caso real de toda mano de truco uruguayo)
+    Tabla completa, de la más fuerte a la más floja. En este ejemplo la muestra
+    es de ORO; cambiá el palo y se reordena igual.
+
+      +----+--------------------------+------------------------------------+
+      | #  | Carta                    | Nombre / observaciones             |
+      +----+--------------------------+------------------------------------+
+      |  1 | 2 de oro                 | PIEZA - la más fuerte del juego    |
+      |  2 | 4 de oro                 | PIEZA                              |
+      |  3 | 5 de oro                 | PIEZA                              |
+      |  4 | 11 de oro                | PIEZA - el caballo                 |
+      |  5 | 10 de oro                | PIEZA - la sota                    |
+      +----+--------------------------+------------------------------------+
+      |  6 | 1 de espada              | MATA - el ancho de espada          |
+      |  7 | 1 de basto               | MATA - el ancho de basto           |
+      |  8 | 7 de espada              | MATA                               |
+      |  9 | 7 de oro                 | MATA (aunque sea del palo de la    |
+      |    |                          | muestra: el 7 nunca es pieza)      |
+      +----+--------------------------+------------------------------------+
+      | 10 | Los 3                    | los 4 palos valen igual            |
+      | 11 | Los 2                    | menos el de la muestra (es pieza)  |
+      | 12 | 1 de oro y 1 de copa     | los anchos falsos                  |
+      | 13 | Los 12 (reyes)           |                                    |
+      | 14 | Los 11 (caballos)        | menos el de la muestra (es pieza)  |
+      | 15 | Los 10 (sotas)           | menos la de la muestra (es pieza)  |
+      | 16 | 7 de copa y 7 de basto   | los sietes falsos                  |
+      | 17 | Los 6                    |                                    |
+      | 18 | Los 5                    | menos el de la muestra (es pieza)  |
+      | 19 | Los 4                    | menos el de la muestra (es pieza)  |
+      +----+--------------------------+------------------------------------+
+
+    Dentro de un mismo escalón todas las cartas valen exactamente lo mismo:
+    si se cruzan, es PARDA (sección 7). Por eso los treses y los doses pardan
+    tan seguido.
+
+5.2 SIN MUESTRA (la base que hay que saber de memoria)
+    Si sacás las piezas, lo que queda es la jerarquía clásica, que es la misma
+    del truco argentino y la que conviene tener automatizada:
+
+      1 de espada > 1 de basto > 7 de espada > 7 de oro >
+      3 > 2 > anchos falsos (1O, 1C) > 12 > 11 > 10 >
+      sietes falsos (7C, 7B) > 6 > 5 > 4
+
+    A las cuatro primeras se les dice LAS MATAS: son las cartas bravas.
+
+5.3 EL ERROR CLÁSICO
+    Mirar la mano sin mirar la muestra. Con muestra de basto, un 4B (la carta
+    más floja de la baraja) te gana un ancho de espada. Antes de tirar la
+    primera carta: MIRÁ QUÉ PALO MANDA.
+
+
+================================================================================
+ 6. ESTRUCTURA DE UNA MANO, PASO A PASO
+================================================================================
+
+Éste es el orden exacto de las fases. El motor del juego lo respeta tal cual.
+
+  PASO 1 - REPARTO
+     El repartidor da 3 cartas a cada jugador (de a una, en sentido
+     antihorario) y da vuelta una carta más: LA MUESTRA.
+
+  PASO 2 - VENTANA DE CANTOS
+     Antes de tirar su primera carta, cada jugador -empezando por el mano y
+     siguiendo el orden de la mesa- puede cantar:
+        - FLOR, si la tiene (sección 8). Es lo primero que se resuelve.
+        - ENVIDO, sólo si nadie cantó flor (sección 9).
+        - TRUCO (sección 10).
+     Si el turno pasa por todos los jugadores sin que nadie abra el envido,
+     el envido ya no se juega en esa mano.
+
+  PASO 3 - SE RESUELVEN LOS CANTOS PENDIENTES
+     Orden de prioridad, siempre:
+        FLOR  >  ENVIDO  >  TRUCO
+     Es decir: si hay flor, mata al envido. Si hay envido cantado y truco
+     cantado, primero se resuelve el envido y recién después el truco.
+     Los puntos de flor y envido se anotan en el momento, no esperan al
+     final de la mano.
+
+  PASO 4 - SE JUEGAN LAS BAZAS
+     Se juegan hasta 3 bazas (sección 7). En cada turno, antes de tirar su
+     carta, un jugador puede cantar o subir el truco (sección 10).
+
+  PASO 5 - SE COBRA EL TRUCO
+     El equipo que gana 2 bazas se lleva los puntos del truco: 1 si nadie lo
+     cantó, o lo que valga el último canto aceptado.
+
+  PASO 6 - SE REPARTE DE NUEVO
+     El reparto y la condición de mano pasan al jugador de la derecha.
+     Se repite hasta que un equipo llega a 30 puntos.
+
+  NOTA: la partida termina en el instante en que un equipo llega a 30, aunque
+  sea en el medio de una mano (por ejemplo cobrando una flor o un envido).
+
+
+================================================================================
+ 7. LAS BAZAS Y LAS PARDAS
+================================================================================
+
+7.1 CÓMO SE GANA UNA BAZA
+    Cada jugador tira una carta y la más alta según la jerarquía (sección 5)
+    gana la baza. En juego por equipos, cuenta la carta más alta del equipo.
+    El que gana una baza es el que abre la siguiente. Si la baza fue parda,
+    la siguiente la abre el mismo jugador que abrió la pardada.
+
+7.2 CÓMO SE GANA LA MANO
+    Gana la mano el equipo que gana 2 de las 3 bazas.
+    La tercera baza no se juega si con la segunda ya quedó todo decidido.
+
+7.3 LA PARDA (empate)
+    Si las cartas más altas de cada equipo están en el mismo escalón de la
+    jerarquía, la baza es PARDA. No es un caso raro: pasa seguido con los
+    treses y los doses, que valen igual en los cuatro palos.
+
+    REGLA GENERAL: cuando hay pardas, gana la mano el equipo que se llevó una
+    baza PRIMERO. Si las tres son pardas, gana el mano (el jugador).
+
+    Todos los casos, resueltos:
+
+      +-------------+-------------+-------------+---------------------------+
+      | 1ra baza    | 2da baza    | 3ra baza    | Gana la mano              |
+      +-------------+-------------+-------------+---------------------------+
+      | gana A      | gana A      | no se juega | A                         |
+      | gana A      | gana B      | gana A      | A                         |
+      | gana A      | gana B      | PARDA       | A (ganó la primera)       |
+      | gana A      | PARDA       | no se juega | A (ganó la primera)       |
+      | PARDA       | gana A      | no se juega | A (ganó la segunda)       |
+      | PARDA       | PARDA       | gana A      | A (ganó la tercera)       |
+      | PARDA       | PARDA       | PARDA       | el MANO                   |
+      +-------------+-------------+-------------+---------------------------+
+
+7.4 IRSE AL MAZO
+    Un jugador que ve que no tiene nada puede renunciar a la mano tirando sus
+    cartas: se va al mazo. El rival cobra los puntos del truco que estén en
+    juego en ese momento (1 si no se cantó nada, 2 si había truco querido,
+    etc.). Lo que ya se cobró por flor o envido no se devuelve.
+
+
+================================================================================
+ 8. LA FLOR
+================================================================================
+
+En el truco uruguayo LA FLOR SE JUEGA SIEMPRE. No es opcional como en otras
+variantes, no se acuerda antes de empezar: está siempre.
+
+8.1 CUÁNDO TENÉS FLOR
+    Tenés flor si se cumple CUALQUIERA de estas tres condiciones:
+
+      (a) Tus 3 cartas son del mismo palo.
+      (b) Tenés 2 o 3 piezas.
+      (c) Tenés 1 pieza y las otras dos cartas son del mismo palo entre sí.
+
+    Ejemplos (muestra 3O, o sea las piezas son de ORO):
+      - 7C, 6C, 3C ............ FLOR por (a): tres copas.
+      - 2O, 4O, 7E ............ FLOR por (b): dos piezas.
+      - 2O, 6C, 12C ........... FLOR por (c): pieza + dos copas.
+      - 2O, 3O, 5C ............ NO hay flor: una sola pieza y las otras dos
+                                cartas (3O y 5C) no son del mismo palo.
+                                Ojo: que el 3O sea del palo de la muestra no
+                                alcanza, lo que importa es que las OTRAS DOS
+                                sean del mismo palo entre sí.
+
+8.2 CUÁNDO SE CANTA
+    Se canta "¡FLOR!" en tu primera oportunidad de hablar: antes de tirar tu
+    primera carta, o al responder un canto de truco o de envido.
+    En la mesa rige "flor no cantada, flor perdida": si dejás pasar tu turno,
+    la perdiste.
+
+    >> EN ESTE JUEGO: el sistema detecta la flor y la canta automáticamente en
+       el momento correcto, para que un principiante no pierda puntos por no
+       darse cuenta de que la tenía. (Ver APÉNDICE A, decisión 6.)
+
+8.3 CUÁNTO VALE
+    - Si nadie más tiene flor: 3 PUNTOS, sin discusión. No se acepta ni se
+      rechaza, se cobra.
+    - LA FLOR ANULA EL ENVIDO: si alguien canta flor, el envido no se juega
+      en esa mano, y queda anulada cualquier apuesta de envido anterior.
+
+8.4 CÓMO SE CUENTA EL VALOR DE UNA FLOR
+    Se suman las tres cartas, arrancando de una base de 20:
+
+        FLOR = 20 + aporte carta 1 + aporte carta 2 + aporte carta 3
+
+    Aporte de cada carta:
+      +---------------------------+---------+
+      | 2 de la muestra (pieza)   |   10    |
+      | 4 de la muestra (pieza)   |    9    |
+      | 5 de la muestra (pieza)   |    8    |
+      | 11 de la muestra (pieza)  |    7    |
+      | 10 de la muestra (pieza)  |    7    |
+      | Cartas del 1 al 7         | su número |
+      | Figuras (10, 11, 12)      |    0    |
+      +---------------------------+---------+
+
+    Ejemplos (muestra 3O):
+      - 7C, 6C, 3C  ->  20 + 7 + 6 + 3  =  36
+      - 2O, 6C, 12C ->  20 + 10 + 6 + 0 =  36
+      - 2O, 11O, 7E ->  20 + 10 + 7 + 7 =  44
+      - 2O, 4O, 5O  ->  20 + 10 + 9 + 8 =  47  <-- FLOR MÁXIMA POSIBLE
+
+    Forma equivalente de contarlo (la que se escucha en la mesa): se toma el
+    valor completo de la pieza más alta y sólo el último dígito de las demás
+    piezas. La flor máxima: 30 + 9 + 8 = 47. Da lo mismo.
+
+8.5 CUANDO LOS DOS TIENEN FLOR
+    Si un rival también canta flor, se puede subir la apuesta:
+
+      +------------------------+------------------------------------------+
+      | Canto                  | Qué se juega                             |
+      +------------------------+------------------------------------------+
+      | FLOR                   | 3 puntos                                 |
+      | CON FLOR ENVIDO        | Se suman los puntos de la flor y del     |
+      |                        | envido: el que gana se lleva 3 + 2 = 5   |
+      | CONTRAFLOR AL RESTO    | Se juega por los puntos que le faltan al |
+      |                        | que va ganando para llegar a 30: el que  |
+      |                        | gana, gana la partida                    |
+      +------------------------+------------------------------------------+
+
+    - Gana LA FLOR MÁS ALTA. En caso de empate, gana el mano.
+    - El que pierde el lance NO cobra sus 3 puntos de flor.
+    - Si no se acepta el desafío ("con flor me achico"), el que desafió se
+      lleva los 3 puntos de su flor y no se juega el resto.
+
+    (El valor exacto del "con flor envido" y de la contraflor varía de mesa en
+     mesa; ver APÉNDICE A, decisión 4.)
+
+
+================================================================================
+ 9. EL ENVIDO
+================================================================================
+
+El envido es una apuesta aparte del truco: no importa quién gana la mano, sino
+QUIÉN TIENE EL MEJOR TANTO. Es lo primero que conviene dominar, porque aparece
+en casi todas las manos.
+
+9.1 CUÁNDO SE JUEGA
+    - Sólo en la PRIMERA baza, en la primera oportunidad de hablar de cada
+      jugador: antes de tirar su primera carta o al responder un truco.
+    - Si el turno pasa por todos sin que nadie lo cante, ya no se juega.
+    - SI ALGUIEN TIENE FLOR, EL ENVIDO NO SE JUEGA.
+
+9.2 CÓMO SE CUENTA TU TANTO
+    Tres casos, en este orden de prioridad:
+
+    CASO A - TENÉS UNA PIEZA
+      Tanto = valor de la pieza + el número de la MÁS ALTA de las otras dos
+      cartas (sin importar el palo: la pieza liga con cualquier carta).
+        2 de la muestra = 30    11 de la muestra = 27
+        4 de la muestra = 29    10 de la muestra = 27
+        5 de la muestra = 28
+
+    CASO B - NO TENÉS PIEZA, PERO SÍ DOS CARTAS DEL MISMO PALO
+      Tanto = número de una + número de la otra + 20.
+
+    CASO C - TUS 3 CARTAS SON DE PALOS DISTINTOS
+      Tanto = el número de tu carta más alta (sin sumar 20).
+
+    En todos los casos, las figuras (10, 11, 12) valen 0.
+
+      +--------+------------------+        Tanto máximo posible: 37
+      | Carta  | Vale para envido |        (2 de la muestra + un 7)
+      +--------+------------------+        Tanto mínimo posible: 0
+      | 1 (as) |        1         |        (tres figuras de palos distintos)
+      | 2      |        2         |
+      | 3      |        3         |        Máximo sin piezas: 33
+      | 4      |        4         |        (7 y 6 del mismo palo)
+      | 5      |        5         |
+      | 6      |        6         |
+      | 7      |        7         |
+      | 10, 11, 12 (figuras) |  0 |
+      +--------+------------------+
+
+    Ejemplos (muestra 3B, o sea las piezas son de BASTO):
+      - 7C, 6C, 12E ....... caso B ->  20 + 7 + 6  = 33
+      - 5E, 4E, 10O ....... caso B ->  20 + 5 + 4  = 29
+      - 12O, 7O, 3E ....... caso B ->  20 + 0 + 7  = 27
+      - 4B, 1E, 10C ....... caso A ->  29 + 1      = 30  (pieza + as)
+      - 2B, 7O, 12C ....... caso A ->  30 + 7      = 37  <-- MÁXIMO
+      - 10B, 12E, 12C ..... caso A ->  27 + 0      = 27  (la sota de la
+                                                          muestra es pieza)
+      - 1E, 7O, 4C ........ caso C ->  7
+      - 12E, 11O, 10C ..... caso C ->  0
+
+9.3 LOS CANTOS DEL ENVIDO Y CUÁNTO VALEN
+    Los cantos se pueden encadenar y lo que está en juego se va acumulando.
+    El que rechaza paga lo que valía la apuesta ANTES del último canto.
+
+      +---------------------------------+-----------+---------------------+
+      | Canto                           | Quiero    | No quiero           |
+      +---------------------------------+-----------+---------------------+
+      | Envido                          |     2     |         1           |
+      | Envido + Envido                 |     4     |         2           |
+      | Real envido (cantado directo)   |     3     |         1           |
+      | Envido + Real envido            |     5     |         2           |
+      | Envido + Envido + Real envido   |     7     |         4           |
+      | Falta envido (cantado directo)  |  la falta |         1           |
+      | Envido + Falta envido           |  la falta |         2           |
+      | Real envido + Falta envido      |  la falta |         3           |
+      +---------------------------------+-----------+---------------------+
+
+    LA FALTA: son los puntos que le faltan al equipo QUE VA GANANDO para
+    llegar a 30. No se suma a lo anterior: lo reemplaza. Si el que va ganando
+    tiene 22 puntos, la falta envido vale 8. Es el canto que define partidas.
+
+    Regla de oro: RECHAZAR NUNCA SALE GRATIS. El que cantó se lleva igual los
+    puntos que había en juego antes.
+
+9.4 CÓMO SE DECLARAN LOS TANTOS
+    Aceptado el envido, se dicen los tantos en voz alta SIN mostrar las
+    cartas, empezando por el mano y siguiendo el orden de la mesa. El que no
+    puede superar lo que ya se cantó dice "son buenas" y no revela su tanto.
+    EN CASO DE EMPATE, GANA EL MANO.
+
+
+================================================================================
+ 10. EL TRUCO
+================================================================================
+
+El truco es la apuesta por la mano: apostás a que tu equipo se lleva 2 de las
+3 bazas.
+
+10.1 CUÁNTO VALE
+     - Si nadie canta nada, la mano vale 1 PUNTO.
+     - Cantando, sube:
+
+       +---------------+-----------+-------------+
+       | Canto         | Quiero    | No quiero   |
+       +---------------+-----------+-------------+
+       | Truco         |     2     |      1      |
+       | Retruco       |     3     |      2      |
+       | Vale cuatro   |     4     |      3      |
+       +---------------+-----------+-------------+
+
+     Los puntos se cobran al terminar la mano y se los lleva el equipo que
+     gana 2 bazas. Si el rival dice "no quiero", la mano se corta ahí y el que
+     cantó cobra al instante (y no se ven las cartas).
+
+10.2 CUÁNDO SE PUEDE CANTAR
+     En tu turno, antes de tirar tu carta, en cualquiera de las tres bazas.
+     También podés cantarlo como respuesta a un canto del rival.
+
+10.3 LA ALTERNANCIA ES OBLIGATORIA
+     Los gritos se van turnando entre equipos: el que canta TRUCO no puede
+     cantar RETRUCO. El retruco lo tiene que cantar el equipo rival, y el vale
+     cuatro vuelve al primero. Cada canto es siempre una respuesta al otro
+     equipo.
+
+       Equipo A: "¡Truco!"  ->  Equipo B: "¡Retruco!"  ->  Equipo A: "¡Vale
+       cuatro!"  ->  Equipo B: "¡Quiero!"     (la mano vale 4)
+
+10.4 LAS TRES RESPUESTAS POSIBLES
+     - QUIERO: se acepta, la mano pasa a valer lo cantado y se sigue jugando.
+     - NO QUIERO: se rechaza, la mano termina y el que cantó cobra el valor
+       "no quiero" de la tabla.
+     - SUBIR: cantar el escalón siguiente (retruco o vale cuatro), que implica
+       aceptar el anterior.
+
+10.5 IRSE AL MAZO
+     Ver 7.4. Equivale a un "no quiero" sobre lo que esté en juego.
+
+
+================================================================================
+ 11. TABLA RESUMEN DE TODOS LOS PUNTOS
+================================================================================
+
+  Ésta es la tabla para tener al lado mientras aprendés.
+
+  +----------------------+-----------------------------+-------------------+
+  | Canto                | Si el rival QUIERE          | Si NO QUIERE      |
+  +----------------------+-----------------------------+-------------------+
+  | (mano sin cantos)    | 1                           | -                 |
+  | Truco                | 2                           | 1                 |
+  | Retruco              | 3                           | 2                 |
+  | Vale cuatro          | 4                           | 3                 |
+  +----------------------+-----------------------------+-------------------+
+  | Envido               | 2                           | 1                 |
+  | Envido + Envido      | 4                           | 2                 |
+  | Real envido          | 3                           | 1                 |
+  | Falta envido         | lo que le falta al que va   | 1                 |
+  |                      | ganando para llegar a 30    | (o lo acumulado)  |
+  +----------------------+-----------------------------+-------------------+
+  | Flor                 | 3 (no se acepta ni rechaza) | -                 |
+  | Con flor envido      | 5 (3 de flor + 2 de envido) | 3 al que cantó    |
+  | Contraflor al resto  | la partida                  | 3 al que cantó    |
+  +----------------------+-----------------------------+-------------------+
+
+  Y ganar la partida es llegar a 30 puntos (15 malas + 15 buenas).
+
+
+================================================================================
+ 12. ECHAR LOS PERROS
+================================================================================
+
+También conocido como "a ley de juego está todo dicho". Es una jugada de
+apuro, típica del truco uruguayo, para cerrar la partida de una.
+
+12.1 QUÉ ES
+     ANTES de repartir la mano siguiente, un equipo canta de una sola vez:
+     CONTRAFLOR AL RESTO + FALTA ENVIDO + TRUCO.
+
+12.2 CÓMO SE RESPONDE
+     El equipo rival recién ahí levanta sus cartas y tiene que contestar los
+     tres cantos juntos, empezando por decir en qué situación está:
+
+       - "EN LEY" ...... tiene flor.
+       - "A PUNTO" ..... no tiene flor.
+
+     Y después responde canto por canto, en orden:
+       - EN LEY: responde a la contraflor al resto y al truco.
+       - A PUNTO: responde a la falta envido y al truco (la contraflor no le
+         corresponde porque no tiene flor).
+
+12.3 EJEMPLOS DE RESPUESTA
+     - "En ley se pasa y se quiere" .... tengo flor, no acepto la contraflor
+                                         al resto, pero sí el truco.
+     - "A punto se quiere y se quiere" . no tengo flor, acepto la falta envido
+                                         y acepto el truco.
+     - "A punto se pasa y se pasa" ..... no tengo flor ni acepto nada: me voy
+                                         al mazo.
+
+12.4 QUÉ PASA DESPUÉS
+     Lo que se aceptó se juega; lo que se rechazó se paga según la tabla de la
+     sección 11.
+
+
+================================================================================
+ 13. LAS SEÑAS (4 y 6 jugadores)
+================================================================================
+
+13.1 QUÉ SON
+     Los gestos con los que le avisás a tu compañero qué cartas tenés sin que
+     el rival se dé cuenta. Sólo existen jugando en equipo. Son parte legítima
+     del juego: lo que no se puede es hablar en código.
+
+13.2 LAS REGLAS DE LAS SEÑAS
+     - Se hacen mirando al compañero, cuando el rival no está mirando.
+     - Se hace UNA seña por carta, y sólo por las cartas que valen la pena.
+     - SEÑA VISTA, SEÑA PERDIDA: si el rival la canta ("¡seña!"), se pierde el
+       derecho a esa seña, y en algunas mesas se pierde la mano.
+     - No se hacen señas después de haber tirado la carta.
+
+13.3 LAS MÁS DIFUNDIDAS
+     No hay catálogo oficial: cambia de grupo en grupo y de barrio en barrio.
+     Las más escuchadas en el Río de la Plata son:
+
+       1 de espada .......... levantar las cejas
+       1 de basto ........... torcer la boca hacia un costado
+       7 de espada .......... guiñar el ojo derecho
+       7 de oro ............. guiñar el ojo izquierdo
+       Un tres .............. morderse el labio inferior
+       Un dos ............... arrugar la nariz
+       Flor ................. pasarse la mano por el pelo
+
+     PENDIENTE: antes de implementar señas en el juego hay que fijar UN
+     catálogo cerrado -incluyendo señas para las piezas, que son propias del
+     truco uruguayo y no están en las listas argentinas-. Ver APÉNDICE A,
+     pregunta abierta 3.
+
+13.4 EL DETALLE DE LOS 6 JUGADORES
+     Jugando de 6, mientras se está en malas se alternan rondas de 3 contra 3
+     con rondas de 1 contra 1, donde cada jugador enfrenta al rival de
+     enfrente. En buenas se juega siempre 3 contra 3.
+
+
+================================================================================
+ 14. ORDEN DE PRECEDENCIA: QUÉ SE PUEDE CANTAR SOBRE QUÉ
+================================================================================
+
+Esta sección es la que traduce todo lo anterior a algo implementable. Es la
+tabla de estados del motor del juego.
+
+14.1 PRIORIDAD ENTRE LANCES (siempre, sin excepción)
+
+        FLOR   mata a   ENVIDO   se resuelve antes que   TRUCO
+
+     - Si hay flor, el envido no se juega y se anula cualquier envido cantado.
+     - Si sobre un truco cantado alguien canta envido, PRIMERO se resuelve el
+       envido y recién después se contesta el truco ("el envido va primero").
+
+14.2 QUÉ SE PUEDE CANTAR EN CADA MOMENTO
+
+  +---------------------------+-------------------------------------------+
+  | Situación                 | Cantos válidos                            |
+  +---------------------------+-------------------------------------------+
+  | 1ra baza, tu primera vez  | Flor (si tenés) / Envido / Real envido /  |
+  | que hablás, sin cantos    | Falta envido / Truco / tirar carta        |
+  | previos                   |                                           |
+  +---------------------------+-------------------------------------------+
+  | 2da y 3ra baza            | Truco (o subirlo) / tirar carta /         |
+  |                           | irse al mazo. YA NO se puede envido       |
+  +---------------------------+-------------------------------------------+
+  | Te cantaron ENVIDO        | Quiero / No quiero / Envido (sólo si el   |
+  |                           | anterior fue "envido") / Real envido /    |
+  |                           | Falta envido / Flor (si tenés: la anula)  |
+  +---------------------------+-------------------------------------------+
+  | Te cantaron REAL ENVIDO   | Quiero / No quiero / Falta envido /       |
+  |                           | Flor (si tenés)                           |
+  +---------------------------+-------------------------------------------+
+  | Te cantaron FALTA ENVIDO  | Quiero / No quiero / Flor (si tenés)      |
+  +---------------------------+-------------------------------------------+
+  | Te cantaron TRUCO         | Quiero / No quiero / Retruco / y si es tu |
+  |                           | primera vez que hablás en la 1ra baza,    |
+  |                           | también Envido o Flor                     |
+  +---------------------------+-------------------------------------------+
+  | Te cantaron RETRUCO       | Quiero / No quiero / Vale cuatro          |
+  +---------------------------+-------------------------------------------+
+  | Te cantaron VALE CUATRO   | Quiero / No quiero                        |
+  +---------------------------+-------------------------------------------+
+  | Te cantaron FLOR y vos    | Con flor envido / Contraflor al resto /   |
+  | también tenés             | "con flor me achico"                      |
+  +---------------------------+-------------------------------------------+
+
+14.3 REGLAS DURAS QUE EL MOTOR DEBE VALIDAR
+     1. Nadie puede subir su propio canto: la alternancia entre equipos es
+        obligatoria (truco -> retruco lo canta el rival).
+     2. El envido sólo existe en la primera baza y sólo mientras algún jugador
+        no haya tirado todavía su primera carta.
+     3. Con flor en la mesa, cualquier envido cantado queda anulado y sin
+        efecto (no se cobra nada por él).
+     4. No se puede tirar carta con un canto sin responder.
+     5. La partida termina apenas un equipo llega a 30, incluso a mitad de mano.
+
+
+================================================================================
+ 15. TRES MANOS COMPLETAS, JUGADA POR JUGADA
+================================================================================
+
+15.1 MANO SIMPLE: envido y truco (mano a mano)
+
+     Muestra: 3C (tres de copa)  ->  piezas: 2C, 4C, 5C, 11C, 10C.
+     Vos (MANO): 1E, 7E, 4B          Rival (PIE): 3O, 12O, 6B
+
+     - Flor: ninguno de los dos tiene (vos tenés dos espadas pero ninguna
+       pieza; el rival tiene dos oros y ninguna pieza).
+     - Tu tanto: 1E y 7E son del mismo palo -> 20 + 1 + 7 = 28.
+       El del rival: 3O y 12O -> 20 + 3 + 0 = 23.
+
+     1. Sos mano, así que hablás primero: "¡ENVIDO!"
+     2. El rival: "¡Quiero!"
+     3. Vos: "28". El rival: "son buenas".        -> COBRÁS 2 PUNTOS.  [2-0]
+     4. Baza 1: tirás el 7E (mata). Antes de tirar, el rival canta
+        "¡TRUCO!". Vos: "¡Quiero!". El rival tira 3O.
+        Gana el 7E (escalón 8 contra escalón 10).      -> primera baza tuya.
+     5. Baza 2: abrís vos, tirás el 1E (ancho de espada, la más alta sin
+        piezas). El rival tira 12O. Gana el 1E.        -> segunda baza tuya.
+     6. Ganaste 2 bazas: la tercera no se juega.   -> COBRÁS 2 PUNTOS.  [4-0]
+
+     Lo que deja esta mano: con dos matas del mismo palo tenías buen tanto Y
+     buen juego. El rival cantó truco con un 3 creyendo que alcanzaba.
+
+15.2 MANO CON PIEZAS Y DOBLE FLOR
+
+     Muestra: 5O (cinco de oro)  ->  ¡LA MUESTRA ES UNA PIEZA!
+     Entonces el 12O ocupa el lugar del 5 como pieza (vale 28).
+     Piezas de esta mano: 2O, 4O, 12O (haciendo de 5), 11O, 10O.
+
+     Vos (MANO): 2O, 11O, 7B         Rival (PIE): 7C, 6C, 3C
+
+     - Tu flor: tenés DOS PIEZAS -> hay flor.
+       Valor: 20 + 10 (2O) + 7 (11O) + 7 (7B) = 44.
+     - La flor del rival: tres copas -> 20 + 7 + 6 + 3 = 36.
+
+     1. Sos mano: "¡FLOR!" (44)
+     2. El rival: "¡FLOR!" también (36), y sube: "¡CON FLOR ENVIDO!"
+     3. Vos: "¡Quiero!" Se comparan: 44 contra 36.
+        -> COBRÁS 5 PUNTOS (3 de tu flor + 2 del envido).            [5-0]
+        El rival NO cobra sus 3 puntos de flor.
+     4. El envido no se juega: había flor.
+     5. Baza 1: tirás el 11O (pieza). El rival tira el 7C. Ganás.
+     6. Baza 2: tirás el 2O, la carta más fuerte del juego. Ganás.
+     7. Nadie cantó truco:                          -> COBRÁS 1 PUNTO. [6-0]
+
+     Lo que deja esta mano: seis puntos de una. Las piezas no sólo ganan
+     bazas, disparan la flor. Y ojo con la muestra: si no mirabas que era el
+     5O, no te dabas cuenta de que tu 12O (si lo hubieras tenido) era pieza.
+
+15.3 MANO CERRADA: falta envido y parda
+
+     Marcador: VOS 25 - RIVAL 22. Vas ganando y estás cerca de los 30.
+     Muestra: 6E  ->  piezas: 2E, 4E, 5E, 11E, 10E.
+
+     Vos (MANO): 4E, 7C, 3B          Rival (PIE): 3O, 3C, 2B
+
+     - Flor: no tenés (tenés una pieza, pero el 7C y el 3B son de palos
+       distintos entre sí). El rival tampoco.
+     - Tu tanto: tenés pieza -> 29 (el 4E) + 7 (la más alta de las otras
+       dos, sin importar el palo) = 36. Casi imbatible.
+     - El del rival: tres palos distintos -> su carta más alta: 3.
+
+     1. Sos mano: "¡FALTA ENVIDO!"
+        Vale 5: es lo que le falta al que va ganando (vos, con 25) para 30.
+        Si el rival la quiere y pierde, ganás la partida ahí mismo.
+     2. El rival mira su 3 y dice: "No quiero".     -> COBRÁS 1 PUNTO. [26-22]
+     3. Baza 1: tirás el 3B. El rival tira el 3O. Los dos son treses:
+        PARDA. Nadie gana la baza.
+     4. Baza 2: como fue parda, abrís de nuevo vos. Cantás "¡TRUCO!" y el
+        rival quiere. Tirás el 4E: es pieza, le gana a todo. El rival tira
+        el 3C.                                          -> segunda baza tuya.
+     5. Parda la primera + ganada la segunda = ganás la mano (sección 7.3).
+        La tercera no se juega.                    -> COBRÁS 2 PUNTOS. [28-22]
+
+     Lo que deja esta mano: la falta envido no siempre se canta para que te la
+     quieran; muchas veces se canta para que NO te la quieran. Y una pieza
+     baja como el 4 de la muestra vale más que cualquier mata.
+
+
+================================================================================
+ 16. LOS ERRORES TÍPICOS DEL QUE ARRANCA
+================================================================================
+
+  1. NO MIRAR LA MUESTRA. Es el error más caro de todos: tirás una carta
+     creyendo que es fuerte y el rival tenía una pieza. Antes de cada mano:
+     mirá qué palo manda.
+
+  2. CANTAR ENVIDO POR COSTUMBRE. El envido se canta cuando tenés con qué, o
+     cuando estás mintiendo a propósito. Cantarlo por inercia regala puntos.
+
+  3. GUARDAR LA CARTA MÁS ALTA PARA LA TERCERA. Si perdés la primera y la
+     segunda, la tercera no se juega nunca. Muchas manos se pierden con la
+     mejor carta todavía en la mano.
+
+  4. QUEDARSE MUDO. El truco se gana cantando. El que nunca canta es
+     previsible, y contra un rival que lee eso no gana ni con buenas cartas.
+
+  5. OLVIDARSE DE QUE LA FLOR MATA AL ENVIDO. Si cantás envido y el rival
+     tiene flor, tu apuesta se anula y él cobra.
+
+  6. NO CONTAR LA PIEZA EN EL TANTO. Con una pieza, tu envido casi siempre es
+     altísimo: el 2 de la muestra solo ya vale 30. Mucha gente que viene del
+     truco argentino lo cuenta como un 2 común.
+
+  7. NO MIRAR EL MARCADOR ANTES DE CANTAR LA FALTA. La falta envido vale lo
+     que le falta al que va ganando: puede ser 2 puntos o puede ser la
+     partida entera.
+
+
+================================================================================
+ 17. TRUCO URUGUAYO VS TRUCO ARGENTINO
+================================================================================
+
+  Es la duda más común de quien aprende mirando videos de Buenos Aires. La
+  base es la misma, pero lo que cambia es sustancial:
+
+  +----------------+--------------------------------+----------------------+
+  |                | TRUCO URUGUAYO                 | TRUCO ARGENTINO      |
+  +----------------+--------------------------------+----------------------+
+  | La muestra     | Se da vuelta una carta y su    | No existe            |
+  |                | palo manda la mano             |                      |
+  | Las piezas     | El 2, 4, 5, 11 y 10 de la      | No existen           |
+  |                | muestra van arriba de todo     |                      |
+  | La flor        | Se juega SIEMPRE               | Se acuerda antes     |
+  | El envido      | Las piezas valen 30/29/28/27   | Sólo palos y números |
+  | La partida     | A 30 puntos                    | A 30 puntos          |
+  +----------------+--------------------------------+----------------------+
+
+  Por eso casi todas las guías que hay en internet no sirven del todo acá:
+  están escritas para el juego argentino y se saltean la muestra, que es
+  justamente el corazón del truco uruguayo. Ésa es la razón de ser de este
+  proyecto.
+
+
+================================================================================
+ APÉNDICE A - DECISIONES CANÓNICAS Y PREGUNTAS ABIERTAS
+================================================================================
+
+Las fuentes consultadas no coinciden en todo. Acá queda asentado qué toma este
+proyecto, para que el motor y los textos no se contradigan entre sí.
+
+  DECISIÓN 1 - Envido con pieza
+    Se cuenta: valor de la pieza + el número de la más alta de las otras dos
+    cartas, SIN importar el palo (la pieza liga con cualquier carta).
+    Por qué: es la lectura de Ludoteka ("se suma el valor de la pieza y el
+    índice superior de las otras dos cartas") y es la única que cierra con el
+    máximo de 37 que declaran las tres fuentes.
+
+  DECISIÓN 2 - Conteo de la flor
+    Base 20 + aportes: piezas 10/9/8/7/7 (2/4/5/11/10) y comunes su número.
+    Por qué: es equivalente a la otra formulación que aparece en las fuentes
+    ("el valor completo de la pieza más alta y el último dígito de las
+    otras"), y las dos dan el máximo declarado de 47: 20+10+9+8 = 30+9+8.
+
+  DECISIÓN 3 - "No quiero" en cadenas de envido
+    Se cobra lo que estaba en juego ANTES del último canto (mínimo 1).
+    Por qué: una de las fuentes lista "real envido: no quiero = 1", que sólo
+    es cierto cuando se canta directo; encadenado son 2. La tabla de la
+    sección 9.3 desarma todos los casos.
+
+  DECISIÓN 4 - Con flor envido / contraflor al resto            [A CONFIRMAR]
+    Adoptamos: con flor envido = 5 puntos al ganador (3 de flor + 2 de
+    envido); contraflor al resto = se juega la partida; rechazar cualquiera de
+    las dos le da 3 puntos al que desafió.
+    Por qué: es la lectura combinada de las dos fuentes que lo mencionan, pero
+    ninguna es precisa y en la mesa varía bastante.
+
+  DECISIÓN 5 - Falta envido                                     [A CONFIRMAR]
+    Vale 30 menos los puntos del equipo que va ganando. NO implementamos la
+    variante "falta en malas" (que la falta valga hasta las buenas, o sea 15,
+    cuando el que gana está en malas).
+
+  DECISIÓN 6 - La flor se canta sola
+    En el juego, el sistema detecta la flor y la canta automáticamente en el
+    momento correcto. En la mesa rige "flor no cantada, flor perdida", pero un
+    principiante perdería 3 puntos por no darse cuenta de que la tenía.
+    Se puede volver opcional más adelante, en un modo avanzado.
+
+  DECISIÓN 7 - La muestra es una pieza
+    El 12 (rey) de ese palo ocupa su lugar: toma su posición en la jerarquía Y
+    su valor para el envido y la flor.
+
+  DECISIÓN 8 - Formato de partida
+    A 30 puntos, 15 malas + 15 buenas. Las partidas a 40 que mencionan algunas
+    fuentes quedan fuera por ahora.
+
+  DECISIÓN 9 - Quién abre después de una parda
+    Vuelve a abrir el mismo jugador que abrió la baza pardada.
+
+  PREGUNTAS ABIERTAS (para cerrar con jugadores uruguayos antes del motor)
+    1. ¿Cuánto vale exactamente el "con flor envido" en la mesa uruguaya?
+       ¿Y existe la "contraflor" simple, sin ir al resto?
+    2. ¿La falta envido en malas se juega hasta 15 o siempre hasta 30?
+    3. ¿Cuál es el catálogo de señas que se usa, incluidas las de las piezas?
+    4. ¿Se juega también a 15 puntos (chico corto) para partidas rápidas?
+
+
+================================================================================
+ APÉNDICE B - GLOSARIO
+================================================================================
+
+  ANCHO ................ El 1 (as) de un palo. "Ancho de espada" = 1 de espada.
+  ANCHOS FALSOS ........ El 1 de oro y el 1 de copa, que no son matas.
+  BAZA ................. Cada una de las 3 vueltas de una mano.
+  BUENAS ............... Los últimos 15 puntos de la partida (del 15 al 30).
+  CANTAR ............... Apostar puntos de viva voz.
+  CHICO ................ Una partida completa, a 30 puntos.
+  CONTRAFLOR AL RESTO .. Subir la apuesta de flor jugándose la partida.
+  ECHAR LOS PERROS ..... Cantar contraflor al resto + falta envido + truco
+                         antes de repartir. Ver sección 12.
+  ENVIDO ............... La apuesta al mejor tanto.
+  FALTA ENVIDO ......... Envido que vale lo que le falta al que va ganando.
+  FLOR ................. Tres cartas que ligan (sección 8.1). Vale 3 puntos.
+  IRSE AL MAZO ......... Abandonar la mano tirando las cartas.
+  MALAS ................ Los primeros 15 puntos de la partida.
+  MANO (jugador) ....... El que tira primero. Gana todos los empates.
+  MANO (ronda) ......... El conjunto de 3 bazas que se juega con 3 cartas.
+  MATAS ................ Las 4 cartas bravas: 1E, 1B, 7E, 7O.
+  MUESTRA .............. La carta que se da vuelta y define el palo que manda.
+  PARDA ................ Baza empatada.
+  PIE .................. El último jugador del equipo en tirar.
+  PIEZA ................ El 2, 4, 5, 11 o 10 del palo de la muestra.
+  QUIERO / NO QUIERO ... Aceptar o rechazar una apuesta.
+  RETRUCO .............. Subir el truco a 3 puntos.
+  SEÑAS ................ Gestos para avisarle al compañero qué tenés.
+  SON BUENAS ........... "No te puedo ganar el tanto".
+  TANTO ................ Los puntos de tu envido.
+  VALE CUATRO .......... Subir el retruco a 4 puntos.
+
+================================================================================
+                              FIN DEL DOCUMENTO
+================================================================================
