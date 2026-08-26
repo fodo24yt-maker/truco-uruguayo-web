@@ -405,26 +405,50 @@ variantes, no se acuerda antes de empezar: está siempre.
     piezas. La flor máxima: 30 + 9 + 8 = 47. Da lo mismo.
 
 8.5 CUANDO LOS DOS TIENEN FLOR
-    Si un rival también canta flor, se puede subir la apuesta:
+    Si un rival también canta flor, se puede subir la apuesta. Hay tres
+    escalones, y cada uno se puede rechazar:
 
-      +------------------------+------------------------------------------+
-      | Canto                  | Qué se juega                             |
-      +------------------------+------------------------------------------+
-      | FLOR                   | 3 puntos                                 |
-      | CON FLOR ENVIDO        | Se suman los puntos de la flor y del     |
-      |                        | envido: el que gana se lleva 3 + 2 = 5   |
-      | CONTRAFLOR AL RESTO    | Se juega por los puntos que le faltan al |
-      |                        | que va ganando para llegar a 30: el que  |
-      |                        | gana, gana la partida                    |
-      +------------------------+------------------------------------------+
+      FLOR  ->  CON FLOR ENVIDO  ->  CONTRAFLOR AL RESTO
 
-    - Gana LA FLOR MÁS ALTA. En caso de empate, gana el mano.
-    - El que pierde el lance NO cobra sus 3 puntos de flor.
-    - Si no se acepta el desafío ("con flor me achico"), el que desafió se
-      lleva los 3 puntos de su flor y no se juega el resto.
+    ESCALÓN 1: FLOR (no se acepta ni se rechaza)
+      Se juegan 3 puntos. Gana LA FLOR MÁS ALTA; en caso de empate, gana el
+      mano. El que pierde no cobra nada por su propia flor.
 
-    (El valor exacto del "con flor envido" y de la contraflor varía de mesa en
-     mesa; ver APÉNDICE A, decisión 4.)
+    ESCALÓN 2: CON FLOR ENVIDO
+      Sobre una flor ya cantada, cualquiera de los dos puede subir la apuesta
+      con "¡con flor envido!". Se juegan 3 puntos de la flor MÁS 3 del envido:
+      6 en total.
+        - Si se quiere y se gana: 6 puntos para el que gana.
+        - Si NO se quiere: 3 puntos para el que cantó "con flor envido" (lo
+          que ya estaba en juego con la flor sola, antes de la subida).
+
+    ESCALÓN 3: CONTRAFLOR AL RESTO
+      Es la apuesta máxima: se juega el resto de la partida. Si se quiere y se
+      gana, ESE EQUIPO GANA EL CHICO ENTERO, sin importar cuántos puntos
+      tuviera cada uno.
+        - Si NO se quiere, se cobra lo que estaba en juego ANTES de la
+          contraflor al resto:
+            · Si antes sólo se había cantado FLOR: 3 puntos para el que
+              cantó la contraflor al resto.
+            · Si antes se había cantado CON FLOR ENVIDO: 6 puntos para el
+              que cantó la contraflor al resto.
+
+    Tabla resumen:
+
+      +----------------------+------------------------+---------------------+
+      | Canto                | Si se quiere y se gana | Si NO se quiere     |
+      +----------------------+------------------------+---------------------+
+      | Flor                 | 3                      | (no aplica)         |
+      | Con flor envido      | 6 (3 + 3)              | 3 para el que cantó |
+      | Contraflor al resto  | se gana la partida     | 3 ó 6, según qué se |
+      |                      | (todos los puntos)     | había cantado antes |
+      +----------------------+------------------------+---------------------+
+
+    >> ACLARACIÓN IMPORTANTE: éste es el valor exacto que usa este proyecto
+       (juego y lecciones). En mesas de otros grupos y barrios estos números
+       pueden variar un poco -sobre todo cuánto suma el "con flor envido"-,
+       así que si jugás con gente que tiene otra costumbre, puede que difiera
+       ligeramente de lo que ves acá. Ver también APÉNDICE A, decisión 4.
 
 
 ================================================================================
@@ -582,8 +606,9 @@ El truco es la apuesta por la mano: apostás a que tu equipo se lleva 2 de las
   |                      | ganando para llegar a 30    | (o lo acumulado)  |
   +----------------------+-----------------------------+-------------------+
   | Flor                 | 3 (no se acepta ni rechaza) | -                 |
-  | Con flor envido      | 5 (3 de flor + 2 de envido) | 3 al que cantó    |
-  | Contraflor al resto  | la partida                  | 3 al que cantó    |
+  | Con flor envido      | 6 (3 de flor + 3 de envido) | 3 al que cantó    |
+  | Contraflor al resto  | la partida                  | 3 ó 6 al que cantó|
+  |                      |                             | (según lo previo) |
   +----------------------+-----------------------------+-------------------+
 
   Y ganar la partida es llegar a 30 puntos (15 malas + 15 buenas).
@@ -887,12 +912,15 @@ proyecto, para que el motor y los textos no se contradigan entre sí.
     es cierto cuando se canta directo; encadenado son 2. La tabla de la
     sección 9.3 desarma todos los casos.
 
-  DECISIÓN 4 - Con flor envido / contraflor al resto            [A CONFIRMAR]
-    Adoptamos: con flor envido = 5 puntos al ganador (3 de flor + 2 de
-    envido); contraflor al resto = se juega la partida; rechazar cualquiera de
-    las dos le da 3 puntos al que desafió.
-    Por qué: es la lectura combinada de las dos fuentes que lo mencionan, pero
-    ninguna es precisa y en la mesa varía bastante.
+  DECISIÓN 4 - Con flor envido / contraflor al resto
+    Adoptamos: con flor envido = 6 puntos al ganador (3 de flor + 3 de
+    envido; si se rechaza, 3 para el que cantó). Contraflor al resto = se
+    juega el resto de la partida entera; si se rechaza, el que la cantó cobra
+    lo que estaba en juego antes (3 si venía sólo de flor, 6 si venía de con
+    flor envido).
+    Por qué: es la regla de mesa que se usa en este proyecto, confirmada por
+    el autor. Puede diferir de cómo se juega en otras mesas, así que se aclara
+    en el texto de la sección 8.5.
 
   DECISIÓN 5 - Falta envido                                     [A CONFIRMAR]
     Vale 30 menos los puntos del equipo que va ganando. NO implementamos la
@@ -917,8 +945,9 @@ proyecto, para que el motor y los textos no se contradigan entre sí.
     Vuelve a abrir el mismo jugador que abrió la baza pardada.
 
   PREGUNTAS ABIERTAS (para cerrar con jugadores uruguayos antes del motor)
-    1. ¿Cuánto vale exactamente el "con flor envido" en la mesa uruguaya?
-       ¿Y existe la "contraflor" simple, sin ir al resto?
+    1. ¿Existe la "contraflor" simple (sin ir al resto), como paso intermedio
+       entre "con flor envido" y "contraflor al resto"? Por ahora el proyecto
+       sólo tiene esos dos escalones (ver decisión 4).
     2. ¿La falta envido en malas se juega hasta 15 o siempre hasta 30?
     3. ¿Cuál es el catálogo de señas que se usa, incluidas las de las piezas?
     4. ¿Se juega también a 15 puntos (chico corto) para partidas rápidas?

@@ -1,17 +1,47 @@
-# ─── Secretos: NUNCA suben al repo ───────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════
+#  SECRETOS: nada de esto sube nunca. El repositorio es público.
+# ═══════════════════════════════════════════════════════════════════════════
 .env
 .env.*
 !.env.example
 *.pem
 *.key
+*.crt
 *.p12
+*.pfx
+id_rsa*
+id_ed25519*
+.ssh/
+.aws/
+.gcloud/
 secrets.json
+secrets.*.json
 credentials.json
+credentials*.json
+service-account*.json
+*serviceaccount*.json
+client_secret*.json
+.npmrc
+.netrc
+docker-compose.override.yml
+*.env.local
 
-# ─── Referencias de apps ajenas: se miran, no se publican ────────────────────
-ideas/imagenes/referencias/
+# ═══════════════════════════════════════════════════════════════════════════
+#  BASES DE DATOS: pueden tener datos de gente de verdad
+# ═══════════════════════════════════════════════════════════════════════════
+*.db
+*.sqlite
+*.sqlite3
+*.rdb
+dump.rdb
+/datos/
+/backups/
+*.dump
+*.sql.gz
 
-# ─── Node / Next.js ──────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════
+#  Node / Next.js
+# ═══════════════════════════════════════════════════════════════════════════
 node_modules/
 .next/
 out/
@@ -19,36 +49,92 @@ dist/
 build/
 *.tsbuildinfo
 .vercel/
+.turbo/
 
-# ─── Python (backend del bot, más adelante) ──────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════
+#  Python (el arnés de entrenamiento del bot)
+# ═══════════════════════════════════════════════════════════════════════════
 __pycache__/
 *.py[cod]
 .venv/
 venv/
+env/
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
 .ipynb_checkpoints/
+*.egg-info/
+instance/
 
-# ─── Modelos y datos de entrenamiento (pesan demasiado para git) ─────────────
+# ═══════════════════════════════════════════════════════════════════════════
+#  Entrenamiento del bot: pesa mucho y se puede volver a generar.
+#  OJO: la política final SÍ se sube (es parte del sitio); lo que se ignora
+#  son los checkpoints intermedios y los datos de las partidas simuladas.
+# ═══════════════════════════════════════════════════════════════════════════
 *.gguf
 *.safetensors
 *.ckpt
 *.pt
 *.pth
 *.onnx
+*.h5
+*.npz
+*.pkl
+*.joblib
 /modelos/
 /checkpoints/
 /datasets/
+/entrenamiento/salida/
+/entrenamiento/partidas/
+runs/
+wandb/
+mlruns/
 
-# ─── Editor y sistema operativo ──────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════
+#  Referencias de apps ajenas: se miran, no se publican
+# ═══════════════════════════════════════════════════════════════════════════
+ideas/imagenes/referencias/
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Andamiaje: archivos que genera la herramienta y no le sirven a nadie que
+#  venga a leer el proyecto. Se regeneran solos cuando hacen falta.
+# ═══════════════════════════════════════════════════════════════════════════
+AGENTS.md
+CLAUDE.md
+.claude/settings.local.json
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Trabajo en curso: notas, borradores y pruebas de un solo uso.
+#  Si lo escribiste para vos y no para quien lee el repo, va acá.
+# ═══════════════════════════════════════════════════════════════════════════
+NOTAS.md
+NOTAS-*.md
+TODO.md
+TODO-*.md
+/notas/
+/borradores/
+/scratch/
+/tmp/
+_*.mjs
+_*.ts
+_*.py
+*.tmp
+*.bak
+*.orig
+*.rej
+capturas/
+*.local.*
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Editor, sistema operativo, logs y temporales
+# ═══════════════════════════════════════════════════════════════════════════
 .vscode/
 .idea/
+*.swp
 .DS_Store
 Thumbs.db
-*.swp
-
-# ─── Logs, cachés y cobertura ────────────────────────────────────────────────
 *.log
 npm-debug.log*
 coverage/
 .cache/
+_*.mjs

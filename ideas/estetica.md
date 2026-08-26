@@ -15,23 +15,79 @@ Cálido, gastado, con historia. Nada de casino, nada de app fría.
 
 ## La escena, por capas
 
-De atrás para adelante, así se construye la pantalla de juego:
+**El objetivo no es "un fondo con estética de bar": es que parezca una mesa de
+verdad, vista desde tu silla.** Si alguien mira la pantalla de reojo, tiene que
+pensar "están jugando a las cartas en un bar", no "es una app con un fondo".
 
-1. **La penumbra** — el fondo, casi negro cálido. Se insinúa el boliche:
-   estantes, botellas, una radio vieja, chapas de publicidad esmaltadas en la
-   pared, un ventilador de techo. Todo desenfocado y oscuro: no compite.
-2. **El cono de luz** — un halo cálido que cae desde arriba sobre la mesa.
-   Es lo que define la composición: el centro está iluminado, los bordes se
-   apagan. Se hace con un `radial-gradient`, no con una imagen.
-3. **La mesa** — madera oscura con el paño de fieltro verde gastado en el
-   centro, con marcas de uso: el verde no es parejo, está más claro donde se
-   apoyaron los codos mil veces.
-4. **Los props** — un mate apoyado en un rincón, un vaso, un cenicero, la
-   libreta del marcador. No se tocan, son atmósfera. Poquitos y chicos.
-5. **Las cartas** — lo único con contraste alto y bordes nítidos. Mandan.
+De atrás para adelante:
 
-> **Regla de oro de la composición:** si algo compite con las cartas por la
-> atención, se apaga. La carta es siempre lo más brillante de la pantalla.
+1. **El bar, desenfocado** — la pared del fondo, en penumbra: se insinúan un
+   estante con botellas, la luz de una lámpara colgante, algún reflejo. Todo
+   fuera de foco y muy oscuro. Es profundidad de campo: la cámara está enfocada
+   en la mesa, y lo de atrás queda borroso, como en una foto real.
+2. **El rival** — se lo ve poco y a propósito (ver más abajo).
+3. **El canto de la mesa** — la línea de madera del borde, con su grosor. Es lo
+   que hace que se lea como una mesa y no como un fondo plano: hay un antes y
+   un después de ese borde.
+4. **La tabla de la mesa** — madera de bar de verdad: vetas irregulares, nudos,
+   marcas de uso, algún cerco de vaso. **No rayas verticales parejas.** La
+   textura se genera con ruido procedural, no con líneas dibujadas a mano.
+5. **La luz** — una lámpara arriba que cae sobre el centro de la mesa. El centro
+   está iluminado y cálido; los bordes se apagan. Las cartas proyectan sombra
+   hacia donde la luz no llega.
+6. **Los objetos** — muy pocos y chicos, apoyados en el borde: un vaso, un mate,
+   el mazo boca abajo. Nunca compiten con las cartas.
+7. **Las cartas** — lo único perfectamente nítido de toda la pantalla.
+
+> **Regla de oro:** si algo compite con las cartas por la atención, se apaga.
+> La carta es siempre lo más brillante y lo más nítido.
+
+### La mesa es de madera, no de paño
+
+Decisión corregida: **no hay paño verde de casino.** Un boliche uruguayo tiene
+mesas de madera, a veces con fórmica, nunca con tapete de póker. El verde de
+casino es justo lo que hace que un juego de cartas se vea genérico.
+
+La madera se construye por capas, toda en CSS y SVG, sin una sola imagen:
+
+- Un color base cálido de fondo.
+- **Vetas con ruido procedural** (`feTurbulence` con frecuencia muy asimétrica:
+  mucha variación en un eje y poca en el otro, que es exactamente cómo se ve la
+  veta de la madera).
+- Unos pocos nudos y manchas de uso, colocados a mano.
+- El halo de la lámpara encima de todo.
+
+### Cómo se ve el rival
+
+**Se tiene que notar que hay alguien enfrente, sin que se vea más que eso.** Ni
+un avatar de cuadradito, ni un personaje de dibujitos animados mirándote fijo.
+
+- Un **busto en silueta**, recortado por el borde superior de la pantalla:
+  hombros, cuello, el ala de un sombrero. Vectorial, en tonos oscuros.
+- Va **desenfocado y con poca opacidad**, porque está fuera del plano de foco.
+- Se lo ve por detrás de sus propias cartas, no al lado.
+- El nombre, chico, sobre una plaquita discreta.
+
+La idea es la sensación de tener a alguien enfrente, no un personaje. Cuando
+llegue la gira por el país, cada rival cambia la silueta (el sombrero, el porte,
+los hombros) y el color de su ropa. Nada más. Con eso alcanza para que se
+distingan entre ellos.
+
+### Las cartas se sostienen y se tiran
+
+Dos momentos, dos tratamientos distintos:
+
+**En la mano** — las tres cartas están **en abanico**, con rotaciones de unos
+pocos grados y alturas apenas distintas, como cuando las tenés agarradas. No
+alineadas en fila como en un solitario. Al pasar por encima o tocarlas, la
+carta se levanta y se endereza un poco, como cuando la separás del resto con el
+pulgar para tirarla.
+
+**Al tirarla** — la carta **cae sobre la mesa**: recorre la distancia, aterriza
+con una rotación al azar de unos grados y da un rebote mínimo, con la sombra
+acompañando. Nunca aparece de la nada en su lugar final. Y las cartas que
+quedan en la mano **se reacomodan solas** para cerrar el hueco: el abanico se
+recompone.
 
 ## Paleta
 
@@ -45,12 +101,17 @@ Colores exactos. Los nombres son los que van a ser las variables CSS.
 | `--madera` | `#4A3121` | El borde de la mesa |
 | `--madera-clara` | `#6B4A31` | Cantos de la mesa donde pega la luz |
 
-### El paño
+### La mesa (madera de bar, no paño)
 | Variable | Hex | Dónde |
 |---|---|---|
-| `--fieltro` | `#1E3A2B` | El verde base de la mesa |
-| `--fieltro-luz` | `#2F5741` | Donde cae la luz de la lámpara |
-| `--fieltro-sombra` | `#142720` | Bordes y sombra bajo las cartas |
+| `--mesa` | `#8A5A32` | La tabla de la mesa, tono base |
+| `--mesa-luz` | `#B57B45` | Donde cae la luz de la lámpara |
+| `--mesa-veta` | `#5C3A1E` | Las vetas oscuras de la madera |
+| `--mesa-canto` | `#3D2413` | El canto de la mesa y su sombra |
+
+El tono base es una madera cálida, tipo lapacho gastado. Bajo la lámpara sube a
+`#B57B45`; en los bordes, lejos de la luz, baja a `#4A2E17`. Esa diferencia la
+hace el degradado de la luz, no colores distintos.
 
 ### Luz y acentos
 | Variable | Hex | Dónde |
@@ -60,7 +121,9 @@ Colores exactos. Los nombres son los que van a ser las variables CSS.
 | `--bordo` | `#7B2231` | Botones de canto, acentos fuertes |
 | `--bordo-claro` | `#A8323F` | Hover de esos botones |
 | `--crema` | `#F2E6D0` | Texto sobre oscuro, cara de las cartas |
-| `--tiza` | `#E8E4DA` | El marcador, escrito como con tiza |
+| `--papel` | `#EDDFC0` | Panel de lectura y libreta del marcador |
+| `--papel-sombra` | `#D6C39A` | Pliegues y bordes irregulares del papel |
+| `--tinta` | `#2A1C14` | Texto sobre papel |
 
 ### Semánticos
 | Variable | Hex | Dónde |
@@ -91,10 +154,11 @@ Todas de Google Fonts, así no hay líos de licencia.
 
 | Uso | Fuente | Por qué |
 |---|---|---|
-| Marca y títulos grandes | **Alfa Slab One** | Cartel pintado a mano, robusta, con peso de chapa esmaltada |
+| Marca y títulos grandes | **Yeseva One** | Contraste alto y curvas de fileteado rioplatense. Las apps de truco usan una romana tipo Cinzel: épica y genérica. Ésta es de acá |
 | Etiquetas, botones, cantos | **Oswald** | Condensada, como los carteles de precios de un almacén. Entra mucho en poco espacio |
 | Texto corrido (Aprender) | **Source Sans 3** | Se lee cómoda en párrafos largos y en celular |
 | El marcador | **Caveat** | Escrito a mano, como la libreta del boliche |
+| Modo lectura | **Source Sans 3** | Las lecciones son texto largo: manda la comodidad |
 | Números de las cartas | **Oswald** (bold) | Legible a 12px, que es lo que importa |
 
 Regla: **nunca más de dos tipografías en pantalla al mismo tiempo**.
@@ -126,30 +190,39 @@ Lo más importante del proyecto visual.
 
 ```
 ┌──────────────────────────────┐
-│ marcador (pizarra)   ⚙ 🔊    │  el marcador siempre visible
-├──────────────────────────────┤
-│      rival: avatar + 3 🂠     │  cartas boca abajo, avatar chico
-│         [globo de canto]     │
-├──────────────────────────────┤
+│░░ bar en penumbra, borroso ░░│
+│░░   ╭──────╮  silueta del  ░░│  el rival: hombros y sombrero,
+│░░   │ ▒▒▒▒ │  rival        ░░│  desenfocado, recortado arriba
+│  🂠 🂠 🂠   sus cartas        │
+│══════════════════════════════│  ← el canto de la mesa
 │                              │
-│   MUESTRA        cartas      │  el paño. La muestra a la izquierda,
-│   (de costado)   jugadas     │  siempre visible, apenas girada
+│  ╔═╗                         │  la tabla: madera con vetas
+│  ║M║      ┌──┐               │  y el halo de la lámpara
+│  ╚═╝      │▩▩│ ← las jugadas │
+│  muestra  └──┘               │
 │                              │
+│      ┌──┐┌──┐┌──┐            │  tu mano, en abanico,
+│      │▩▩││▩▩││▩▩│            │  como agarrada
+│      └──┘└──┘└──┘            │
 ├──────────────────────────────┤
-│      tus 3 cartas en abanico │  bien grandes, se tocan con el pulgar
-├──────────────────────────────┤
-│  [ENVIDO] [TRUCO] [AL MAZO]  │  barra de cantos, al alcance del pulgar
+│ TRUCO │ ENVIDO │ FLOR │ MAZO │  barra fija, 56px
 └──────────────────────────────┘
 ```
 
-**Escritorio:** la misma mesa, centrada y más ancha, con el boliche visible
-alrededor. No se agrega información: se agrega aire.
+El **marcador** va apoyado en un rincón de la mesa, como la libreta de verdad:
+no flotando como un widget.
 
-**No negociables del layout:**
-- La **muestra** está siempre a la vista, sin tener que abrir nada. Es el error
-  número uno de los principiantes: hay que hacerlo imposible de olvidar.
-- El **marcador** está siempre a la vista, con malas y buenas separadas.
-- Los **botones de canto** miden 44px de alto como mínimo.
+**Escritorio:** la misma mesa, más ancha pero **no más grande**. Máximo 760px de
+zona de juego, centrada verticalmente. Alrededor se ve más del bar. Nunca se
+estira a lo ancho de un monitor: un truco a pantalla completa se lee peor, no
+mejor.
+
+**No negociables:**
+- La muestra siempre visible, sin abrir nada.
+- El marcador siempre visible, malas y buenas separadas.
+- Botones de canto de 44px de alto mínimo.
+- Entra en 360px de ancho sin scroll horizontal.
+- **La mesa se ve entera sin hacer scroll**, en celular y en escritorio.
 
 ## El marcador
 
@@ -170,16 +243,18 @@ Un canto es un momento, no un mensaje de sistema.
 
 ## Movimiento
 
-Cortito y con peso. Nada flota.
+Cortito y con peso. **Nada flota, nada aparece de la nada.**
 
 | Momento | Duración | Cómo |
 |---|---|---|
-| Repartir | 180ms por carta, escalonadas 60ms | Salen del mazo en arco |
+| Repartir | 200ms por carta, escalonadas 70ms | Salen del mazo en arco y se acomodan en el abanico |
 | Dar vuelta la muestra | 300ms | Giro sobre su eje, con un brillo al final |
-| Tirar una carta | 220ms | Cae con rotación aleatoria de -6° a 6° y sombra |
-| Canto | 120ms | Pop del globo |
-| Quiero | 80ms | Sacudida de la mesa |
-| Ganar una baza | 400ms | Las cartas se arrastran hacia el ganador |
+| **Tirar una carta** | 380ms | Recorre el camino de la mano a la mesa, se endereza, aterriza con una rotación al azar de -7° a 7° y da un rebote mínimo. La sombra se agranda mientras viaja y se cierra al aterrizar |
+| Reacomodar la mano | 280ms | Las cartas que quedan cierran el hueco y el abanico se recompone |
+| Levantar una carta | 140ms | Sube 10px y se endereza, como cuando la separás con el pulgar |
+| Canto | 140ms | Pop del globo |
+| Quiero | 90ms | Sacudida de la mesa |
+| Ganar una baza | 420ms | Las cartas se arrastran hacia el ganador |
 
 **Todo se puede saltear tocando la pantalla**, y todo se apaga si el navegador
 pide `prefers-reduced-motion`. Una mano no puede durar más de lo que dura en la
@@ -209,20 +284,58 @@ No es un extra: si no se lee, no se aprende.
 ## Lo que NO queremos
 
 - ❌ Neón flúor y estética casino de Las Vegas.
-- ❌ Verde plano tipo solitario de Windows.
+- ❌ **Paño verde de casino.** Un boliche tiene mesas de madera.
+- ❌ **Texturas de rayas parejas.** La madera de verdad tiene vetas
+  irregulares; unas líneas verticales equidistantes se ven como un patrón de
+  fondo, no como madera.
+- ❌ Cartas alineadas en fila prolija como un solitario: se sostienen en
+  abanico.
 - ❌ Gradientes violeta/celeste de app cripto.
 - ❌ Fotos realistas mezcladas con ilustración: o una cosa, o la otra.
 - ❌ Mesa recargada de íconos, banners y chiches. La carta manda.
 - ❌ Fuego, calaveras, "épica gamer". Esto es un boliche, no un torneo.
 
-## Pendiente de definir juntos
+## Referencias: qué tomamos de Truco Blitz y qué no
 
-1. **La foto de referencia de Truco Blitz** (no llegó al chat). Cuando esté en
-   [`imagenes/`](imagenes/) revisamos qué tomamos y qué no.
-2. **Estilo de los personajes:** ¿ilustración cartoon con contorno grueso, o
-   siluetas/retratos más sobrios? Cambia mucho el tono.
-3. **Cuánta ilustración de fondo:** ¿un boliche dibujado con detalle, o casi
-   todo penumbra con dos o tres objetos que se insinúan? (Lo segundo es más
-   barato y suele quedar mejor.)
-4. **La baraja:** ¿cuánto nos acercamos a la baraja española clásica y cuánto
-   la estilizamos?
+Las capturas de Truco Blitz que miramos (mesa 1v1, mesa 2v2, la "Gira Nacional"
+y la pantalla de reglas) confirmaron el rumbo y aportaron tres ideas concretas.
+
+**Lo que tomamos:**
+
+| De la referencia | Cómo lo usamos |
+|---|---|
+| El marcador en una **libreta de papel escrita a mano** con cuadraditos | Nuestro marcador es exactamente eso: papel, lápiz y Caveat. Es mil veces más cálido que un contador digital, y hace entender que la partida son 15 + 15 |
+| El **panel de papel viejo** sobre fondo de madera para la pantalla de reglas | Es nuestro "modo lectura" de la sección Aprender. El texto largo sobre negro cansa; sobre papel, no |
+| El **mapa de la gira** con el país dividido en regiones | Confirma la ruta por el Uruguay del concepto. Queda para la fase de la historia |
+| La **barra fija de cantos** abajo (Truco / Envido / Flor / Mazo) | Misma idea: cuatro botones grandes al alcance del pulgar. Con "Vale cuatro" entrando en el mismo lugar cuando corresponde |
+| Madera oscura + ornamentos dorados | Nuestra base, pero más cálida y con el cono de luz de la lámpara |
+
+**Lo que NO copiamos, a propósito:**
+
+- ❌ **El fotorrealismo mezclado.** En las capturas hay una taza de café real y
+  un pulgar humano real sosteniendo la carta, arriba de cartas dibujadas. Choca.
+  Nosotros vamos 100% ilustración plana: una sola manera de dibujar en todo el
+  juego. Además es más liviano y se ve mejor en pantallas chicas.
+- ❌ **La serif romana tipo Cinzel.** Es la tipografía por default de cualquier
+  juego mobile "épico". Vamos a Yeseva One, que tiene el aire del fileteado.
+- ❌ **La mesa negra sin luz.** Su mesa está plana y pareja. La nuestra tiene el
+  cono de luz de la lámpara: centro iluminado, bordes en penumbra.
+- ❌ **La muestra ausente.** Truco Blitz es argentino: no tiene muestra ni
+  piezas. Ahí está toda nuestra diferencia, y por eso la muestra tiene su propio
+  lugar de honor en la mesa (el portamuestra, ver
+  [`diseno-frontend.md`](diseno-frontend.md)).
+
+**Ojo con las capturas en el repo:** son de una app comercial ajena. Las
+miramos como referencia, pero **no se suben al repositorio público**, porque
+son material con derechos de otro. Por eso `ideas/imagenes/referencias/` está
+ignorado en `.gitignore`: dejá ahí las capturas de otras apps y quedan en tu
+máquina nomás. Las imágenes propias van sueltas en `ideas/imagenes/` y ésas sí
+se suben.
+
+## Todavía por definir
+
+1. **Estilo de los personajes** (para la fase de la historia): ¿retratos
+   ilustrados en marco dorado como los de la referencia, o siluetas más sobrias?
+2. **Cuánta ilustración de fondo** en el boliche: por ahora vamos con penumbra
+   y dos o tres objetos que se insinúan, que es lo más barato y lo que mejor
+   deja lucir las cartas.

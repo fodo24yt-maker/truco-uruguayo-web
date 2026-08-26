@@ -1,0 +1,279 @@
+@import "tailwindcss";
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Tokens. Salen de ideas/estetica.md y ideas/diseno-frontend.md.
+   Si un color no está acá, no se usa.
+   ─────────────────────────────────────────────────────────────────────────── */
+@theme {
+  --color-noche: #14100e;
+  --color-madera: #3a2418;
+  --color-madera-clara: #6b4a31;
+  --color-mesa: #4a2f1a;
+  --color-mesa-luz: #8a5c33;
+  --color-mesa-veta: #2e1c0e;
+  --color-mesa-canto: #1c1009;
+  --color-pared: #150e09;
+  --color-ambar: #f0b45c;
+  --color-papel: #eddfc0;
+  --color-papel-sombra: #d6c39a;
+  --color-dorado: #c9922e;
+  --color-dorado-claro: #e8b95c;
+  --color-bordo: #7b2231;
+  --color-bordo-claro: #a8323f;
+  --color-crema: #f2e6d0;
+  --color-tinta: #2a1c14;
+  --color-quiero: #4e8b57;
+  --color-no-quiero: #a8323f;
+
+  --color-espada: #2b4a6f;
+  --color-basto: #4e6b2f;
+  --color-oro: #c9922e;
+  --color-copa: #a8323f;
+
+  --font-display: var(--fuente-display), Georgia, serif;
+  --font-ui: var(--fuente-ui), system-ui, sans-serif;
+  --font-texto: var(--fuente-texto), system-ui, sans-serif;
+  --font-mano: var(--fuente-mano), cursive;
+}
+
+/* ─── Base ─────────────────────────────────────────────────────────────────── */
+body {
+  background-color: var(--color-noche);
+  color: var(--color-crema);
+  font-family: var(--font-texto);
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-dorado-claro);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ─── Texturas, todas en CSS: ni una sola imagen que descargar ─────────────── */
+
+/* Tablas verticales de madera, como la pared del boliche */
+.madera {
+  background-color: var(--color-madera);
+  background-image: repeating-linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.32) 0px,
+      rgba(0, 0, 0, 0.32) 2px,
+      transparent 2px,
+      transparent 46px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.035) 0px,
+      transparent 3px,
+      transparent 23px,
+      rgba(255, 255, 255, 0.02) 24px
+    );
+}
+
+/* La tabla de la mesa: madera cálida con la lámpara cayendo en el centro.
+   Las vetas las pone <TexturaMadera /> encima; esto es sólo el color y la luz. */
+/* La tabla vista en perspectiva. La luz de la lámpara cae en el centro y los
+   bordes se apagan casi del todo: es un bar de noche, no una plaza. */
+.tabla-mesa {
+  background-color: var(--color-mesa);
+  background-image: radial-gradient(
+    ellipse 66% 54% at 50% 34%,
+    #a97341 0%,
+    #8a5c33 22%,
+    #63401f 45%,
+    #3a2411 72%,
+    #1d1108 100%
+  );
+}
+
+/* La escena en perspectiva: la mesa se inclina como si la vieras desde tu silla */
+.escena-3d {
+  perspective: 900px;
+  perspective-origin: 50% 12%;
+}
+.plano-mesa {
+  transform: rotateX(34deg);
+  transform-origin: 50% 0%;
+}
+
+/* Cada carta apoyada se inclina apenas: sugiere el plano sin volverse ilegible */
+.carta-apoyada {
+  transform: rotateX(13deg);
+  transform-origin: 50% 100%;
+}
+
+/* La penumbra que cierra los bordes de la pantalla */
+.penumbra::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 74% 62% at 50% 46%,
+    transparent 0%,
+    transparent 42%,
+    rgba(8, 5, 3, 0.55) 78%,
+    rgba(8, 5, 3, 0.9) 100%
+  );
+}
+
+/* El canto de la mesa: el grosor de la tabla, que la separa del fondo */
+.canto-mesa {
+  background: linear-gradient(
+    180deg,
+    #2b1a0e 0%,
+    var(--color-mesa-canto) 34%,
+    #6b4326 78%,
+    #4a2e17 100%
+  );
+  box-shadow: 0 -12px 26px -6px rgba(0, 0, 0, 0.75);
+}
+
+/* Papel viejo: el fondo de todo lo que se lee */
+.papel {
+  background-color: var(--color-papel);
+  background-image: radial-gradient(
+      ellipse at 18% 12%,
+      rgba(255, 255, 255, 0.5) 0%,
+      transparent 55%
+    ),
+    radial-gradient(ellipse at 82% 88%, var(--color-papel-sombra) 0%, transparent 62%);
+  color: var(--color-tinta);
+}
+
+/* El halo de la muestra y de las piezas: el hilo visual que las une */
+.halo-pieza {
+  box-shadow:
+    0 0 0 2px var(--color-dorado),
+    0 0 18px -2px rgba(201, 146, 46, 0.85);
+}
+
+/* Filo dorado de los marcos y las barras */
+.filo-dorado {
+  border-color: color-mix(in srgb, var(--color-dorado) 55%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ─── Animaciones. Cortas y con peso: nada flota ───────────────────────────── */
+/* La carta tirada: viaja hasta la mesa, aterriza con una rotación al azar y
+   da un rebote mínimo. Cada carta recibe su propio --giro y --desde. */
+@keyframes tirar-carta {
+  0% {
+    opacity: 0;
+    transform: translate(var(--desde-x, 0), var(--desde-y, -70px))
+      rotate(calc(var(--giro, 0deg) * 2.4)) scale(1.14);
+  }
+  62% {
+    opacity: 1;
+    transform: translate(0, 5px) rotate(var(--giro, 0deg)) scale(1.02);
+  }
+  80% {
+    transform: translate(0, -2px) rotate(var(--giro, 0deg)) scale(1);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(var(--giro, 0deg)) scale(1);
+  }
+}
+.anim-caer {
+  animation: tirar-carta 380ms cubic-bezier(0.18, 0.9, 0.28, 1) both;
+}
+
+/* La sombra se agranda mientras la carta viaja y se cierra al aterrizar */
+@keyframes sombra-aterriza {
+  0% {
+    opacity: 0;
+    transform: scale(1.5);
+    filter: blur(9px);
+  }
+  62% {
+    opacity: 0.5;
+    transform: scale(1);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 0.38;
+    transform: scale(0.94);
+    filter: blur(3px);
+  }
+}
+.anim-sombra {
+  animation: sombra-aterriza 380ms cubic-bezier(0.18, 0.9, 0.28, 1) both;
+}
+
+/* Cuando una carta sale de la mano, las que quedan cierran el hueco */
+.mano-abanico > * {
+  transition:
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  70% {
+    transform: scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.anim-pop {
+  animation: pop 140ms ease-out both;
+}
+
+/* ─── Prosa de las lecciones. Sin plugin de typography: son ocho reglas ─────── */
+.prosa h2 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  line-height: 1.25;
+  color: var(--color-bordo);
+  margin-top: 2.25rem;
+  margin-bottom: 0.75rem;
+}
+.prosa h3 {
+  font-family: var(--font-ui);
+  font-size: 1.05rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-tinta);
+  opacity: 0.85;
+  margin-top: 1.75rem;
+  margin-bottom: 0.5rem;
+}
+.prosa p {
+  margin-bottom: 1rem;
+  font-size: 1.0625rem;
+  line-height: 1.7;
+}
+.prosa ul,
+.prosa ol {
+  margin: 0 0 1.25rem 1.25rem;
+  font-size: 1.0625rem;
+  line-height: 1.7;
+}
+.prosa ul {
+  list-style: disc;
+}
+.prosa ol {
+  list-style: decimal;
+}
+.prosa li {
+  margin-bottom: 0.5rem;
+  padding-left: 0.25rem;
+}
+.prosa strong {
+  font-weight: 700;
+}

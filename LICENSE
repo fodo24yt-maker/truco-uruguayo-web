@@ -1,0 +1,96 @@
+LICENCIA DE TRUCO URUGUAYO WEB
+Copyright (c) 2026 fodo24yt-maker. Todos los derechos reservados.
+
+────────────────────────────────────────────────────────────────────────────
+RESUMEN EN CRIOLLO (esto no es la licencia, es para que se entienda rápido)
+
+  PODÉS:
+   ✔ Leer todo el código, cuanto quieras.
+   ✔ Jugar y usar la web libremente, gratis.
+   ✔ Estudiarlo, aprender de él, y usar lo que aprendiste en tus proyectos.
+   ✔ Inspirarte: copiar IDEAS, técnicas y enfoques.
+   ✔ Copiar fragmentos chicos (unas pocas funciones) para tus cosas.
+   ✔ Clonar el repositorio y correrlo en tu máquina para probarlo.
+   ✔ Proponer cambios por pull request.
+
+  NO PODÉS (sin permiso escrito del autor):
+   ✘ Publicar este juego, o una versión modificada, como si fuera tuyo.
+   ✘ Usar partes sustanciales del código para armar tu propio juego de truco.
+   ✘ Lucrar con esto ni con obras derivadas: venderlo, ponerle publicidad,
+     compras dentro del juego, suscripciones, ni nada por el estilo.
+   ✘ Republicar el sitio en otro dominio.
+
+  El archivo reglas.txt es la excepción: ver la sección 6.
+────────────────────────────────────────────────────────────────────────────
+
+
+TÉRMINOS
+
+1. DEFINICIONES
+   "El Software" es todo el contenido de este repositorio: código fuente,
+   textos de las lecciones, diseño, y los gráficos vectoriales de la baraja.
+   "El Autor" es el titular del copyright indicado arriba.
+   "Vos" es cualquier persona que acceda al Software.
+
+2. PERMISOS QUE SE OTORGAN
+   El Autor te concede, gratis y sin exclusividad, el derecho a:
+   a) Acceder al código fuente, leerlo y estudiarlo.
+   b) Usar la web publicada para jugar y aprender, para lo que quieras,
+      incluso en un contexto comercial (por ejemplo, enseñar a jugar en un
+      club o en una clase).
+   c) Reproducir el Software en tu propio equipo con fines de estudio,
+      evaluación o contribución al proyecto.
+   d) Aplicar el conocimiento, las técnicas y las ideas aprendidas del
+      Software en tus propios trabajos, sin ninguna obligación hacia el
+      Autor. Las ideas no se pueden poseer y acá no se pretende hacerlo.
+   e) Reutilizar fragmentos breves de código —del orden de unas pocas
+      funciones sueltas— en otros proyectos, incluso comerciales, sin
+      pedir permiso.
+
+3. LO QUE NO SE PERMITE
+   Salvo autorización previa y por escrito del Autor, no está permitido:
+   a) Distribuir, publicar o poner a disposición del público el Software o
+      una obra derivada, ya sea en su forma original o modificada.
+   b) Reutilizar partes sustanciales del Software —entendiendo por tales el
+      motor de reglas, el contenido de las lecciones, los gráficos de la
+      baraja, o el conjunto del diseño de la interfaz— en otro producto.
+   c) Explotar comercialmente el Software o una obra derivada: venderlo,
+      licenciarlo, monetizarlo con publicidad, cobrar suscripciones o
+      compras internas, o cualquier otra forma de lucro.
+   d) Alojar una copia del Software en un dominio o servicio propio.
+   e) Quitar, alterar u ocultar los avisos de copyright o esta licencia.
+
+4. CONTRIBUCIONES
+   Si mandás un pull request o un issue con código, aceptás que el Autor
+   pueda usar tu aporte dentro de este proyecto bajo esta misma licencia.
+   Conservás el copyright de lo que escribiste.
+
+5. PERMISOS ESPECIALES
+   ¿Querés hacer algo que la sección 3 no permite? Preguntá. Este proyecto
+   existe para que el truco uruguayo se aprenda gratis, así que los usos
+   educativos y sin fines de lucro se ven con muy buenos ojos. Abrí un issue
+   en el repositorio y se conversa.
+
+6. LAS REGLAS DEL TRUCO NO SON DE NADIE
+   Las reglas del truco uruguayo son patrimonio cultural: nadie es dueño de
+   ellas y este proyecto no pretende serlo.
+   El archivo reglas.txt se libera bajo Creative Commons Atribución 4.0
+   (CC BY 4.0): podés copiarlo, adaptarlo y usarlo para lo que quieras,
+   incluso comercialmente, sólo citando de dónde salió.
+   Esa excepción cubre el texto del archivo reglas.txt, no su
+   implementación en código dentro de lib/motor/.
+
+7. SIN GARANTÍA
+   El Software se entrega "tal cual", sin garantía de ningún tipo, expresa
+   o implícita, incluidas las de comerciabilidad, aptitud para un propósito
+   determinado y no infracción. En ningún caso el Autor será responsable
+   por reclamos, daños u otras responsabilidades derivadas del Software o
+   de su uso.
+
+8. FIN DE LOS PERMISOS
+   Si incumplís esta licencia, los permisos de la sección 2 se terminan
+   automáticamente. Si corregís el incumplimiento dentro de los 30 días de
+   haber sido notificado, se restablecen.
+
+9. LEY APLICABLE
+   Esta licencia se rige por las leyes de la República Oriental del Uruguay.
