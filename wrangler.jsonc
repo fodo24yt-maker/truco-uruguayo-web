@@ -1,0 +1,14 @@
+{
+  // Le dice a Cloudflare que esto es un sitio 100% estático: que sirva los
+  // archivos de out/ tal cual, sin intentar armar un servidor de Next.js.
+  //
+  // Sin este archivo, Cloudflare detecta "Next.js" y por defecto arma un
+  // servidor completo con OpenNext -algo que hace falta para páginas
+  // dinámicas o con API-, pero acá no lo necesitamos: todo el juego corre
+  // en el navegador y el sitio entero es HTML, CSS y JS ya generados.
+  "name": "trucouruguayo",
+  "compatibility_date": "2026-08-26",
+  "assets": {
+    "directory": "./out"
+  }
+}

@@ -12,7 +12,10 @@
  * NEXT_PUBLIC_URL_SITIO con el dominio real; si no está, se usa el que sigue.
  */
 export const URL_SITIO = (
-  process.env.NEXT_PUBLIC_URL_SITIO ?? "https://truco-uruguayo.pages.dev"
+  // Provisorio: el subdominio real de Workers (algo como
+  // trucouruguayo.TU-CUENTA.workers.dev) lo asigna Cloudflare recién al
+  // desplegar. Actualizar acá en cuanto se confirme la dirección real.
+  process.env.NEXT_PUBLIC_URL_SITIO ?? "https://trucouruguayo.workers.dev"
 ).replace(/\/$/, "");
 
 export const NOMBRE_SITIO = "Truco Uruguayo";
