@@ -3,12 +3,11 @@
 Una web para **aprender a jugar al truco uruguayo desde cero** y después
 **practicar contra un bot**, sin pagar nada y sin registrarse.
 
+### 🎴 [Jugar ahora → truquito.smmqo08.workers.dev](https://truquito.smmqo08.workers.dev)
+
 > **Estado: en desarrollo.** Ya andan la sección Aprender (8 lecciones) y la
-> mesa mano a mano contra el bot.
->
-> **Estamos preparando la página para que puedas entrar y jugar directamente
-> desde el navegador, sin instalar ni descargar nada.** Cuando esté publicada,
-> el enlace va acá.
+> mesa mano a mano contra el bot. Entrás desde el navegador, sin instalar ni
+> descargar nada. Todavía se ve un poco justo en celular; se está puliendo.
 
 ## Por qué este proyecto
 

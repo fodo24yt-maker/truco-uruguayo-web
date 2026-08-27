@@ -111,7 +111,7 @@ Ordenado por lo que más se nota:
 | # | Qué | Por qué importa | Tamaño |
 |---|---|---|---|
 | 1 | ~~`sitemap.xml` y `robots.txt`~~ | ✅ hecho: 13 URLs indexables | — |
-| 2 | Pulir la mesa en celular | Es por donde va a entrar casi todo el mundo | Mediano |
+| 2 | **Pulir la mesa en celular** | Confirmado jugándolo en el sitio real (26/08): anda, pero se ve apretado. Es por donde va a entrar casi todo el mundo | Mediano |
 | 3 | Marcar lecciones como leídas | Ya está el `localStorage`; falta el botón y la tilde | Chico |
 | 4 | Página de error 404 propia | Hoy es la genérica de Next | Chico |
 | 5 | ~~Imagen de vista previa~~ | ✅ hecho | — |
@@ -119,9 +119,12 @@ Ordenado por lo que más se nota:
 | 7 | Modo situaciones | "Ésta es tu mano, ¿qué hacés?" — es lo que más enseña | Grande |
 | 8 | La gira por el país | Ya están los 7 rivales; falta el mapa y el desbloqueo | Grande |
 
-**Los dos que decidían si el proyecto se ve o no (1 y 5) ya están hechos.** Lo
-que queda se puede hacer con el sitio ya publicado, porque cada `push` publica
-solo.
+El sitio ya está publicado en **truquito.smmqo08.workers.dev**. Lo que queda de
+esta lista se hace con el sitio ya arriba, porque cada `push` publica solo — no
+hace falta volver a tocar Cloudflare para nada de esto.
+
+**El próximo paso acordado es el #2**, la mesa en celular. Se deja anotado acá
+para no perderlo, sin tocarlo todavía.
 
 ## Sobre la publicidad: decidido que no
 
