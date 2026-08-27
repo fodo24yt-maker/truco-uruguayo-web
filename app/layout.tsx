@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Caveat, Oswald, Source_Sans_3, Yeseva_One } from "next/font/google";
 import Link from "next/link";
+import { NOMBRE_SITIO, URL_SITIO } from "@/lib/sitio";
 import "./globals.css";
 
 // Las fuentes se sirven desde nuestro propio dominio: ni una sola llamada a
@@ -28,6 +29,9 @@ const manuscrita = Caveat({
 });
 
 export const metadata: Metadata = {
+  // Sin esto, la imagen para compartir apuntaría a localhost y no se vería
+  // nada al pegar el enlace en WhatsApp o en Twitter.
+  metadataBase: new URL(URL_SITIO),
   title: {
     default: "Truco Uruguayo — aprender y practicar, gratis",
     template: "%s · Truco Uruguayo",
@@ -37,11 +41,20 @@ export const metadata: Metadata = {
   keywords: [
     "truco uruguayo",
     "cómo jugar al truco uruguayo",
+    "reglas del truco uruguayo",
     "muestra",
     "piezas",
     "envido",
     "flor",
+    "jugar al truco",
   ],
+  openGraph: {
+    type: "website",
+    locale: "es_UY",
+    siteName: NOMBRE_SITIO,
+    url: URL_SITIO,
+  },
+  alternates: { canonical: "/" },
 };
 
 export const viewport: Viewport = {

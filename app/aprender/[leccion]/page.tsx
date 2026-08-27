@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { EspacioAviso } from "@/components/EspacioAviso";
+import { ApoyarProyecto } from "@/components/ApoyarProyecto";
 import { PanelPapel } from "@/components/PanelPapel";
 import { LECCIONES, buscarLeccion } from "@/lib/lecciones";
 
@@ -79,7 +79,7 @@ export default async function PaginaLeccion({ params }: Props) {
         )}
       </nav>
 
-      <EspacioAviso className="mt-10" />
+      <ApoyarProyecto className="mt-10" />
     </div>
   );
 }

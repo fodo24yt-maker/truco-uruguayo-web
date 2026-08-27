@@ -72,16 +72,15 @@ export default function Privacidad() {
 
           <h2>Publicidad</h2>
           <p>
-            Hoy el sitio <strong>no muestra publicidad</strong> y no carga
-            ningún script de terceros. Hay espacios reservados en el diseño,
-            pero están vacíos.
+            <strong>Este sitio no tiene publicidad.</strong> No carga ningún
+            script de terceros, no pone cookies de rastreo y no manda datos a
+            ninguna red de anuncios.
           </p>
           <p>
-            Si en el futuro se agregan avisos —para cubrir el costo de tener
-            esto en línea, que va a seguir siendo gratis— esta página se
-            actualiza <em>antes</em> de que eso pase, explicando qué proveedor
-            se usa, qué datos recoge y cómo desactivarlo. Los avisos nunca van
-            a aparecer dentro de la mesa mientras jugás.
+            Fue una decisión, no un descuido: poner anuncios habría significado
+            rastrearte para que a alguien le sirviera de algo, y no vale la
+            pena. Si en algún momento eso cambiara, esta página se actualiza{" "}
+            <em>antes</em>, no después.
           </p>
 
           <h2>Enlaces a otros sitios</h2>

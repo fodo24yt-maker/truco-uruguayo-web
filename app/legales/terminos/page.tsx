@@ -94,8 +94,8 @@ export default function Terminos() {
 
           <h2>Publicidad</h2>
           <p>
-            Hoy no hay. Si algún día se agregan avisos para cubrir el costo de
-            mantener esto en línea, se avisa antes en la{" "}
+            No hay, y no está previsto que la haya. Si eso cambiara, se avisa
+            antes en la{" "}
             <Link
               href="/legales/privacidad"
               className="text-bordo underline underline-offset-2"
@@ -104,7 +104,7 @@ export default function Terminos() {
             >
               política de privacidad
             </Link>
-            , y nunca van a aparecer dentro de la mesa mientras jugás.
+.
           </p>
 
           <h2>Cambios</h2>

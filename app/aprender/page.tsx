@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { EspacioAviso } from "@/components/EspacioAviso";
+import { ApoyarProyecto } from "@/components/ApoyarProyecto";
 import { LECCIONES } from "@/lib/lecciones";
 
 export const metadata: Metadata = {
@@ -48,7 +48,7 @@ export default function Aprender() {
         ))}
       </ol>
 
-      <EspacioAviso className="mt-12" />
+      <ApoyarProyecto className="mt-12" />
     </div>
   );
 }

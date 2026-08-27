@@ -3,8 +3,12 @@
 Una web para **aprender a jugar al truco uruguayo desde cero** y después
 **practicar contra un bot**, sin pagar nada y sin registrarse.
 
-> **Estado: MVP en desarrollo.** Ya andan la sección Aprender (8 lecciones) y
-> la mesa mano a mano contra el bot. Todavía no está publicada en internet.
+> **Estado: en desarrollo.** Ya andan la sección Aprender (8 lecciones) y la
+> mesa mano a mano contra el bot.
+>
+> **Estamos preparando la página para que puedas entrar y jugar directamente
+> desde el navegador, sin instalar ni descargar nada.** Cuando esté publicada,
+> el enlace va acá.
 
 ## Por qué este proyecto
 
@@ -54,20 +58,20 @@ test que lo verifica.
 - 2 contra 2, con compañero y señas.
 - Un bot de verdad, con un modelo de IA open source detrás.
 
-## Cómo correrlo
+## Correrlo por tu cuenta
 
-```bash
-npm install
-npm run dev
-```
+Para jugar **no hace falta nada de esto**: la idea es que entres a la página y
+listo. Esta sección es sólo para quien quiera abrir el código, curiosear o
+aportar algo.
 
-Y abrís <http://localhost:3000>.
+Con [Node.js](https://nodejs.org) instalado, `npm install` y `npm run dev`
+levantan el proyecto. Los comandos disponibles:
 
 | Comando | Qué hace |
 |---|---|
 | `npm run dev` | Levanta el sitio para desarrollar |
 | `npm run build` | Genera el sitio estático en `out/` |
-| `npm test` | Corre los tests del motor del juego |
+| `npm test` | Corre las pruebas del motor del juego |
 | `npm run typecheck` | Revisa los tipos sin compilar |
 
 ## Cómo está organizado
@@ -156,4 +160,7 @@ usos educativos y sin fines de lucro se ven con muy buenos ojos.
 - [Términos de uso](app/legales/terminos/page.tsx)
 
 Las dos se actualizan **antes** de agregar cualquier función que toque datos
-del usuario o publicidad.
+del usuario.
+
+**El sitio no lleva publicidad**, y no es sólo una promesa: no carga ningún
+script de terceros, no pone cookies y no hace una sola petición de red.

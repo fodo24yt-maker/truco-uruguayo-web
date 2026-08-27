@@ -1,0 +1,28 @@
+# Cabeceras HTTP del sitio.
+#
+# Este archivo lo leen Cloudflare Pages y Netlify tal cual. Hace falta porque
+# hay protecciones que SÓLO funcionan como cabecera HTTP de verdad: puestas en
+# una etiqueta <meta> el navegador las ignora. La más importante es
+# frame-ancestors, que es la que impide que alguien meta el sitio dentro de un
+# iframe suyo para engañar a la gente (clickjacking).
+
+/*
+  # Nadie puede embeber este sitio en un iframe ajeno.
+  X-Frame-Options: DENY
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests
+
+  # El navegador respeta el tipo que declaramos y no adivina.
+  X-Content-Type-Options: nosniff
+
+  # No le contamos a otros sitios de dónde viene la visita.
+  Referrer-Policy: no-referrer
+
+  # El sitio no necesita ninguno de estos permisos: se los negamos de antemano.
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), interest-cohort=()
+
+  # Una vez que se entró por HTTPS, no se vuelve a HTTP por dos años.
+  Strict-Transport-Security: max-age=63072000; includeSubDomains
+
+# Los archivos con huella digital en el nombre nunca cambian: se cachean fuerte.
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable

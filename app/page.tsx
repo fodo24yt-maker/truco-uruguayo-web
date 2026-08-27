@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { Carta } from "@/components/Carta";
-import { EspacioAviso } from "@/components/EspacioAviso";
+import { ApoyarProyecto } from "@/components/ApoyarProyecto";
 import { LECCIONES } from "@/lib/lecciones";
 import { desdeTexto } from "@/lib/motor/baraja";
 
@@ -113,7 +113,7 @@ export default function Inicio() {
         </ol>
       </section>
 
-      <EspacioAviso className="mb-14" />
+      <ApoyarProyecto className="mb-16" />
     </>
   );
 }

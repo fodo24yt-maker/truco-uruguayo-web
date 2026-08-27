@@ -95,7 +95,7 @@ Sitio estático (`output: export`): anda en GitHub Pages sin servidor.
 ├────────────────────────────┤
 │  Las 8 lecciones (lista)   │
 ├────────────────────────────┤
-│  [ espacio de aviso ]      │  ← slot de ad, abajo, discreto
+│  [ ¿te sirvió? → GitHub ]  │  ← invitación a seguir, discreta
 └────────────────────────────┘
 ```
 
@@ -120,7 +120,7 @@ de Google es una regla concreta que lo descoloca y lo hace seguir leyendo.
 │ │  texto...            │   │
 │ ╰──────────────────────╯   │
 ├────────────────────────────┤
-│  [ espacio de aviso ]      │
+│  [ ¿te sirvió? → GitHub ]  │
 ├────────────────────────────┤
 │  ← anterior   siguiente →  │
 └────────────────────────────┘
@@ -173,7 +173,7 @@ estira a 1920px, porque un truco a pantalla completa se lee peor, no mejor.
 | `BarraCantos` | Los botones, habilitados según lo que permite la regla |
 | `GloboCanto` | El canto como globo de diálogo |
 | `PanelPapel` | El fondo de papel viejo para leer |
-| `EspacioAviso` | El hueco de publicidad (ver abajo) |
+| `ApoyarProyecto` | La invitación a seguir el proyecto, al pie |
 
 ### La baraja en SVG
 Las 40 cartas se dibujan **por código**, no una por una: cuatro símbolos de
@@ -184,20 +184,21 @@ comerciales (que tienen derechos y el repo es público).
 Prueba de fuego: la carta se tiene que reconocer a **60px de ancho**, de noche,
 con el brillo al 40%.
 
-## Los espacios de publicidad
+## Nada de publicidad
 
-El proyecto es gratis. Si algún día hay avisos, tienen que tener un lugar
-pensado de antemano, no meterse a último momento donde molesten.
+**Decisión tomada: el sitio no lleva anuncios.**
 
-- **Dónde sí:** al pie de la landing, al pie de cada lección y en la pantalla
-  de fin de partida.
-- **Dónde no:** nunca dentro de la mesa mientras se juega. Ni interstitials, ni
-  videos, ni nada que tape una carta.
-- **Cómo:** un componente `EspacioAviso` que hoy reserva el lugar con un
-  recuadro discreto y mañana se reemplaza por el script del proveedor. Reservar
-  la altura desde ahora evita que el día que se prendan los avisos se mueva
-  todo el contenido de lugar.
-- **Hoy no se carga ningún script de terceros.** Cero rastreadores.
+Se evaluó poner AdSense y no vale la pena. En un sitio chico paga centavos por
+cada mil visitas, y a cambio hay que: abrir la política de seguridad para que
+entren scripts de Google, poner cookies de rastreo, agregar un cartel de
+consentimiento y reescribir la política de privacidad. Es mucho costo —para el
+que entra y para el proyecto— por muy poco.
+
+En su lugar, al pie de la portada y de cada lección va un bloque discreto que
+invita a seguir el proyecto en GitHub. No pide plata, no pone cookies y no
+manda ni un dato a ningún lado: es un enlace.
+
+Dentro de la mesa **no va nada**. Ni la invitación: mientras se juega, se juega.
 
 ## Calidad mínima
 

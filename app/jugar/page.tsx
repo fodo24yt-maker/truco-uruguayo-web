@@ -96,10 +96,7 @@ export default function Jugar() {
   const ultimoEvento = p.eventos[p.eventos.length - 1];
 
   return (
-    <div className="relative flex min-h-[calc(100dvh-4rem)] justify-center gap-4 overflow-hidden bg-[#0d0906] pb-[68px]">
-      {/* Espacio de aviso, sólo en pantallas anchas. Nunca sobre la mesa. */}
-      <EspacioLateral lado="izquierda" />
-
+    <div className="relative flex min-h-[calc(100dvh-4rem)] justify-center overflow-hidden bg-[#0d0906] pb-[68px]">
       <div className="penumbra relative flex w-full max-w-[860px] flex-col">
         {/* ─── El bar y el rival, al fondo ───────────────────────────── */}
         <div className="relative h-[168px] shrink-0">
@@ -264,8 +261,6 @@ export default function Jugar() {
         </div>
       </div>
 
-      <EspacioLateral lado="derecha" />
-
       {p.fase !== "jugando" && !eligiendo && (
         <Cartel
           partida={p}
@@ -366,25 +361,6 @@ export default function Jugar() {
         </div>
       </div>
     </div>
-  );
-}
-
-/**
- * El espacio de aviso al costado de la mesa. Sólo aparece en pantallas anchas,
- * donde de todos modos sobra lugar: en celular la mesa se queda con todo.
- * Nunca se mete sobre la mesa mientras se juega.
- */
-function EspacioLateral({ lado }: { lado: "izquierda" | "derecha" }) {
-  return (
-    <aside
-      className="hidden w-[160px] shrink-0 self-start pt-6 xl:block"
-      aria-hidden="true"
-      data-lado={lado}
-    >
-      <div className="flex h-[600px] w-full items-center justify-center rounded-sm bg-black/20 text-[10px] uppercase tracking-widest text-crema/15">
-        espacio
-      </div>
-    </aside>
   );
 }
 
