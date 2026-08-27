@@ -13,7 +13,7 @@ const TRAZOS = [
 
 function Grupo({ cantidad }: { cantidad: number }) {
   return (
-    <svg viewBox="0 0 22 26" className="h-6 w-5 shrink-0" aria-hidden="true">
+    <svg viewBox="0 0 22 26" className="h-4 w-3.5 shrink-0 sm:h-6 sm:w-5" aria-hidden="true">
       {TRAZOS.slice(0, cantidad).map((d) => (
         <path
           key={d}
@@ -37,7 +37,7 @@ function Fila({ etiqueta, puntos }: { etiqueta: string; puntos: number }) {
 
   return (
     <div className="flex items-center gap-1.5">
-      <span className="w-7 shrink-0 font-[family-name:var(--font-mano)] text-base leading-none text-tinta/80">
+      <span className="w-5 shrink-0 font-[family-name:var(--font-mano)] text-sm leading-none text-tinta/80 sm:w-7 sm:text-base">
         {etiqueta}
       </span>
       <span className="flex gap-0.5">
@@ -45,13 +45,13 @@ function Fila({ etiqueta, puntos }: { etiqueta: string; puntos: number }) {
           <Grupo key={`m${i}`} cantidad={n} />
         ))}
       </span>
-      <span className="mx-1 h-5 w-px bg-tinta/30" />
+      <span className="mx-0.5 h-4 w-px bg-tinta/30 sm:mx-1 sm:h-5" />
       <span className="flex gap-0.5">
         {grupos(buenas).map((n, i) => (
           <Grupo key={`b${i}`} cantidad={n} />
         ))}
       </span>
-      <span className="ml-1.5 w-5 shrink-0 text-right font-[family-name:var(--font-mano)] text-lg leading-none text-bordo">
+      <span className="ml-1 w-4 shrink-0 text-right font-[family-name:var(--font-mano)] text-base leading-none text-bordo sm:ml-1.5 sm:w-5 sm:text-lg">
         {puntos}
       </span>
     </div>
@@ -61,11 +61,11 @@ function Fila({ etiqueta, puntos }: { etiqueta: string; puntos: number }) {
 export function Marcador({ vos, rival }: { vos: number; rival: number }) {
   return (
     <div
-      className="papel -rotate-2 inline-block w-fit shrink-0 px-2.5 py-2"
+      className="papel -rotate-2 inline-block w-fit shrink-0 px-2 py-1.5 sm:px-2.5 sm:py-2"
       style={{ boxShadow: "3px 7px 14px -3px rgba(0,0,0,0.8)" }}
     >
-      <div className="mb-0.5 flex gap-1.5 pl-8 font-[family-name:var(--font-ui)] text-[8px] uppercase tracking-[0.12em] text-tinta/45">
-        <span className="w-[64px]">malas</span>
+      <div className="mb-0.5 flex gap-1 pl-6 font-[family-name:var(--font-ui)] text-[7px] uppercase tracking-[0.12em] text-tinta/45 sm:gap-1.5 sm:pl-8 sm:text-[8px]">
+        <span className="w-[46px] sm:w-[64px]">malas</span>
         <span>buenas</span>
       </div>
       <Fila etiqueta="Él" puntos={rival} />

@@ -133,6 +133,12 @@ export interface PropsCarta {
   oculta?: boolean;
   /** Es pieza en esta mano: se prende con el halo dorado de la muestra. */
   pieza?: boolean;
+  /**
+   * Ancho en píxeles. Si se omite, la carta ocupa el ancho que le dé el CSS
+   * (por ejemplo `className="w-[76px] sm:w-[92px]"`) y mantiene sola la
+   * proporción 2:3. Eso es lo que permite que la misma carta se achique en
+   * celular sin JavaScript ni parpadeo al cargar.
+   */
   ancho?: number;
   className?: string;
   /** Para pasarle el giro con el que aterriza, o cualquier ajuste puntual. */
@@ -143,12 +149,20 @@ export function Carta({
   carta,
   oculta = false,
   pieza = false,
-  ancho = 84,
+  ancho,
   className = "",
   style,
 }: PropsCarta) {
-  const alto = Math.round((ancho * 150) / 100);
-  const estilo = { width: ancho, height: alto, ...style };
+  const estilo: React.CSSProperties = {
+    // Sin ancho explícito, manda el CSS y la proporción se mantiene sola
+    // Sin ancho explícito NO se toca el width: si lo pusiéramos acá en línea,
+    // pisaría a la clase de CSS (los estilos en línea siempre ganan) y las
+    // medidas por breakpoint no servirían de nada.
+    ...(ancho === undefined
+      ? { aspectRatio: "2 / 3" }
+      : { width: ancho, height: Math.round((ancho * 150) / 100) }),
+    ...style,
+  };
 
   if (oculta || !carta) {
     return (

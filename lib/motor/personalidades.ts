@@ -1,191 +1,214 @@
 /**
- * Las personalidades de los rivales.
+ * Los rivales: uno por cada departamento del Uruguay.
  *
- * El bot es uno solo: lo que cambia de rival en rival son estos números. Un
- * mentiroso y un cerrado corren exactamente el mismo código, sólo que uno canta
- * truco con un cuatro y el otro no canta ni con el ancho de espada.
+ * El bot es UNO SOLO. Lo que cambia de rival en rival son estos números: con
+ * qué tanto canta, cuánto miente, cuánto se guarda. El mentiroso de Rocha y el
+ * mozo de Ciudad Vieja corren exactamente el mismo código.
  *
- * Cada personaje de la ruta (ver ideas/concepto.md) es una fila de esta tabla.
+ * El orden de `paso` es el de la gira: arranca en Montevideo y termina en
+ * Carmelo, Colonia, con el Tucho. La dificultad sube con el camino.
  */
 
 export interface Personalidad {
   id: string;
   nombre: string;
+  /** El departamento, tal como se llama en el mapa. */
+  departamento: string;
+  /** La ciudad o el barrio de donde es, para darle color. */
   lugar: string;
-  /** De 1 a 5, para mostrar en pantalla. */
+  /** De 1 a 5. */
   dificultad: number;
-  /** Cómo juega, en una línea, para que el jugador sepa a qué atenerse. */
+  /** Lugar en la gira: 1 es Montevideo, 19 es Carmelo. */
+  paso: number;
+  /** Cómo juega, en una línea, para que sepas a qué atenerte. */
   descripcion: string;
 
   // ── Envido ────────────────────────────────────────────────────────────
-  /** Tanto mínimo para cantar envido. Más bajo = más atrevido. */
   cantaEnvidoCon: number;
-  /** Tanto mínimo para querer un envido que le cantaron. */
   quiereEnvidoCon: number;
-  /** Tanto mínimo para subir a real envido. */
   subeEnvidoCon: number;
 
   // ── Truco ─────────────────────────────────────────────────────────────
-  /** Calidad de mano (0 a 1) mínima para cantar truco. */
   cantaTrucoCon: number;
-  /** Calidad mínima para querer un truco. */
   quiereTrucoCon: number;
-  /** Calidad mínima para subir a retruco o vale cuatro. */
   subeTrucoCon: number;
 
   // ── Carácter ──────────────────────────────────────────────────────────
-  /**
-   * Cuánto miente, de 0 a 1. Es la probabilidad de cantar igual cuando NO
-   * tiene con qué. Un 0 es incapaz de mentir; un 0,5 miente una de cada dos.
-   */
+  /** Probabilidad de cantar igual sin tener con qué. 0 = incapaz de mentir. */
   mentira: number;
-  /**
-   * Cuánto se guarda, de 0 a 1. Probabilidad de callarse un canto que sí
-   * podría hacer. Sirve para que no sea un reloj: si canta siempre que puede,
-   * le leés el tanto exacto.
-   */
+  /** Probabilidad de callarse un canto que podría hacer. */
   silencio: number;
+  /**
+   * Qué tanto se fija en lo que hay sobre la mesa antes de cantar, de 0 a 1.
+   *
+   * En 1 nunca canta truco si la carta que tiró el rival ya le ganó a todo lo
+   * que le queda: sabe que esa baza está perdida. En 0 canta igual, como el
+   * que se entusiasma sin mirar. Es lo que separa a un rival duro de uno que
+   * regala puntos.
+   */
+  sentidoComun: number;
 
   // ── Flor ──────────────────────────────────────────────────────────────
-  /** Valor de flor mínimo para ir a la contraflor al resto. */
   contraflorCon: number;
-  /** Valor de flor mínimo para cantar con flor envido. */
   conFlorEnvidoCon: number;
-  /** Valor de flor mínimo para querer una apuesta de flor. */
   quiereFlorCon: number;
 }
 
-/** El rival de siempre: honesto, tranquilo, el que conviene para aprender. */
-export const EL_CHUECO: Personalidad = {
-  id: "el-chueco",
-  nombre: "El Chueco",
-  lugar: "Ciudad Vieja",
-  dificultad: 1,
-  descripcion: "El mozo. Nunca miente: si canta, tiene.",
-  cantaEnvidoCon: 26,
-  quiereEnvidoCon: 25,
-  subeEnvidoCon: 31,
-  cantaTrucoCon: 0.68,
-  quiereTrucoCon: 0.38,
-  subeTrucoCon: 0.72,
-  mentira: 0.0,
-  silencio: 0.15,
-  contraflorCon: 40,
-  conFlorEnvidoCon: 34,
-  quiereFlorCon: 32,
-};
+/**
+ * Arma una personalidad a partir de un nivel base, para no repetir 19 veces
+ * los mismos números. Después cada rival ajusta lo suyo.
+ */
+function segunNivel(nivel: 1 | 2 | 3 | 4 | 5) {
+  const tabla = {
+    1: { cantaEnvidoCon: 27, quiereEnvidoCon: 26, subeEnvidoCon: 32, cantaTrucoCon: 0.74, quiereTrucoCon: 0.44, subeTrucoCon: 0.82, sentidoComun: 0.15 },
+    2: { cantaEnvidoCon: 26, quiereEnvidoCon: 25, subeEnvidoCon: 31, cantaTrucoCon: 0.7, quiereTrucoCon: 0.4, subeTrucoCon: 0.76, sentidoComun: 0.4 },
+    3: { cantaEnvidoCon: 26, quiereEnvidoCon: 25, subeEnvidoCon: 30, cantaTrucoCon: 0.66, quiereTrucoCon: 0.36, subeTrucoCon: 0.72, sentidoComun: 0.65 },
+    4: { cantaEnvidoCon: 25, quiereEnvidoCon: 24, subeEnvidoCon: 29, cantaTrucoCon: 0.62, quiereTrucoCon: 0.33, subeTrucoCon: 0.68, sentidoComun: 0.85 },
+    5: { cantaEnvidoCon: 24, quiereEnvidoCon: 23, subeEnvidoCon: 28, cantaTrucoCon: 0.58, quiereTrucoCon: 0.3, subeTrucoCon: 0.64, sentidoComun: 1 },
+  } as const;
+  return tabla[nivel];
+}
 
-export const PERSONALIDADES: Personalidad[] = [
-  EL_CHUECO,
+const FLOR_POR_NIVEL = {
+  1: { contraflorCon: 44, conFlorEnvidoCon: 37, quiereFlorCon: 35 },
+  2: { contraflorCon: 42, conFlorEnvidoCon: 35, quiereFlorCon: 33 },
+  3: { contraflorCon: 40, conFlorEnvidoCon: 34, quiereFlorCon: 32 },
+  4: { contraflorCon: 37, conFlorEnvidoCon: 31, quiereFlorCon: 29 },
+  5: { contraflorCon: 35, conFlorEnvidoCon: 29, quiereFlorCon: 27 },
+} as const;
+
+interface Semilla {
+  id: string;
+  nombre: string;
+  departamento: string;
+  lugar: string;
+  nivel: 1 | 2 | 3 | 4 | 5;
+  descripcion: string;
+  mentira: number;
+  silencio: number;
+}
+
+/** Los 19, en el orden de la gira. */
+const SEMILLAS: Semilla[] = [
   {
-    id: "la-tota",
-    nombre: "La Tota",
-    lugar: "Canelones",
-    dificultad: 1,
-    descripcion: "Canta envido en todas las manos. Truco, casi nunca.",
-    cantaEnvidoCon: 20, // canta con cualquier cosa
-    quiereEnvidoCon: 22,
-    subeEnvidoCon: 30,
-    cantaTrucoCon: 0.85, // sólo con mano bárbara
-    quiereTrucoCon: 0.45,
-    subeTrucoCon: 0.9,
-    mentira: 0.1,
-    silencio: 0.0, // no se guarda nada
-    contraflorCon: 44,
-    conFlorEnvidoCon: 36,
-    quiereFlorCon: 34,
+    id: "luki", nombre: "Luki", departamento: "Montevideo", lugar: "La Blanqueada",
+    nivel: 1, mentira: 0.05, silencio: 0.1,
+    descripcion: "Juega en el liceo y no salió nunca de ahí. Canta lo que tiene, nada más.",
   },
   {
-    id: "machado",
-    nombre: "Machado",
-    lugar: "Colonia",
-    dificultad: 2,
-    descripcion: "Juega siempre igual. Aprendé el patrón y lo tenés.",
-    cantaEnvidoCon: 27,
-    quiereEnvidoCon: 26,
-    subeEnvidoCon: 31,
-    cantaTrucoCon: 0.7,
-    quiereTrucoCon: 0.4,
-    subeTrucoCon: 0.75,
-    mentira: 0.05,
-    silencio: 0.0, // total previsibilidad: siempre canta lo mismo
-    contraflorCon: 42,
-    conFlorEnvidoCon: 35,
-    quiereFlorCon: 33,
+    id: "la-coca", nombre: "La Coca", departamento: "Canelones", lugar: "Las Piedras",
+    nivel: 1, mentira: 0.12, silencio: 0,
+    descripcion: "Feriante. Canta envido en todas las manos, tenga o no tenga.",
   },
   {
-    id: "bruno",
-    nombre: "Bruno",
-    lugar: "Rocha",
-    dificultad: 3,
-    descripcion: "Mentiroso. Te canta truco con un cuatro y te lo hace creer.",
-    cantaEnvidoCon: 24,
-    quiereEnvidoCon: 23,
-    subeEnvidoCon: 28,
-    cantaTrucoCon: 0.5,
-    quiereTrucoCon: 0.28, // quiere casi todo
-    subeTrucoCon: 0.55,
-    mentira: 0.45, // miente casi una de cada dos
-    silencio: 0.1,
-    contraflorCon: 36,
-    conFlorEnvidoCon: 30,
-    quiereFlorCon: 28,
+    id: "el-rulo", nombre: "El Rulo", departamento: "San José", lugar: "Ciudad del Plata",
+    nivel: 1, mentira: 0.08, silencio: 0.2,
+    descripcion: "Tranquilo y previsible. Si no canta, no tiene.",
   },
   {
-    id: "dona-elsa",
-    nombre: "Doña Elsa",
-    lugar: "Tacuarembó",
-    dificultad: 3,
-    descripcion: "Paciente. Te deja ganar la primera y te liquida en la tercera.",
-    cantaEnvidoCon: 28,
-    quiereEnvidoCon: 26,
-    subeEnvidoCon: 32,
-    cantaTrucoCon: 0.74,
-    quiereTrucoCon: 0.42,
-    subeTrucoCon: 0.8,
-    mentira: 0.12,
-    silencio: 0.45, // se guarda mucho: es difícil leerle la mano
-    contraflorCon: 41,
-    conFlorEnvidoCon: 35,
-    quiereFlorCon: 33,
+    id: "tito", nombre: "Tito", departamento: "Florida", lugar: "Sarandí Grande",
+    nivel: 2, mentira: 0.15, silencio: 0.05,
+    descripcion: "Juega siempre igual. Agarrale el ritmo y lo tenés.",
   },
   {
-    id: "el-rusito",
-    nombre: "El Rusito",
-    lugar: "Salto",
-    dificultad: 4,
-    descripcion: "Fanático de las piezas y la flor. No se le escapa una cuenta.",
-    cantaEnvidoCon: 25,
-    quiereEnvidoCon: 24,
-    subeEnvidoCon: 29,
-    cantaTrucoCon: 0.7,
-    quiereTrucoCon: 0.36,
-    subeTrucoCon: 0.74,
-    mentira: 0.2,
-    silencio: 0.2,
-    contraflorCon: 34, // se juega la partida con flores que otros no arriesgan
-    conFlorEnvidoCon: 28,
-    quiereFlorCon: 26,
+    id: "la-nelly", nombre: "La Nelly", departamento: "Lavalleja", lugar: "Minas",
+    nivel: 2, mentira: 0.1, silencio: 0.35,
+    descripcion: "Callada. Te deja hablar a vos y after te cobra.",
   },
   {
-    id: "cacho",
-    nombre: "Cacho",
-    lugar: "Melo",
-    dificultad: 4,
-    descripcion: "Mira el marcador antes que las cartas. Te canta la falta en el peor momento.",
-    cantaEnvidoCon: 25,
-    quiereEnvidoCon: 24,
-    subeEnvidoCon: 28,
-    cantaTrucoCon: 0.6,
-    quiereTrucoCon: 0.32,
-    subeTrucoCon: 0.65,
-    mentira: 0.32,
-    silencio: 0.25,
-    contraflorCon: 37,
-    conFlorEnvidoCon: 31,
-    quiereFlorCon: 29,
+    id: "marito", nombre: "Marito", departamento: "Maldonado", lugar: "Piriápolis",
+    nivel: 2, mentira: 0.25, silencio: 0.1,
+    descripcion: "De temporada. Se entusiasma rápido y canta de más.",
+  },
+  {
+    id: "el-pescador", nombre: "El Pescador", departamento: "Rocha", lugar: "La Paloma",
+    nivel: 2, mentira: 0.3, silencio: 0.15,
+    descripcion: "Paciencia de pescador: te tira el anzuelo y espera que piques.",
+  },
+  {
+    id: "don-aparicio", nombre: "Don Aparicio", departamento: "Treinta y Tres", lugar: "Vergara",
+    nivel: 3, mentira: 0.12, silencio: 0.4,
+    descripcion: "Olimareño de ley. No apura nada y no se le escapa una cuenta.",
+  },
+  {
+    id: "el-melo", nombre: "El Melo", departamento: "Cerro Largo", lugar: "Melo",
+    nivel: 3, mentira: 0.35, silencio: 0.15,
+    descripcion: "Fronterizo. Te canta truco mirándote a los ojos con un cuatro.",
+  },
+  {
+    id: "cachila", nombre: "Cachila", departamento: "Durazno", lugar: "Sarandí del Yí",
+    nivel: 3, mentira: 0.2, silencio: 0.25,
+    descripcion: "Mira el marcador antes que las cartas. Te canta la falta justo.",
+  },
+  {
+    id: "el-trinitario", nombre: "El Trinitario", departamento: "Flores", lugar: "Trinidad",
+    nivel: 3, mentira: 0.22, silencio: 0.3,
+    descripcion: "De pueblo chico y mesa grande. Juega el envido como nadie.",
+  },
+  {
+    id: "peralta", nombre: "El Gaucho Peralta", departamento: "Tacuarembó", lugar: "Paso de los Toros",
+    nivel: 3, mentira: 0.18, silencio: 0.35,
+    descripcion: "De la Patria Gaucha. Aguanta, aguanta, y te liquida en la tercera.",
+  },
+  {
+    id: "joao", nombre: "Joao", departamento: "Rivera", lugar: "Rivera",
+    nivel: 4, mentira: 0.4, silencio: 0.2,
+    descripcion: "Mitad y mitad, como la frontera. Nunca sabés si te está cargando.",
+  },
+  {
+    id: "el-piedra", nombre: "El Piedra", departamento: "Artigas", lugar: "Bella Unión",
+    nivel: 4, mentira: 0.28, silencio: 0.3,
+    descripcion: "Duro como las amatistas de allá. No regala una sola mano.",
+  },
+  {
+    id: "don-ramon", nombre: "Don Ramón", departamento: "Salto", lugar: "Salto",
+    nivel: 4, mentira: 0.22, silencio: 0.35,
+    descripcion: "Citricultor. Cuenta las piezas antes de que las des vuelta.",
+  },
+  {
+    id: "beto", nombre: "Beto", departamento: "Paysandú", lugar: "Paysandú",
+    nivel: 4, mentira: 0.32, silencio: 0.22,
+    descripcion: "Sanducero de bar. Te canta el retruco sin despeinarse.",
+  },
+  {
+    id: "el-fray", nombre: "El Fray", departamento: "Río Negro", lugar: "Fray Bentos",
+    nivel: 4, mentira: 0.26, silencio: 0.3,
+    descripcion: "Sabe esperar. Si te quiere el truco, andá con cuidado.",
+  },
+  {
+    id: "la-rosa", nombre: "La Rosa", departamento: "Soriano", lugar: "Mercedes",
+    nivel: 5, mentira: 0.3, silencio: 0.35,
+    descripcion: "No pierde una mano por apurada. Lee el juego como un libro.",
+  },
+  {
+    id: "el-tucho", nombre: "El Tucho", departamento: "Colonia", lugar: "Carmelo",
+    nivel: 5, mentira: 0.38, silencio: 0.4,
+    descripcion: "El más bravo de todos. Miente cuando conviene y nunca cuando no.",
   },
 ];
 
+export const PERSONALIDADES: Personalidad[] = SEMILLAS.map((s, i) => ({
+  id: s.id,
+  nombre: s.nombre,
+  departamento: s.departamento,
+  lugar: s.lugar,
+  dificultad: s.nivel,
+  paso: i + 1,
+  descripcion: s.descripcion,
+  mentira: s.mentira,
+  silencio: s.silencio,
+  ...segunNivel(s.nivel),
+  ...FLOR_POR_NIVEL[s.nivel],
+}));
+
+/** El primero de la gira: el rival con el que conviene aprender. */
+export const LUKI = PERSONALIDADES[0];
+
+/** Compatibilidad con el modo de partida rápida. */
+export const EL_CHUECO = LUKI;
+
 export const buscarPersonalidad = (id: string) =>
-  PERSONALIDADES.find((p) => p.id === id) ?? EL_CHUECO;
+  PERSONALIDADES.find((p) => p.id === id) ?? LUKI;
+
+export const porDepartamento = (departamento: string) =>
+  PERSONALIDADES.find((p) => p.departamento === departamento);

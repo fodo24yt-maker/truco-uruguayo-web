@@ -48,9 +48,9 @@ recibe visitas, ahí comprás un `.uy`, que es el que le va.
 
 ### 1. Antes de publicar (5 minutos)
 
-Sacá tu correo personal de los commits futuros. Hoy `fodo24yt@gmail.com` es
-visible para cualquiera en la historia del repositorio, y los bots de spam
-rastrean GitHub buscando justamente eso:
+Sacá tu correo personal de los commits futuros. Si commiteaste con tu correo
+real, queda visible para cualquiera en la historia del repositorio, y los bots
+de spam rastrean GitHub buscando justamente eso:
 
 ```
 git config user.email "TU_ID+fodo24yt-maker@users.noreply.github.com"
@@ -111,13 +111,24 @@ Ordenado por lo que más se nota:
 | # | Qué | Por qué importa | Tamaño |
 |---|---|---|---|
 | 1 | ~~`sitemap.xml` y `robots.txt`~~ | ✅ hecho: 13 URLs indexables | — |
-| 2 | **Pulir la mesa en celular** | Confirmado jugándolo en el sitio real (26/08): anda, pero se ve apretado. Es por donde va a entrar casi todo el mundo | Mediano |
+| 2 | ~~Pulir la mesa en celular~~ | ✅ hecho (27/08): la mesa entra entera en pantalla, sin scroll, y las cartas ya no quedan tapadas por la barra | — |
 | 3 | Marcar lecciones como leídas | Ya está el `localStorage`; falta el botón y la tilde | Chico |
 | 4 | Página de error 404 propia | Hoy es la genérica de Next | Chico |
 | 5 | ~~Imagen de vista previa~~ | ✅ hecho | — |
 | 6 | Sonido de la mesa | Cambia mucho la sensación de estar jugando | Mediano |
-| 7 | Modo situaciones | "Ésta es tu mano, ¿qué hacés?" — es lo que más enseña | Grande |
-| 8 | La gira por el país | Ya están los 7 rivales; falta el mapa y el desbloqueo | Grande |
+| 7 | ~~Ejercicios en las lecciones~~ | ✅ hecho (27/08): 12 ejercicios jugables, uno o dos por lección, con la explicación de por qué | — |
+| 8 | ~~El mapa de la gira~~ | ✅ hecho (27/08): los 19 departamentos, jugables todos | — |
+| 9 | **Desbloqueo en cadena de la gira** | Hoy están los 19 abiertos. Cada rival ya tiene su `paso` (1 a 19) y el progreso guarda qué ganaste: falta sólo la regla de "hasta que no ganes éste, no se abre el próximo" | Chico |
+| 10 | Que el bot lea las señas | Para cuando haya 2 contra 2 | Grande |
+
+## Fallas encontradas jugando
+
+Las que aparecen usándolo de verdad, que son las que más valen.
+
+| Fecha | Qué pasó | Estado |
+|---|---|---|
+| 27/08 | **El bot cantaba truco con la mano ya perdida.** Le tiré el 2 de la muestra —la carta más fuerte del juego, a la que no le gana nada— y cantó truco igual, cuando era imposible que ganara esa baza | ✅ arreglado: el bot ahora mira la carta que hay sobre la mesa antes de cantar. Los rivales de nivel 5 no cometen el error nunca; los de nivel 1 sí, a propósito, porque son principiantes |
+| 27/08 | La mesa no entraba en pantalla de celular: había que scrollear para ver las propias cartas | ✅ arreglado |
 
 El sitio ya está publicado en **truquito.smmqo08.workers.dev**. Lo que queda de
 esta lista se hace con el sitio ya arriba, porque cada `push` publica solo — no

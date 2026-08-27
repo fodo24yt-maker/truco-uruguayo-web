@@ -103,7 +103,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         )}
         <meta name="referrer" content="no-referrer" />
       </head>
-      <body className="min-h-dvh">
+      <body className="flex min-h-dvh flex-col">
         <header className="madera border-b-2 filo-dorado">
           <nav className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-4 py-3">
             <Link
@@ -129,7 +129,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </nav>
         </header>
 
-        <main>{children}</main>
+        <main className="flex min-h-0 flex-1 flex-col">{children}</main>
 
         <footer className="madera mt-16 border-t-2 filo-dorado px-4 py-8 text-center text-sm text-crema/60">
           <p className="mx-auto max-w-lg">

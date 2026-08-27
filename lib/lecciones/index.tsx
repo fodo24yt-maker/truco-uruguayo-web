@@ -3,6 +3,7 @@
  * Todo el contenido sale de reglas.txt: si algo no está allá, no se enseña acá.
  */
 
+import { Ejercicio } from "@/components/Ejercicio";
 import { Dato, FilaCartas, ManoConMuestra, Tabla, c } from "@/components/Ejemplos";
 import { explicarEnvido } from "@/lib/motor/tantos";
 
@@ -50,6 +51,29 @@ function LaBaraja() {
         40 cartas, cuatro palos, del 1 al 7 más sota (10), caballo (11) y rey
         (12). Sin ochos ni nueves.
       </Dato>
+
+      <Ejercicio
+        pregunta="De estas tres cartas, ¿cuál vale CERO para contar el envido?"
+        mano={["7C", "12O", "3B"]}
+        opciones={[
+          {
+            texto: "El rey de oro",
+            correcta: true,
+            porque:
+              "Las tres figuras —sota (10), caballo (11) y rey (12)— valen cero para contar. Sirven para ganar bazas, pero no suman un solo punto al tanto.",
+          },
+          {
+            texto: "El siete de copa",
+            correcta: false,
+            porque: "El 7 vale 7: del as al siete, cada carta vale su número.",
+          },
+          {
+            texto: "El tres de basto",
+            correcta: false,
+            porque: "El 3 vale 3. Es carta buena para ganar bazas y además suma.",
+          },
+        ]}
+      />
     </>
   );
 }
@@ -114,6 +138,31 @@ function Jerarquia() {
         uruguayo se reordena en cada mano. De eso se trata la lección que sigue,
         que es la más importante de todas.
       </p>
+
+      <Ejercicio
+        pregunta="Tirás una sola carta para ganar la baza. ¿Cuál de las tres es la más fuerte?"
+        mano={["3E", "1B", "12O"]}
+        opciones={[
+          {
+            texto: "El 1 de basto",
+            correcta: true,
+            porque:
+              "Es una de las cuatro matas: sólo le gana el ancho de espada. El 3 y el rey están bastante más abajo.",
+          },
+          {
+            texto: "El rey de oro",
+            correcta: false,
+            porque:
+              "El rey engaña porque es el número más alto, pero en el truco está en el escalón 8: le ganan las matas, los treses, los doses y hasta los anchos falsos.",
+          },
+          {
+            texto: "El 3 de espada",
+            correcta: false,
+            porque:
+              "El 3 es carta buena, pero está en el escalón 5: cualquiera de las cuatro matas le gana.",
+          },
+        ]}
+      />
     </>
   );
 }
@@ -190,6 +239,59 @@ function LaMuestra() {
         piezas y van arriba de todo, en ese orden. Si la muestra es una de
         ellas, el rey de ese palo la reemplaza.
       </Dato>
+
+      <Ejercicio
+        pregunta="Él tiró el ancho de espada, la carta más brava sin piezas. ¿Con cuál se lo tapás?"
+        muestra="3B"
+        enMesa="1E"
+        mano={["5B", "3O", "12E"]}
+        opciones={[
+          {
+            texto: "El 5 de basto",
+            correcta: true,
+            porque:
+              "La muestra es de basto, así que el 5 de basto es pieza: le gana al ancho de espada y a todo lo que no sea el 2 o el 4 de basto. Un 5 tapando un ancho: eso es el truco uruguayo.",
+          },
+          {
+            texto: "El 3 de oro",
+            correcta: false,
+            porque:
+              "El 3 es buena carta, pero el ancho de espada está tres escalones más arriba: te la tapa sin despeinarse.",
+          },
+          {
+            texto: "El rey de espada",
+            correcta: false,
+            porque:
+              "Ser del mismo palo que su carta no sirve de nada: en el truco no se sigue el palo. Y el rey pierde contra el ancho igual.",
+          },
+        ]}
+      />
+
+      <Ejercicio
+        pregunta="La muestra es el 5 de oro. ¿Cuál de tus cartas es pieza?"
+        muestra="5O"
+        mano={["12O", "2E", "5C"]}
+        opciones={[
+          {
+            texto: "El rey de oro",
+            correcta: true,
+            porque:
+              "Como la muestra ES el 5 de oro, esa pieza no se puede jugar y el rey de oro ocupa su lugar. Deja de ser un rey común y pasa a valer más que el ancho de espada.",
+          },
+          {
+            texto: "El 2 de espada",
+            correcta: false,
+            porque:
+              "El 2 sólo es pieza si es del palo de la muestra. Éste es de espada y la muestra es de oro: es un 2 común.",
+          },
+          {
+            texto: "El 5 de copa",
+            correcta: false,
+            porque:
+              "Mismo caso: el número está bien, pero el palo no. Sólo mandan las del palo de la muestra.",
+          },
+        ]}
+      />
     </>
   );
 }
@@ -260,6 +362,30 @@ function LaMano() {
         eso es irse al mazo. El rival cobra lo que estuviera en juego en ese
         momento. Lo que ya cobraste por envido o flor no se devuelve.
       </p>
+
+      <Ejercicio
+        pregunta="La primera baza fue parda y la segunda la ganaste vos. ¿Quién se lleva la mano?"
+        opciones={[
+          {
+            texto: "Vos, y la tercera ni se juega",
+            correcta: true,
+            porque:
+              "Con la primera pardada, la segunda define. Como ya está decidido, la tercera carta no se tira: la mano es tuya.",
+          },
+          {
+            texto: "Se define en la tercera baza",
+            correcta: false,
+            porque:
+              "No hace falta: una parda no la gana nadie, así que el que se lleva la segunda ya no puede ser alcanzado.",
+          },
+          {
+            texto: "El mano, porque hubo una parda",
+            correcta: false,
+            porque:
+              "El mano gana los empates, pero acá no hay empate: vos ganaste una baza y él ninguna. Sólo si las tres fueran pardas ganaría el mano.",
+          },
+        ]}
+      />
     </>
   );
 }
@@ -368,6 +494,59 @@ function ElEnvido() {
         cartas. Si nadie lo cantó para entonces, el envido no se juega en esa
         mano. Y si alguien tiene flor, tampoco: la flor lo anula.
       </Dato>
+
+      <Ejercicio
+        pregunta="Se cantó envido y los dos mostraron. Contá los dos tantos: ¿quién gana?"
+        muestra="3B"
+        manoRival={["2B", "1C", "10O"]}
+        mano={["7E", "6E", "12O"]}
+        opciones={[
+          {
+            texto: "Gana él, 31 contra 33",
+            correcta: false,
+            porque:
+              "Los números están bien pero al revés: 33 es más que 31. Tu 33 se lleva el envido.",
+          },
+          {
+            texto: "Ganás vos: 33 contra 31",
+            correcta: true,
+            porque:
+              "Vos: el 7 y el 6 son los dos de espada, así que 20 + 7 + 6 = 33 (el rey suma cero). Él tiene el 2 de basto, que es pieza porque la muestra es de basto: vale 30, más el 1 de copa que es su carta más alta = 31. Le ganás por dos.",
+          },
+          {
+            texto: "Empatan y gana el mano",
+            correcta: false,
+            porque:
+              "No empatan: 33 contra 31. El mano sólo desempata cuando los dos tantos son idénticos.",
+          },
+        ]}
+      />
+
+      <Ejercicio
+        pregunta="La muestra es el 6 de espada. ¿Cuánto es tu tanto?"
+        muestra="6E"
+        mano={["4E", "7C", "3B"]}
+        opciones={[
+          {
+            texto: "36",
+            correcta: true,
+            porque:
+              "El 4 de espada es pieza (la muestra es de espada) y vale 29. La pieza liga con cualquier carta: le sumás el número de la más alta de las otras dos, que es el 7. Da 29 + 7 = 36.",
+          },
+          {
+            texto: "24, sumando el 4 y el 7 más 20 no llega",
+            correcta: false,
+            porque:
+              "Ese sería el camino si no hubiera pieza. Pero cuando tenés una pieza manda ella: son 29 más la carta más alta, no una suma de dos del mismo palo.",
+          },
+          {
+            texto: "7, porque son tres palos distintos",
+            correcta: false,
+            porque:
+              "Los tres palos distintos sólo mandan cuando NO tenés pieza. Acá el 4 de espada es pieza y cambia toda la cuenta.",
+          },
+        ]}
+      />
     </>
   );
 }
@@ -466,6 +645,33 @@ function LaFlor() {
         "con flor envido" a veces se cuenta distinto. Si jugás con gente que
         tiene otra costumbre, puede que difiera un poco de lo que ves acá.
       </Dato>
+
+      <Ejercicio
+        pregunta="Los dos cantaron flor. ¿De quién es la más alta?"
+        muestra="3O"
+        manoRival={["7C", "6C", "3C"]}
+        mano={["2O", "11O", "5B"]}
+        opciones={[
+          {
+            texto: "La tuya: 42 contra 36",
+            correcta: true,
+            porque:
+              "Vos tenés dos piezas: el 2 de oro aporta 10 y el caballo de oro aporta 7, más el 5 de basto: 20 + 10 + 7 + 5 = 42. Él tiene tres copas: 20 + 7 + 6 + 3 = 36. Las piezas son lo que dispara una flor.",
+          },
+          {
+            texto: "La de él, porque tiene tres del mismo palo",
+            correcta: false,
+            porque:
+              "Tener tres del mismo palo es la forma más común de tener flor, pero no la más alta. Dos piezas valen muchísimo más que tres copas cualquiera.",
+          },
+          {
+            texto: "Vos no tenés flor: son de palos distintos",
+            correcta: false,
+            porque:
+              "Sí tenés: con dos piezas hay flor, sin importar los palos de las otras cartas. Ésa es una de las tres formas de tener flor.",
+          },
+        ]}
+      />
     </>
   );
 }
@@ -529,6 +735,57 @@ function ElTruco() {
         previsible, y contra alguien que lee eso no gana ni con las mejores
         cartas. Cantar de mentira es parte del juego.
       </Dato>
+
+      <Ejercicio
+        pregunta="Cantaste truco y él respondió “¡retruco!”. ¿Qué podés hacer?"
+        opciones={[
+          {
+            texto: "Querer, no querer, o cantar vale cuatro",
+            correcta: true,
+            porque:
+              "Las tres son válidas. El vale cuatro te toca a vos justamente porque el retruco lo cantó él: los cantos se van alternando entre los dos.",
+          },
+          {
+            texto: "Volver a cantar retruco, más fuerte",
+            correcta: false,
+            porque:
+              "Un canto no se repite: se sube al siguiente escalón. Después del retruco viene el vale cuatro, y ahí se terminó la escalera.",
+          },
+          {
+            texto: "Nada: cantaste vos, así que sólo te queda esperar",
+            correcta: false,
+            porque:
+              "Al contrario. Él te respondió subiendo, así que ahora la pelota está de tu lado: podés querer, no querer o subir a vale cuatro.",
+          },
+        ]}
+      />
+
+      <Ejercicio
+        pregunta="Él tiró el 2 de la muestra y a vos te quedan un 4, un 5 y un 6. ¿Cantás truco?"
+        muestra="3O"
+        enMesa="2O"
+        mano={["4C", "5B", "6E"]}
+        opciones={[
+          {
+            texto: "No: esa baza ya está perdida",
+            correcta: true,
+            porque:
+              "El 2 de la muestra es la carta más fuerte del juego: no le gana absolutamente nada. Ninguna de tus tres cartas se lo tapa, así que cantar sólo sirve para perder más puntos de los necesarios.",
+          },
+          {
+            texto: "Sí, para asustarlo",
+            correcta: false,
+            porque:
+              "Mentir es parte del truco, pero no cuando el rival ya vio que su carta es imbatible. Ahí no lo asustás: le regalás un punto extra.",
+          },
+          {
+            texto: "Sí, porque todavía quedan dos bazas",
+            correcta: false,
+            porque:
+              "Quedan, pero con un 4, un 5 y un 6 no vas a ganar ninguna salvo un milagro. Con esa mano lo sensato es perder barato.",
+          },
+        ]}
+      />
     </>
   );
 }
@@ -594,6 +851,54 @@ function PuntosYPartida() {
           puntos o la partida entera.
         </li>
       </ol>
+
+      <Ejercicio
+        pregunta="Vas 25 a 22 y cantás falta envido. ¿Cuánto vale?"
+        opciones={[
+          {
+            texto: "5 puntos: lo que te falta a vos para llegar a 30",
+            correcta: true,
+            porque:
+              "La falta vale lo que le falta al que va ganando. Vas ganando vos con 25, así que son los 5 que te separan de los 30: si la ganás, ganás la partida ahí mismo.",
+          },
+          {
+            texto: "8 puntos: lo que le falta a él",
+            correcta: false,
+            porque:
+              "Se mira al que va ganando, no al que va perdiendo. Si valiera lo que le falta al de atrás, el canto sería más grande justo cuando menos conviene.",
+          },
+          {
+            texto: "3 puntos: la diferencia entre los dos",
+            correcta: false,
+            porque:
+              "La diferencia no entra en la cuenta. Es siempre 30 menos el puntaje del que va adelante.",
+          },
+        ]}
+      />
+
+      <Ejercicio
+        pregunta="Tenés flor y él canta envido antes que vos. ¿Qué pasa?"
+        opciones={[
+          {
+            texto: "Cantás flor y el envido queda anulado",
+            correcta: true,
+            porque:
+              "La flor mata al envido. No importa que él lo haya cantado primero: al cantar flor, esa apuesta se anula y no se cobra nada por ella.",
+          },
+          {
+            texto: "Se juega el envido primero y después la flor",
+            correcta: false,
+            porque:
+              "No se juegan los dos: si hay flor, el envido directamente no existe en esa mano.",
+          },
+          {
+            texto: "Perdiste la flor por no cantarla antes",
+            correcta: false,
+            porque:
+              "Todavía estás a tiempo: podés cantarla al responderle. En este juego además se canta sola, para que no se te escape.",
+          },
+        ]}
+      />
 
       <p>
         Con esto ya sabés jugar. Lo que falta es sentarse a la mesa:{" "}

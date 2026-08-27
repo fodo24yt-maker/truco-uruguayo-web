@@ -19,7 +19,7 @@ import {
   accionesPosibles,
   laFalta,
 } from "./partida.ts";
-import { EL_CHUECO, type Personalidad } from "./personalidades.ts";
+import { LUKI, type Personalidad } from "./personalidades.ts";
 
 /** Qué tan buena es la mano, de 0 a 1, según la fuerza de sus cartas. */
 function calidadDeMano(cartas: readonly Carta[], muestra: Carta): number {
@@ -29,6 +29,56 @@ function calidadDeMano(cartas: readonly Carta[], muestra: Carta): number {
   const mejor = Math.max(...cartas.map(normalizar));
   const promedio = cartas.reduce((t, c) => t + normalizar(c), 0) / cartas.length;
   return mejor * 0.6 + promedio * 0.4;
+}
+
+/**
+ * ¿Esta baza ya está perdida?
+ *
+ * Si el rival tiró una carta y ninguna de las que me quedan le gana, esa baza
+ * es suya y no hay nada que hacer. Cantar truco ahí es tirar puntos: es
+ * exactamente el error que cometía el bot cuando le tiraban el 2 de la muestra
+ * —la carta más fuerte del juego, que no le gana nadie— y él cantaba igual.
+ *
+ * Ojo con lo que NO hace esta función: no mira las cartas del rival ni adivina
+ * lo que le queda en la mano. Sólo mira lo que está sobre la mesa, que es
+ * información que cualquiera que esté sentado ahí puede ver.
+ */
+function bazaPerdida(p: Partida, quien: Jugador): boolean {
+  const baza = p.bazas[p.bazas.length - 1];
+  const cartaDelRival = quien === "rival" ? baza.vos : baza.rival;
+  if (!cartaDelRival) return false; // todavía no tiró: no hay nada perdido
+
+  const suFuerza = fuerza(cartaDelRival, p.muestra);
+  return !p.cartas[quien].some((c) => fuerza(c, p.muestra) > suFuerza);
+}
+
+/**
+ * ¿Conviene cantar truco en este momento?
+ *
+ * Un jugador con sentido común no canta cuando la mano ya se le fue. Cuánto
+ * caso le hace a esto depende de la personalidad: los rivales duros nunca
+ * cometen ese error, los principiantes se entusiasman igual.
+ */
+function trucoTieneSentido(
+  p: Partida,
+  quien: Jugador,
+  personalidad: Personalidad,
+  azar: () => number,
+): boolean {
+  if (!bazaPerdida(p, quien)) return true;
+
+  // La baza en curso está perdida. Si además ya perdió una anterior, la mano
+  // entera está liquidada: cantar es regalar puntos.
+  const perdidas = p.bazas.filter(
+    (b) => b.ganador !== null && b.ganador !== quien && b.ganador !== "parda",
+  ).length;
+  if (perdidas >= 1) return azar() > personalidad.sentidoComun;
+
+  // Todavía puede dar vuelta la mano ganando las dos que siguen, pero es un
+  // mal momento para cantar: sólo se manda si le queda algo muy fuerte.
+  const leQuedaAlgoBravo = p.cartas[quien].some((c) => fuerza(c, p.muestra) >= 95);
+  if (leQuedaAlgoBravo) return true;
+  return azar() > personalidad.sentidoComun;
 }
 
 /**
@@ -63,7 +113,7 @@ export function decidirJugada(
   p: Partida,
   quien: Jugador = "rival",
   azar: () => number = Math.random,
-  personalidad: Personalidad = EL_CHUECO,
+  personalidad: Personalidad = LUKI,
 ): Accion | null {
   const posibles = accionesPosibles(p, quien);
   if (posibles.length === 0) return null;
@@ -122,8 +172,13 @@ export function decidirJugada(
       return tanto >= umbral ? { tipo: "quiero" } : { tipo: "no-quiero" };
     }
 
-    // Truco: quiere con cartas, sube sólo con cartas muy buenas
-    if (calidad > personalidad.subeTrucoCon && puede("truco")) {
+    // Truco: quiere con cartas, sube sólo con cartas muy buenas. Y no sube
+    // nunca si la baza que está sobre la mesa ya la perdió.
+    if (
+      calidad > personalidad.subeTrucoCon &&
+      puede("truco") &&
+      trucoTieneSentido(p, quien, personalidad, azar)
+    ) {
       return { tipo: "truco" };
     }
     return calidad > personalidad.quiereTrucoCon
@@ -150,7 +205,11 @@ export function decidirJugada(
   const umbralTruco = ganoLaPrimera
     ? personalidad.cantaTrucoCon - 0.23
     : personalidad.cantaTrucoCon;
-  if (puede("truco") && seAnima(calidad, umbralTruco, personalidad, azar)) {
+  if (
+    puede("truco") &&
+    trucoTieneSentido(p, quien, personalidad, azar) &&
+    seAnima(calidad, umbralTruco, personalidad, azar)
+  ) {
     return { tipo: "truco" };
   }
 

@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 
 import { decidirJugada } from "./bot.ts";
 import {
-  EL_CHUECO,
+  LUKI,
   PERSONALIDADES,
   buscarPersonalidad,
   type Personalidad,
@@ -44,7 +44,7 @@ function medirCantos(personalidad: Personalidad, partidas = 60) {
       }
       const quien = p.turno;
       // el jugador humano lo hace el bot honesto, para aislar la variable
-      const cual = quien === "rival" ? personalidad : EL_CHUECO;
+      const cual = quien === "rival" ? personalidad : LUKI;
       const accion = decidirJugada(p, quien, azar, cual);
       if (!accion) break;
 
@@ -73,11 +73,11 @@ test("cada personalidad está bien formada", () => {
 });
 
 test("el mentiroso canta bastante más que el honesto", () => {
-  const bruno = buscarPersonalidad("bruno"); // mentira 0.45
-  const chueco = buscarPersonalidad("el-chueco"); // mentira 0
+  const joao = buscarPersonalidad("joao"); // mentira 0.40, el más mentiroso
+  const luki = buscarPersonalidad("luki"); // mentira 0.05, el más honesto
 
-  const conMentira = medirCantos(bruno);
-  const sinMentira = medirCantos(chueco);
+  const conMentira = medirCantos(joao);
+  const sinMentira = medirCantos(luki);
 
   assert.ok(
     conMentira.tasa > sinMentira.tasa,
@@ -86,12 +86,11 @@ test("el mentiroso canta bastante más que el honesto", () => {
 });
 
 test("el que se guarda los cantos canta menos que el que no", () => {
-  const elsa = buscarPersonalidad("dona-elsa"); // silencio 0.45
-  const machado = buscarPersonalidad("machado"); // silencio 0
+  const nelly = buscarPersonalidad("la-nelly"); // silencio 0.35
+  const coca = buscarPersonalidad("la-coca"); // silencio 0, no se calla nada
 
-  // mismos umbrales de truco, casi; la diferencia grande es el silencio
-  const callada = medirCantos(elsa);
-  const hablador = medirCantos(machado);
+  const callada = medirCantos(nelly);
+  const hablador = medirCantos(coca);
 
   assert.ok(
     callada.tasa < hablador.tasa,
@@ -121,7 +120,35 @@ test("todas las personalidades terminan sus partidas sin trabarse", () => {
   }
 });
 
-test("buscarPersonalidad devuelve el honesto si le piden cualquier cosa", () => {
-  assert.equal(buscarPersonalidad("no-existe").id, "el-chueco");
-  assert.equal(buscarPersonalidad("bruno").nombre, "Bruno");
+test("buscarPersonalidad devuelve el primero si le piden cualquier cosa", () => {
+  assert.equal(buscarPersonalidad("no-existe").id, "luki");
+  assert.equal(buscarPersonalidad("el-tucho").nombre, "El Tucho");
+});
+
+test("hay un rival por cada uno de los 19 departamentos", () => {
+  assert.equal(PERSONALIDADES.length, 19);
+  const deptos = new Set(PERSONALIDADES.map((p) => p.departamento));
+  assert.equal(deptos.size, 19, "hay departamentos repetidos");
+
+  // La gira arranca en Montevideo y termina en Colonia, con el Tucho
+  const enOrden = [...PERSONALIDADES].sort((a, b) => a.paso - b.paso);
+  assert.equal(enOrden[0].departamento, "Montevideo");
+  assert.equal(enOrden[18].id, "el-tucho");
+  assert.equal(enOrden[18].lugar, "Carmelo");
+
+  // y los pasos son 1..19 sin huecos
+  assert.deepEqual(
+    enOrden.map((p) => p.paso),
+    Array.from({ length: 19 }, (_, i) => i + 1),
+  );
+});
+
+test("la dificultad no baja a medida que avanza la gira", () => {
+  const enOrden = [...PERSONALIDADES].sort((a, b) => a.paso - b.paso);
+  for (let i = 1; i < enOrden.length; i++) {
+    assert.ok(
+      enOrden[i].dificultad >= enOrden[i - 1].dificultad,
+      `${enOrden[i].nombre} es más fácil que el anterior`,
+    );
+  }
 });

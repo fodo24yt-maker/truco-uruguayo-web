@@ -277,3 +277,23 @@ body {
 .prosa strong {
   font-weight: 700;
 }
+
+
+/* ─── La mesa ocupa toda la pantalla ────────────────────────────────────────
+   Cuando hay una mesa de juego en pantalla, el pie de página estorba: se lleva
+   alto que hace falta para las cartas y obliga a scrollear. Se esconde sólo
+   ahí; en el resto del sitio sigue estando. */
+body:has(.mesa-pantalla-completa) footer {
+  display: none;
+}
+
+/* En la mesa el alto es exacto, no "al menos": así nada empuja hacia abajo y
+   la página no scrollea nunca. En el resto del sitio el body sigue creciendo
+   con su contenido, como corresponde. */
+body:has(.mesa-pantalla-completa) {
+  height: 100dvh;
+  overflow: hidden;
+}
+.mesa-pantalla-completa {
+  height: 100%;
+}
