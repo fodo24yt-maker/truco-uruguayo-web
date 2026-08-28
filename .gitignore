@@ -95,6 +95,22 @@ mlruns/
 # ═══════════════════════════════════════════════════════════════════════════
 ideas/imagenes/referencias/
 
+# Imágenes de stock que se arrastran a la raíz para mirarlas mientras se
+# dibuja. Tienen derechos de terceros y este repo es público: no pueden entrar
+# ni por accidente. Van ancladas con "/" para ignorar SÓLO la raíz — en el
+# sitio no hay ni una imagen, pero si algún día public/ tiene una, esto no se
+# la come.
+/*.jpg
+/*.jpeg
+/*.png
+/*.gif
+/*.webp
+/*.avif
+/*.jfif
+/*.bmp
+/*.tif
+/*.tiff
+
 # ═══════════════════════════════════════════════════════════════════════════
 #  Andamiaje: archivos que genera la herramienta y no le sirven a nadie que
 #  venga a leer el proyecto. Se regeneran solos cuando hacen falta.

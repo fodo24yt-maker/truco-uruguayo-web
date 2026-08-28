@@ -118,7 +118,7 @@ Ordenado por lo que más se nota:
 | 6 | Sonido de la mesa | Cambia mucho la sensación de estar jugando | Mediano |
 | 7 | ~~Ejercicios en las lecciones~~ | ✅ hecho (27/08): 12 ejercicios jugables, uno o dos por lección, con la explicación de por qué | — |
 | 8 | ~~El mapa de la gira~~ | ✅ hecho (27/08): los 19 departamentos, jugables todos | — |
-| 9 | **Desbloqueo en cadena de la gira** | Hoy están los 19 abiertos. Cada rival ya tiene su `paso` (1 a 19) y el progreso guarda qué ganaste: falta sólo la regla de "hasta que no ganes éste, no se abre el próximo" | Chico |
+| 9 | ~~Desbloqueo en cadena de la gira~~ | ✅ hecho (28/08): se abre de a uno, derivado del progreso que ya había —sin campo nuevo en el `localStorage`—, con el mapa hecho mapa del tesoro y el modo historia en la mesa | — |
 | 10 | Que el bot lea las señas | Para cuando haya 2 contra 2 | Grande |
 
 ## Fallas encontradas jugando

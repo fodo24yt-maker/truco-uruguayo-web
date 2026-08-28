@@ -44,12 +44,17 @@ tus cartas son piezas; se apagan cuando querés.
 las muestras posibles, y 40 partidas de bot contra bot que terminan sin una
 sola jugada inválida.
 
-**La gira** — el mapa del Uruguay con un rival por departamento, cada uno con
-su forma de jugar. El mapa está dibujado en SVG sobre la geometría real de los
-19 departamentos, sacada de [Natural Earth](https://www.naturalearthdata.com/)
-—que es de dominio público— y simplificada por
-[`herramientas/generar-mapa.mjs`](herramientas/generar-mapa.mjs). Sigue sin
-haber una sola imagen: son coordenadas.
+**La gira** — un mapa del tesoro del Uruguay con un rival por departamento,
+cada uno con su forma de jugar. Se desbloquea de a uno: arrancás en Montevideo
+y cada parada se abre cuando le ganaste a la anterior, subiendo por estrellas
+hasta el norte gaucho, que es donde está el truco bravo. El camino punteado, la
+✕ de los departamentos ganados y el sombrero parado en el que te toca salen de
+la geometría real de los 19 departamentos, sacada de
+[Natural Earth](https://www.naturalearthdata.com/) —que es de dominio público—
+y simplificada por
+[`herramientas/generar-mapa.mjs`](herramientas/generar-mapa.mjs). El pergamino,
+la rosa de los vientos, el mate y el sombrero también están dibujados por
+código: sigue sin haber una sola imagen, son coordenadas.
 
 **El bot** — no juega al azar. Evalúa la fuerza de su mano, decide qué cantar
 según su tanto y el marcador, y elige la carta más baja que le gane a la tuya
@@ -58,8 +63,6 @@ test que lo verifica.
 
 ## Qué falta
 
-- El desbloqueo en cadena de la gira: hoy están los 19 habilitados desde el
-  principio.
 - El modo situaciones y la práctica de tanto contrarreloj.
 - 2 contra 2, con compañero y señas.
 - Un bot de verdad, con un modelo de IA open source detrás.
@@ -95,6 +98,8 @@ lib/
   lecciones/            El contenido de la sección Aprender
   mapa-uruguay.ts       La geometría del mapa. GENERADO: no se edita a mano.
   mapa-colores.ts       El color de cada departamento. Eso sí se elige a mano.
+  gira.ts               El desbloqueo en cadena, derivado del progreso
+  gira-camino.ts        La geometría del camino punteado, con sus pruebas
 herramientas/
   generar-mapa.mjs      Rehace mapa-uruguay.ts desde datos cartográficos
 ideas/

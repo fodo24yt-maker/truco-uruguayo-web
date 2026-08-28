@@ -25,6 +25,7 @@ import {
   type Personalidad,
 } from "@/lib/motor/personalidades";
 import { explicarEnvido, valorEnvido } from "@/lib/motor/tantos";
+import { porSlugDeDepartamento } from "@/lib/gira";
 import { anotarPartida, guardarPreferencia, leerProgreso } from "@/lib/progreso";
 
 const DEMORA_BOT = 900; // lo que el bot "piensa", para que se pueda seguir
@@ -57,12 +58,34 @@ function Cargando() {
 
 function Mesa() {
   const parametros = useSearchParams();
-  // Si venís del mapa, la dirección trae a quién enfrentás
+  // Partida Rápida: la dirección puede traer a quién enfrentás.
   const rivalPedido = parametros.get("rival");
+
+  /**
+   * MODO HISTORIA. Si venís de la gira, la dirección trae el DEPARTAMENTO, y
+   * el rival lo pone el mapa: se deriva del parámetro y de ningún otro lado.
+   *
+   * Esto no es cosmético. Si el rival saliera del estado del selector, alcanzaba
+   * con forzar ese estado desde las herramientas de desarrollo para elegirse el
+   * más blando y desbloquear igual, y el recorrido perdía todo el sentido. Acá
+   * el selector directamente no se monta —no `disabled`, no escondido por CSS—
+   * y su estado es irrelevante para la partida.
+   *
+   * Como bien dice el README, esto es coherencia del juego y no una defensa de
+   * seguridad: la partida corre en el cliente y el progreso es local.
+   *
+   * Un `?depto=` inventado devuelve null y la mesa se queda en modo libre.
+   */
+  const rivalDelDepto = porSlugDeDepartamento(parametros.get("depto"));
+  const esHistoria = rivalDelDepto !== null;
+
   const [p, setP] = useState<Partida | null>(null);
   const [ayudas, setAyudas] = useState(true);
   const [menuEnvido, setMenuEnvido] = useState(false);
-  const [rival, setRival] = useState<Personalidad>(LUKI);
+  const [rivalElegido, setRivalElegido] = useState<Personalidad>(LUKI);
+
+  /** El que juega de verdad. En historia manda el mapa; en libre, vos. */
+  const rival = rivalDelDepto ?? rivalElegido;
   const [eligiendo, setEligiendo] = useState(false);
   const [marcas, setMarcas] = useState<Record<string, { ganadas: number; jugadas: number }>>({});
   const anotada = useRef<Partida | null>(null);
@@ -73,11 +96,11 @@ function Mesa() {
     const progreso = leerProgreso();
     setAyudas(progreso.ayudas);
     setMarcas(progreso.rivales);
-    // El rival de la dirección gana: viene de que elegiste un departamento
-    if (rivalPedido) setRival(buscarPersonalidad(rivalPedido));
-    else if (progreso.ultimoRival) setRival(buscarPersonalidad(progreso.ultimoRival));
+    // Sólo para el modo libre: en historia el rival ya salió del departamento.
+    if (rivalPedido) setRivalElegido(buscarPersonalidad(rivalPedido));
+    else if (progreso.ultimoRival) setRivalElegido(buscarPersonalidad(progreso.ultimoRival));
     setP(nuevaPartida());
-  }, [rivalPedido]);
+  }, [rivalPedido, rivalDelDepto]);
 
   // El turno del bot, con la personalidad del rival elegido
   useEffect(() => {
@@ -143,17 +166,30 @@ function Mesa() {
             ))}
           </div>
 
-          <button
-            onClick={() => setEligiendo(true)}
-            className="absolute right-3 top-3 rounded-sm bg-black/60 px-2.5 py-1.5 text-right transition-colors hover:bg-black/80"
-          >
-            <span className="block font-[family-name:var(--font-ui)] text-[11px] uppercase tracking-wide text-crema/90">
-              {rival.nombre}
-            </span>
-            <span className="block font-[family-name:var(--font-ui)] text-[9px] uppercase tracking-wide text-crema/45">
-              {rival.lugar} · cambiar
-            </span>
-          </button>
+          {/* En historia va una placa fija con el departamento y el rival; el
+              selector NO se monta. En libre, el botón de siempre. */}
+          {esHistoria ? (
+            <div className="absolute right-3 top-3 rounded-sm border border-dorado/30 bg-black/60 px-2.5 py-1.5 text-right">
+              <span className="block font-[family-name:var(--font-ui)] text-[11px] uppercase tracking-wide text-crema/90">
+                {rival.nombre}
+              </span>
+              <span className="block font-[family-name:var(--font-ui)] text-[9px] uppercase tracking-wide text-dorado/70">
+                {rival.departamento} · gira
+              </span>
+            </div>
+          ) : (
+            <button
+              onClick={() => setEligiendo(true)}
+              className="absolute right-3 top-3 rounded-sm bg-black/60 px-2.5 py-1.5 text-right transition-colors hover:bg-black/80"
+            >
+              <span className="block font-[family-name:var(--font-ui)] text-[11px] uppercase tracking-wide text-crema/90">
+                {rival.nombre}
+              </span>
+              <span className="block font-[family-name:var(--font-ui)] text-[9px] uppercase tracking-wide text-crema/45">
+                {rival.lugar} · cambiar
+              </span>
+            </button>
+          )}
         </div>
 
         {/* ─── El canto de la mesa ───────────────────────────────────── */}
@@ -286,7 +322,7 @@ function Mesa() {
         <Cartel
           partida={p}
           rival={rival}
-          desdeLaGira={rivalPedido !== null}
+          desdeLaGira={esHistoria}
           onSeguir={() => {
             anotada.current = null;
             setP(p.fase === "partida-terminada" ? nuevaPartida() : siguienteMano(p));
@@ -295,12 +331,16 @@ function Mesa() {
         />
       )}
 
-      {eligiendo && (
+      {/* El selector tampoco se monta acá en historia: no hay forma de llegar
+          —el botón no existe y el cartel de fin ofrece volver al mapa—, pero
+          que el componente no pueda montarse es justamente lo que hace que
+          forzar el estado no sirva de nada. */}
+      {eligiendo && !esHistoria && (
         <ElegirRival
           actual={rival}
           marcas={marcas}
           onElegir={(nuevo) => {
-            setRival(nuevo);
+            setRivalElegido(nuevo);
             guardarPreferencia("ultimoRival", nuevo.id);
             anotada.current = null;
             setP(nuevaPartida());

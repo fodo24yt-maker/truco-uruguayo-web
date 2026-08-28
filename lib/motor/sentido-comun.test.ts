@@ -87,8 +87,13 @@ test("EL CASO REPORTADO: le tiran el 2 de la muestra y el bot no canta truco", (
     bazasPrevias: ["vos"],
   });
 
+  // El Melo cierra la gira y es de los impecables: no se le escapa nunca.
+  const melo = vecesQueCanta(mesa, "el-melo");
+  assert.equal(melo, 0, `el Melo cantó ${melo} veces con la mano perdida`);
+
+  // Los de nivel 4 se entusiasman muy de vez en cuando, y está bien.
   const tucho = vecesQueCanta(mesa, "el-tucho");
-  assert.equal(tucho, 0, `el Tucho cantó ${tucho} veces con la mano perdida`);
+  assert.ok(tucho <= 60, `el Tucho cantó demasiado: ${tucho}/300`);
 
   const donRamon = vecesQueCanta(mesa, "don-ramon");
   assert.ok(donRamon <= 60, `Don Ramón cantó demasiado: ${donRamon}/300`);
@@ -116,9 +121,11 @@ test("cuanto más duro el rival, menos veces canta con la mano perdida", () => {
   }
 
   // Y los principiantes fallan seguido, que es lo que los hace principiantes.
+  // Se compara contra uno de nivel 5, que es el que nunca se equivoca: contra
+  // un nivel 4 la diferencia se mezcla con lo mentiroso que sea cada uno.
   const luki = vecesQueCanta(mesa, "luki", 200);
-  const tucho = vecesQueCanta(mesa, "el-tucho", 200);
-  assert.ok(luki > tucho, "Luki debería equivocarse más que el Tucho");
+  const melo = vecesQueCanta(mesa, "el-melo", 200);
+  assert.ok(luki > melo, "Luki debería equivocarse más que el Melo");
 });
 
 test("pero SÍ canta cuando la carta de la mesa se le puede ganar", () => {
@@ -144,7 +151,7 @@ test("los principiantes todavía se entusiasman: es parte de su carácter", () =
   // Luki tiene sentidoComun 0.15: se equivoca seguido, y está bien que así sea
   const luki = buscarPersonalidad("luki");
   assert.ok(luki.sentidoComun < 0.3, "Luki debería ser despistado");
-  assert.equal(buscarPersonalidad("el-tucho").sentidoComun, 1, "el Tucho, impecable");
+  assert.equal(buscarPersonalidad("el-melo").sentidoComun, 1, "el Melo, impecable");
 });
 
 test("el sentido común sube con la dificultad", () => {

@@ -130,11 +130,11 @@ test("hay un rival por cada uno de los 19 departamentos", () => {
   const deptos = new Set(PERSONALIDADES.map((p) => p.departamento));
   assert.equal(deptos.size, 19, "hay departamentos repetidos");
 
-  // La gira arranca en Montevideo y termina en Colonia, con el Tucho
+  // La gira arranca en Montevideo y termina en Melo, Cerro Largo
   const enOrden = [...PERSONALIDADES].sort((a, b) => a.paso - b.paso);
   assert.equal(enOrden[0].departamento, "Montevideo");
-  assert.equal(enOrden[18].id, "el-tucho");
-  assert.equal(enOrden[18].lugar, "Carmelo");
+  assert.equal(enOrden[18].id, "el-melo");
+  assert.equal(enOrden[18].lugar, "Melo");
 
   // y los pasos son 1..19 sin huecos
   assert.deepEqual(

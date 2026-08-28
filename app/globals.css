@@ -25,6 +25,14 @@
   --color-quiero: #4e8b57;
   --color-no-quiero: #a8323f;
 
+  /* El mapa del tesoro de la gira: papel viejo, tinta y el colorado del camino */
+  --color-pergamino: #d8bd88;
+  --color-pergamino-luz: #ecd9a9;
+  --color-pergamino-sombra: #b99a62;
+  --color-quemado: #7a4a22;
+  --color-sangre: #8c2b20;
+  --color-tinta-mapa: #3b2412;
+
   --color-espada: #2b4a6f;
   --color-basto: #4e6b2f;
   --color-oro: #c9922e;
@@ -172,8 +180,10 @@ body {
 /* ...y se vuelve a poner sólo para quien navega con el teclado, marcando el
    borde de la propia forma con el mismo dorado del departamento elegido. */
 .depto:focus-visible {
-  stroke: var(--color-dorado-claro);
-  stroke-width: 5;
+  /* Sobre el pergamino el dorado no se ve: el foco va en el tono más oscuro
+     que hay, que contrasta contra cualquiera de las aguadas. */
+  stroke: var(--color-noche);
+  stroke-width: 6;
 }
 
 /* Filo dorado de los marcos y las barras */
@@ -186,7 +196,47 @@ body {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    /* Sin esto, una animación `infinite` con duración 0.01ms SIGUE siendo
+       infinita: el navegador la tickea igual y repinta en cada cuadro, justo
+       para quien pidió menos movimiento. Cortarle las repeticiones es lo que
+       de verdad la apaga. */
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ─── Lo que se mueve en el mapa de la gira ────────────────────────────────
+   Va definido DENTRO de `no-preference`, y no apagado después: una animación
+   que nunca se declara no se puede quedar prendida. El bloque `reduce` de
+   arriba queda igual como red de seguridad para el resto del sitio. */
+@media (prefers-reduced-motion: no-preference) {
+  /* La marcha de hormigas del tramo que te toca. El desplazamiento tiene que
+     ser EXACTAMENTE un período del stroke-dasharray (16 + 18 = 34): con
+     cualquier otro número el loop pega un salto visible al reiniciar. */
+  @keyframes marcha-hormigas {
+    to {
+      stroke-dashoffset: -34;
+    }
+  }
+  .camino-marcha {
+    animation: marcha-hormigas 1.6s linear infinite;
+  }
+
+  /* El sombrero de gaucho, esperando en el departamento que toca. La anima un
+     <g> de adentro: el de afuera lleva el translate que lo posiciona, y si el
+     CSS le tocara el transform a ese, le pisaría el atributo entero y la ficha
+     se iría a (0,0). */
+  @keyframes espera-gaucho {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-7px);
+    }
+  }
+  .ficha-gaucho {
+    animation: espera-gaucho 2.4s ease-in-out infinite;
   }
 }
 

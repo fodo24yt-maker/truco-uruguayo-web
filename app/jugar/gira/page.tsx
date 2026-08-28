@@ -1,36 +1,43 @@
 "use client";
 
 /**
- * La gira: el mapa del Uruguay con un rival por departamento.
+ * La gira: el mapa del tesoro del Uruguay, con un rival por departamento.
  *
- * Por ahora están todos habilitados —se puede jugar cualquiera— y el progreso
- * sólo marca cuáles ya ganaste. El desbloqueo en cadena viene después; la
- * estructura ya está lista para eso, porque cada rival tiene su `paso` (1 a 19)
- * y el progreso ya guarda qué departamentos se ganaron.
+ * Se desbloquea en cadena: arrancás en Montevideo y cada parada se abre cuando
+ * le ganaste a la anterior. Eso NO se guarda en ningún lado nuevo: se deriva de
+ * las victorias que el progreso ya anotaba, con `lib/gira.ts`. Un campo
+ * `desbloqueados` en el `localStorage` sería una segunda fuente de verdad que
+ * puede contradecir a la primera.
+ *
+ * El `<Link>` a la mesa se renderiza SÓLO para las paradas abiertas o ganadas,
+ * así que por el camino normal nunca se llega a un rival cerrado. Lo que no se
+ * hace es bloquear `?rival=`: esto es un sitio estático, el chequeo correría en
+ * el navegador —en el mismo lugar donde vive el `localStorage` que querría
+ * proteger— y de paso rompería los enlaces directos. La Partida Rápida sigue
+ * libre, y el README ya dice que el progreso es local.
  */
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { MapaUruguay } from "@/components/mapa/MapaUruguay";
-import { PERSONALIDADES, porDepartamento } from "@/lib/motor/personalidades";
+import { type Marcas, armarGira, proximaParada, slugDepartamento } from "@/lib/gira";
 import { leerProgreso } from "@/lib/progreso";
 
 export default function Gira() {
   const [elegido, setElegido] = useState<string | null>(null);
-  const [ganados, setGanados] = useState<Set<string>>(new Set());
+  const [marcas, setMarcas] = useState<Marcas>({});
 
   // El progreso vive en el navegador, así que se lee recién del lado del cliente
   useEffect(() => {
-    const progreso = leerProgreso();
-    const conVictoria = PERSONALIDADES.filter(
-      (p) => (progreso.rivales[p.id]?.ganadas ?? 0) > 0,
-    ).map((p) => p.departamento);
-    setGanados(new Set(conVictoria));
+    setMarcas(leerProgreso().rivales);
   }, []);
 
-  const rival = elegido ? porDepartamento(elegido) : undefined;
-  const total = PERSONALIDADES.length;
+  const paradas = useMemo(() => armarGira(marcas), [marcas]);
+  const parada = paradas.find((p) => p.personalidad.departamento === elegido) ?? null;
+  const proximo = proximaParada(paradas);
+  const ganadas = paradas.filter((p) => p.estado === "ganada").length;
+  const rival = parada?.personalidad;
 
   // Pantalla completa, igual que la mesa: la gira es una pantalla de juego, no
   // una página para leer. Sin esto el mapa queda encajonado entre el pie de
@@ -51,61 +58,69 @@ export default function Gira() {
           Gira Nacional
         </h1>
         <span className="font-[family-name:var(--font-ui)] text-xs text-crema/60">
-          {ganados.size}/{total}
+          {ganadas}/{paradas.length}
         </span>
       </header>
 
-      {/* El mapa. Va sobre el fondo de noche del sitio, no sobre una caja
-          crema: el mapa es el papel, y el papel está apoyado en la mesa oscura
-          del boliche. El ancho máximo evita que en pantalla ancha se estire a
-          lo largo y quede una franja de mapa perdida en el medio. */}
-      <div className="relative mx-auto min-h-0 w-full max-w-[min(100%,calc(100vh-13rem))] flex-1">
-        <MapaUruguay
-          rivales={PERSONALIDADES}
-          elegido={elegido}
-          onElegir={setElegido}
-          ganados={ganados}
-        />
+      {/* El mapa. El papel está apoyado sobre la mesa oscura del boliche, así
+          que va sobre el fondo de noche del sitio y no sobre una caja crema.
+          El tope de ancho evita que en pantalla ancha se estire y quede una
+          franja de mapa perdida en el medio; va en `dvh` y no en `vh` porque
+          la mesa ya usa `dvh` y en iOS Safari eso son unos 90 px de diferencia
+          que hacían saltar el encuadre entre una pantalla y la otra. */}
+      <div className="relative mx-auto min-h-0 w-full max-w-[min(100%,calc(100dvh-13rem))] flex-1">
+        <MapaUruguay paradas={paradas} elegido={elegido} onElegir={setElegido} />
       </div>
 
-      {/* Sin nada elegido, una franja discreta invita a tocar el mapa. Antes
+      {/* Sin nada elegido, una franja discreta dice adónde hay que ir. Antes
           iba superpuesta y tapaba justo Montevideo, que es donde se arranca. */}
-      {!rival && (
+      {!parada && (
         <p className="shrink-0 border-t-2 border-madera bg-[#181008] py-3 text-center font-[family-name:var(--font-ui)] text-xs uppercase tracking-widest text-crema/55">
-          Tocá un departamento para ver contra quién jugás
+          {proximo
+            ? `Te toca ${proximo.personalidad.departamento} · tocá el mapa`
+            : "Ganaste la gira entera"}
         </p>
       )}
 
-      {/* La ficha del rival elegido */}
-      {rival && (
+      {/* La ficha de la parada elegida */}
+      {parada && rival && (
         <div className="papel anim-pop shrink-0 border-t-4 border-madera px-4 py-4">
           <div className="mx-auto flex max-w-lg flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <p className="font-[family-name:var(--font-ui)] text-[11px] uppercase tracking-widest text-tinta/50">
-                {rival.departamento} · {rival.lugar}
+                Paso {parada.paso} · {rival.departamento} · {rival.lugar}
               </p>
               <p className="font-[family-name:var(--font-display)] text-2xl leading-tight text-tinta">
-                {rival.nombre}
+                {parada.estado === "cerrada" ? "Todavía no" : rival.nombre}
               </p>
-              <p className="mt-1 text-sm leading-snug text-tinta/75">{rival.descripcion}</p>
+              <p className="mt-1 text-sm leading-snug text-tinta/75">
+                {parada.estado === "cerrada"
+                  ? `Primero ganale a ${parada.abreCon?.nombre ?? "el anterior"}.`
+                  : rival.descripcion}
+              </p>
               <p
                 className="mt-1.5 font-[family-name:var(--font-ui)] text-sm text-dorado"
                 aria-label={`Dificultad ${rival.dificultad} de 5`}
               >
                 {"★".repeat(rival.dificultad)}
                 <span className="text-tinta/20">{"★".repeat(5 - rival.dificultad)}</span>
-                {ganados.has(rival.departamento) && (
-                  <span className="ml-2 text-quiero">✓ ganado</span>
-                )}
+                {parada.estado === "ganada" && <span className="ml-2 text-quiero">✓ ganado</span>}
               </p>
             </div>
 
-            <Link
-              href={`/jugar/mesa?rival=${rival.id}`}
-              className="shrink-0 rounded bg-bordo px-6 py-3 text-center font-[family-name:var(--font-ui)] text-base uppercase tracking-wide text-crema transition-colors hover:bg-bordo-claro"
-            >
-              Jugar
-            </Link>
+            {/* El enlace existe sólo si la parada está abierta o ganada */}
+            {parada.estado === "cerrada" ? (
+              <p className="shrink-0 rounded border border-tinta/25 px-6 py-3 text-center font-[family-name:var(--font-ui)] text-sm uppercase tracking-wide text-tinta/50">
+                Cerrado
+              </p>
+            ) : (
+              <Link
+                href={`/jugar/mesa?depto=${slugDepartamento(rival.departamento)}`}
+                className="shrink-0 rounded bg-bordo px-6 py-3 text-center font-[family-name:var(--font-ui)] text-base uppercase tracking-wide text-crema transition-colors hover:bg-bordo-claro"
+              >
+                {parada.estado === "ganada" ? "Jugar de nuevo" : "Jugar"}
+              </Link>
+            )}
           </div>
         </div>
       )}

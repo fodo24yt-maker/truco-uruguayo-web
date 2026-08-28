@@ -6,7 +6,8 @@
  * mozo de Ciudad Vieja corren exactamente el mismo código.
  *
  * El orden de `paso` es el de la gira: arranca en Montevideo y termina en
- * Carmelo, Colonia, con el Tucho. La dificultad sube con el camino.
+ * Melo, Cerro Largo. El recorrido sube por estrellas, así que la dificultad
+ * nunca baja de un paso al siguiente: hay un test que lo verifica.
  */
 
 export interface Personalidad {
@@ -18,7 +19,7 @@ export interface Personalidad {
   lugar: string;
   /** De 1 a 5. */
   dificultad: number;
-  /** Lugar en la gira: 1 es Montevideo, 19 es Carmelo. */
+  /** Lugar en la gira: 1 es Montevideo, 19 es Melo. */
   paso: number;
   /** Cómo juega, en una línea, para que sepas a qué atenerte. */
   descripcion: string;
@@ -88,8 +89,17 @@ interface Semilla {
   silencio: number;
 }
 
-/** Los 19, en el orden de la gira. */
+/**
+ * Los 19, en el orden de la gira.
+ *
+ * El orden ES el recorrido: `paso` sale del índice de este array. Y el
+ * recorrido sube por dificultad, no por geografía: arranca en el área
+ * metropolitana, hace el este y la costa, cruza el centro hacia el oeste, sube
+ * todo el litoral desde Colonia, y termina cruzando el norte gaucho, que es
+ * donde está el truco bravo de verdad.
+ */
 const SEMILLAS: Semilla[] = [
+  // ── ★1 · El área metropolitana: acá se aprende ──────────────────────────
   {
     id: "luki", nombre: "Luki", departamento: "Montevideo", lugar: "La Blanqueada",
     nivel: 1, mentira: 0.05, silencio: 0.1,
@@ -105,6 +115,8 @@ const SEMILLAS: Semilla[] = [
     nivel: 1, mentira: 0.08, silencio: 0.2,
     descripcion: "Tranquilo y previsible. Si no canta, no tiene.",
   },
+
+  // ── ★2 · El este y la costa ─────────────────────────────────────────────
   {
     id: "tito", nombre: "Tito", departamento: "Florida", lugar: "Sarandí Grande",
     nivel: 2, mentira: 0.15, silencio: 0.05,
@@ -125,15 +137,12 @@ const SEMILLAS: Semilla[] = [
     nivel: 2, mentira: 0.3, silencio: 0.15,
     descripcion: "Paciencia de pescador: te tira el anzuelo y espera que piques.",
   },
+
+  // ── ★3 · El centro, de este a oeste ─────────────────────────────────────
   {
     id: "don-aparicio", nombre: "Don Aparicio", departamento: "Treinta y Tres", lugar: "Vergara",
     nivel: 3, mentira: 0.12, silencio: 0.4,
     descripcion: "Olimareño de ley. No apura nada y no se le escapa una cuenta.",
-  },
-  {
-    id: "el-melo", nombre: "El Melo", departamento: "Cerro Largo", lugar: "Melo",
-    nivel: 3, mentira: 0.35, silencio: 0.15,
-    descripcion: "Fronterizo. Te canta truco mirándote a los ojos con un cuatro.",
   },
   {
     id: "cachila", nombre: "Cachila", departamento: "Durazno", lugar: "Sarandí del Yí",
@@ -146,29 +155,16 @@ const SEMILLAS: Semilla[] = [
     descripcion: "De pueblo chico y mesa grande. Juega el envido como nadie.",
   },
   {
-    id: "peralta", nombre: "El Gaucho Peralta", departamento: "Tacuarembó", lugar: "Paso de los Toros",
-    nivel: 3, mentira: 0.18, silencio: 0.35,
-    descripcion: "De la Patria Gaucha. Aguanta, aguanta, y te liquida en la tercera.",
+    id: "la-rosa", nombre: "La Rosa", departamento: "Soriano", lugar: "Mercedes",
+    nivel: 3, mentira: 0.3, silencio: 0.35,
+    descripcion: "No pierde una mano por apurada. Te deja creer que vas ganando.",
   },
+
+  // ── ★4 · El litoral, subiendo, y la frontera ────────────────────────────
   {
-    id: "joao", nombre: "Joao", departamento: "Rivera", lugar: "Rivera",
-    nivel: 4, mentira: 0.4, silencio: 0.2,
-    descripcion: "Mitad y mitad, como la frontera. Nunca sabés si te está cargando.",
-  },
-  {
-    id: "el-piedra", nombre: "El Piedra", departamento: "Artigas", lugar: "Bella Unión",
-    nivel: 4, mentira: 0.28, silencio: 0.3,
-    descripcion: "Duro como las amatistas de allá. No regala una sola mano.",
-  },
-  {
-    id: "don-ramon", nombre: "Don Ramón", departamento: "Salto", lugar: "Salto",
-    nivel: 4, mentira: 0.22, silencio: 0.35,
-    descripcion: "Citricultor. Cuenta las piezas antes de que las des vuelta.",
-  },
-  {
-    id: "beto", nombre: "Beto", departamento: "Paysandú", lugar: "Paysandú",
-    nivel: 4, mentira: 0.32, silencio: 0.22,
-    descripcion: "Sanducero de bar. Te canta el retruco sin despeinarse.",
+    id: "el-tucho", nombre: "El Tucho", departamento: "Colonia", lugar: "Carmelo",
+    nivel: 4, mentira: 0.38, silencio: 0.4,
+    descripcion: "Carmelero de mesa larga. Miente cuando conviene, y nunca cuando no.",
   },
   {
     id: "el-fray", nombre: "El Fray", departamento: "Río Negro", lugar: "Fray Bentos",
@@ -176,14 +172,36 @@ const SEMILLAS: Semilla[] = [
     descripcion: "Sabe esperar. Si te quiere el truco, andá con cuidado.",
   },
   {
-    id: "la-rosa", nombre: "La Rosa", departamento: "Soriano", lugar: "Mercedes",
-    nivel: 5, mentira: 0.3, silencio: 0.35,
-    descripcion: "No pierde una mano por apurada. Lee el juego como un libro.",
+    id: "beto", nombre: "Beto", departamento: "Paysandú", lugar: "Paysandú",
+    nivel: 4, mentira: 0.32, silencio: 0.22,
+    descripcion: "Sanducero de bar. Te canta el retruco sin despeinarse.",
   },
   {
-    id: "el-tucho", nombre: "El Tucho", departamento: "Colonia", lugar: "Carmelo",
-    nivel: 5, mentira: 0.38, silencio: 0.4,
-    descripcion: "El más bravo de todos. Miente cuando conviene y nunca cuando no.",
+    id: "don-ramon", nombre: "Don Ramón", departamento: "Salto", lugar: "Salto",
+    nivel: 4, mentira: 0.22, silencio: 0.35,
+    descripcion: "Citricultor. Cuenta las piezas antes de que las des vuelta.",
+  },
+  {
+    id: "el-piedra", nombre: "El Piedra", departamento: "Artigas", lugar: "Bella Unión",
+    nivel: 4, mentira: 0.28, silencio: 0.3,
+    descripcion: "Duro como las amatistas de allá. No regala una sola mano.",
+  },
+  {
+    id: "joao", nombre: "Joao", departamento: "Rivera", lugar: "Rivera",
+    nivel: 4, mentira: 0.4, silencio: 0.2,
+    descripcion: "Mitad y mitad, como la frontera. Nunca sabés si te está cargando.",
+  },
+
+  // ── ★5 · El norte gaucho: los últimos dos ───────────────────────────────
+  {
+    id: "peralta", nombre: "El Gaucho Peralta", departamento: "Tacuarembó", lugar: "Paso de los Toros",
+    nivel: 5, mentira: 0.18, silencio: 0.35,
+    descripcion: "De la Patria Gaucha. Aguanta, aguanta, y te liquida en la tercera.",
+  },
+  {
+    id: "el-melo", nombre: "El Melo", departamento: "Cerro Largo", lugar: "Melo",
+    nivel: 5, mentira: 0.35, silencio: 0.15,
+    descripcion: "El último de la gira. Te canta truco mirándote a los ojos con un cuatro.",
   },
 ];
 
