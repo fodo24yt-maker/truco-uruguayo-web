@@ -24,6 +24,7 @@ import {
   buscarPersonalidad,
   type Personalidad,
 } from "@/lib/motor/personalidades";
+import { fichaVacia, observarMano } from "@/lib/motor/lectura";
 import { explicarEnvido, valorEnvido } from "@/lib/motor/tantos";
 import { porSlugDeDepartamento } from "@/lib/gira";
 import { anotarPartida, guardarPreferencia, leerProgreso } from "@/lib/progreso";
@@ -90,6 +91,16 @@ function Mesa() {
   const [marcas, setMarcas] = useState<Record<string, { ganadas: number; jugadas: number }>>({});
   const anotada = useRef<Partida | null>(null);
 
+  /**
+   * Lo que el rival tiene anotado de cómo jugás. Dura lo que dura la partida:
+   * no se guarda en el navegador ni viaja a ningún lado. Va en un `useRef` y no
+   * en el estado porque cambiarla no tiene que redibujar la mesa.
+   */
+  const ficha = useRef(fichaVacia());
+  const manoObservada = useRef<Partida | null>(null);
+  /** Se prende cuando las ayudas te salvan una flor que ibas a perder. */
+  const [florSalvada, setFlorSalvada] = useState(false);
+
   // El reparto se hace en el navegador: si se hiciera al generar la página,
   // todos verían siempre las mismas cartas.
   useEffect(() => {
@@ -99,6 +110,7 @@ function Mesa() {
     // Sólo para el modo libre: en historia el rival ya salió del departamento.
     if (rivalPedido) setRivalElegido(buscarPersonalidad(rivalPedido));
     else if (progreso.ultimoRival) setRivalElegido(buscarPersonalidad(progreso.ultimoRival));
+    ficha.current = fichaVacia();
     setP(nuevaPartida());
   }, [rivalPedido, rivalDelDepto]);
 
@@ -106,11 +118,20 @@ function Mesa() {
   useEffect(() => {
     if (!p || p.fase !== "jugando" || p.turno !== "rival") return;
     const reloj = setTimeout(() => {
-      const accion = decidirJugada(p, "rival", Math.random, rival);
+      const accion = decidirJugada(p, "rival", Math.random, rival, ficha.current);
       if (accion) setP((actual) => (actual ? aplicar(actual, accion, "rival") : actual));
     }, DEMORA_BOT);
     return () => clearTimeout(reloj);
   }, [p, rival]);
+
+  // Al cerrar cada mano el rival repasa lo que te vio hacer. Sólo mira las
+  // cartas que quedaron sobre la mesa y los tantos que se cantaron en voz alta:
+  // nunca tu mano (ver lectura.ts).
+  useEffect(() => {
+    if (!p || p.fase === "jugando" || manoObservada.current === p) return;
+    manoObservada.current = p;
+    ficha.current = observarMano(ficha.current, p, "vos");
+  }, [p]);
 
   // Cuando termina una partida se anota, una sola vez
   useEffect(() => {
@@ -123,6 +144,27 @@ function Mesa() {
 
   const hacer = (accion: Accion) => {
     setMenuEnvido(false);
+    setFlorSalvada(false);
+
+    /**
+     * RED DE SEGURIDAD. En la mesa rige "flor no cantada, flor perdida": si
+     * tirás carta sin cantarla, te quedaste sin los 3 puntos. Con las ayudas
+     * prendidas eso no pasa: se canta sola y se te avisa.
+     *
+     * Con las ayudas apagadas rige la regla de verdad y la flor se puede
+     * perder, que es como se juega y como se aprende a no olvidársela.
+     */
+    const esCantoDeFlor = accion.tipo === "flor" || accion.tipo === "flor-canto";
+    if (ayudas && !esCantoDeFlor && puede("flor")) {
+      const conLaFlor = aplicar(p, { tipo: "flor" }, "vos");
+      setFlorSalvada(true);
+      // Si después de cantarla la jugada sigue en pie, se hace igual. Si el
+      // rival también tiene flor, ahora hay que contestarle a él, y `aplicar`
+      // devuelve el mismo estado sin tocar nada.
+      setP(aplicar(conLaFlor, accion, "vos"));
+      return;
+    }
+
     setP(aplicar(p, accion, "vos"));
   };
 
@@ -131,6 +173,10 @@ function Mesa() {
   const envidosPosibles = posibles.filter((a) => a.tipo === "envido");
   const florCantos = posibles.filter((a) => a.tipo === "flor-canto");
   const miTurno = p.turno === "vos" && p.fase === "jugando";
+  /** Te cantaron flor a secas y te toca contestar: ahí "no quiero" es achicarse. */
+  const meCantaronFlor = p.pendiente?.tipo === "flor" && p.pendiente.cadena.length === 0;
+  /** Si ya hay un envido en la mesa, lo que hacés es subirlo; si no, abrirlo. */
+  const subiendoEnvido = p.pendiente?.tipo === "envido";
   const bazaActual = p.bazas[p.bazas.length - 1];
   // El tanto se cuenta con las tres cartas del reparto, nunca con las que quedan
   const miFlor = p.flor.vos;
@@ -220,6 +266,12 @@ function Mesa() {
               </button>
             </div>
 
+            {florSalvada && (
+              <p className="shrink-0 text-center font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-wide text-dorado/90">
+                Te cantamos la flor: se perdía
+              </p>
+            )}
+
             <div className="flex min-h-[1.75rem] shrink-0 items-center justify-center sm:min-h-[2.1rem]">
               {ultimoEvento && (
                 <p
@@ -288,7 +340,14 @@ function Mesa() {
               {ayudas && (
                 <p className="mb-1 text-center font-[family-name:var(--font-ui)] text-[11px] uppercase leading-tight tracking-wide text-dorado drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] sm:text-xs">
                   {miFlor.tiene ? (
-                    <>Tenés flor: {miFlor.valor}</>
+                    <>
+                      Tenés flor: {miFlor.valor}
+                      {puede("flor") && (
+                        <span className="ml-2 normal-case tracking-normal text-crema/60">
+                          (cantala antes de tirar)
+                        </span>
+                      )}
+                    </>
                   ) : (
                     <>
                       Tu tanto: {miTanto}
@@ -354,11 +413,14 @@ function Mesa() {
           Va dentro del flujo, no fija: fija tapaba las cartas de la mano en
           celular, que es justamente lo que hay que poder ver y tocar. */}
       <div className="absolute inset-x-0 bottom-0 z-20 border-t-2 filo-dorado bg-[#1a120c]">
-        {!p.florResuelta && (
+        {/* La flor la cantás vos. El botón sólo aparece cuando de verdad se
+            puede: con flor, en la primera baza y sin haber hablado todavía.
+            Si se va la ventana, se pierde (salvo con las ayudas prendidas). */}
+        {(puede("flor") || florCantos.length > 0) && (
           <div className="mx-auto flex max-w-[760px] gap-1 border-b border-crema/10 p-1.5">
             {puede("flor") && (
               <BotonCanto onClick={() => hacer({ tipo: "flor" })} tono="dorado">
-                Me quedo con la flor
+                {meCantaronFlor ? "Yo también" : "¡Flor!"}
               </BotonCanto>
             )}
             {florCantos.map((a) =>
@@ -391,20 +453,22 @@ function Mesa() {
         )}
 
         <div className="mx-auto flex max-w-[760px] gap-1 p-1.5">
+          {/* La flor a secas no se quiere ni se rechaza (reglas 8.5): o tenés
+              flor y se comparan, o te achicás. Por eso van por separado. */}
           {puede("quiero") && (
-            <>
-              <BotonCanto onClick={() => hacer({ tipo: "quiero" })} tono="quiero">
-                Quiero
-              </BotonCanto>
-              <BotonCanto onClick={() => hacer({ tipo: "no-quiero" })} tono="no">
-                No quiero
-              </BotonCanto>
-            </>
+            <BotonCanto onClick={() => hacer({ tipo: "quiero" })} tono="quiero">
+              Quiero
+            </BotonCanto>
+          )}
+          {puede("no-quiero") && (
+            <BotonCanto onClick={() => hacer({ tipo: "no-quiero" })} tono="no">
+              {meCantaronFlor ? "Me achico" : "No quiero"}
+            </BotonCanto>
           )}
 
           {envidosPosibles.length > 0 && (
             <BotonCanto onClick={() => setMenuEnvido((v) => !v)} tono="dorado">
-              {puede("quiero") ? "Subir" : "Envido"}
+              {subiendoEnvido ? "Subir" : "Envido"}
             </BotonCanto>
           )}
 

@@ -7,9 +7,11 @@
  * Sigue el orden de fases de reglas.txt, sección 6, y la tabla de cantos
  * válidos de la sección 14.
  *
- * Alcance de esta versión: 1 contra 1, con flor automática (decisión 6 del
- * apéndice A). Con flor envido y contraflor al resto usan los valores de
- * reglas.txt 8.5 (decisión 4): 6 puntos y la partida entera.
+ * Alcance de esta versión: 1 contra 1. La flor SE CANTA A MANO (ver
+ * `yaHablo` más abajo y la decisión 6 del apéndice A): hay un botón, y quien
+ * no la canta a tiempo la pierde. La interfaz pone una red de seguridad
+ * cuando las ayudas están prendidas, pero el motor no sabe nada de eso: acá
+ * rige la regla de mesa.
  *
  * LÍMITE CONOCIDO: toda la partida vive en el navegador, así que las cartas del
  * rival están en memoria del cliente. No aparecen en el HTML (se dibujan de
@@ -48,6 +50,19 @@ export interface Evento {
   texto: string;
 }
 
+/**
+ * El registro de qué hizo cada uno, en limpio. Los `eventos` son texto para
+ * mostrar en pantalla; esto es para que el bot pueda repasar la mano sin tener
+ * que interpretar frases (ver lectura.ts).
+ */
+export interface Registro {
+  quien: Jugador;
+  tipo: Accion["tipo"];
+  canto?: CantoEnvido | CantoFlor;
+  /** En qué baza pasó: 0, 1 ó 2. */
+  baza: number;
+}
+
 export interface Partida {
   puntos: Record<Jugador, number>;
   quienEsMano: Jugador;
@@ -64,19 +79,39 @@ export interface Partida {
   bazas: Baza[];
   turno: Jugador;
   pendiente: Pendiente | null;
+  /**
+   * El truco que quedó esperando porque alguien cantó el envido arriba.
+   * "El envido va primero" (reglas.txt 14.1): se resuelve el envido entero y
+   * recién ahí vuelve la pregunta del truco a quien la tenía que contestar.
+   */
+  trucoEnEspera: Pendiente | null;
   envidoCerrado: boolean; // ya se jugó, se rechazó o se pasó la ventana
-  florResuelta: boolean; // false mientras los dos tienen flor y no se decidió
+  florResuelta: boolean; // false mientras hay una flor cantada sin decidir
+  florCantada: Record<Jugador, boolean>;
+  /**
+   * Si ese jugador YA USÓ su primera oportunidad de hablar en la primera baza.
+   *
+   * Es lo que decide quién puede contestar "el envido va primero" arriba de un
+   * truco: sólo el que todavía no habló (reglas.txt 14.2). Si el mano tira
+   * carta y después el pie le canta truco, el mano ya gastó su turno y no puede
+   * salir con el envido.
+   *
+   * Cantar envido o flor NO lo gasta: eso es usar el turno para lo que
+   * corresponde. Tirar carta, cantar truco o contestar un truco, sí.
+   */
+  yaHablo: Record<Jugador, boolean>;
   truco: { nivel: number; querido: boolean; cantadoPor: Jugador | null };
   fase: "jugando" | "mano-terminada" | "partida-terminada";
   ganadorMano: Jugador | null;
   ganadorPartida: Jugador | null;
   eventos: Evento[];
+  historial: Registro[];
 }
 
 export type Accion =
   | { tipo: "jugar"; carta: Carta }
   | { tipo: "envido"; canto: CantoEnvido }
-  | { tipo: "flor" } // quedarse con la flor a secas, sin subir
+  | { tipo: "flor" } // cantar "¡Flor!"
   | { tipo: "flor-canto"; canto: CantoFlor }
   | { tipo: "truco" }
   | { tipo: "quiero" }
@@ -141,7 +176,7 @@ export function repartirMano(
   const cartas: Record<Jugador, Carta[]> =
     esMano === "vos" ? { vos: mano, rival: pie } : { vos: pie, rival: mano };
 
-  const p: Partida = {
+  return {
     puntos: { ...previo.puntos },
     quienEsMano: esMano,
     muestra,
@@ -154,16 +189,23 @@ export function repartirMano(
     bazas: [{ vos: null, rival: null, abre: esMano, ganador: null }],
     turno: esMano,
     pendiente: null,
+    trucoEnEspera: null,
+    // OJO: el envido arranca ABIERTO aunque alguien tenga flor. Cerrarlo acá
+    // sería soplarle al jugador que el rival tiene flor: vería el botón de
+    // envido apagado sin que nadie haya cantado nada. Se cierra recién cuando
+    // alguien CANTA la flor, o cuando se juega el envido, o cuando se pasa la
+    // ventana de la primera baza.
     envidoCerrado: false,
     florResuelta: true,
+    florCantada: { vos: false, rival: false },
+    yaHablo: { vos: false, rival: false },
     truco: { nivel: 0, querido: false, cantadoPor: null },
     fase: "jugando",
     ganadorMano: null,
     ganadorPartida: null,
     eventos: [],
+    historial: [],
   };
-
-  return resolverFlor(p);
 }
 
 /**
@@ -174,36 +216,20 @@ function compararFlores(p: Partida): Jugador {
   return vos.valor === rival.valor ? p.quienEsMano : vos.valor > rival.valor ? "vos" : "rival";
 }
 
-/** Muestra los dos tantos de flor en el registro, recién cuando se resuelve. */
-function revelarFlores(p: Partida) {
-  p.eventos.push({ quien: "vos", texto: `Flor: ${p.flor.vos.valor}` });
-  p.eventos.push({ quien: "rival", texto: `Flor: ${p.flor.rival.valor}` });
-}
-
 /**
- * La flor se detecta sola, apenas se reparte (decisión 6): nadie se olvida de
- * cantarla. La flor siempre anula el envido, la tenga uno o los dos.
+ * Muestra en el registro los tantos de flor, recién cuando se resuelve.
  *
- * Si la tiene uno solo, no hay nada que apostar: cobra sus 3 puntos ahí mismo.
- * Si la tienen los dos, se abre la ventana de cantos (reglas.txt 8.5): quien
- * habla primero puede quedarse con la flor a secas o subir la apuesta.
+ * SÓLO los de quien la cantó. Mostrar la del que se la guardó —o la del que se
+ * achicó sin enseñarla— sería contar una carta que nadie puso sobre la mesa: en
+ * la mesa de verdad, la flor que no se canta no se ve, y saber que el otro
+ * tenía 41 te dice que le quedan tres cartas buenas.
  */
-function resolverFlor(p: Partida): Partida {
-  const { vos, rival } = p.flor;
-  if (!vos.tiene && !rival.tiene) return p;
-
-  p.envidoCerrado = true;
-
-  if (vos.tiene && rival.tiene) {
-    p.florResuelta = false;
-    p.eventos.push({ quien: "vos", texto: "¡Flor!" });
-    p.eventos.push({ quien: "rival", texto: "¡Flor!" });
-    return p;
+function revelarFlores(p: Partida) {
+  for (const quien of ["vos", "rival"] as Jugador[]) {
+    if (p.florCantada[quien] && p.flor[quien].tiene) {
+      p.eventos.push({ quien, texto: `Flor: ${p.flor[quien].valor}` });
+    }
   }
-
-  const quien: Jugador = vos.tiene ? "vos" : "rival";
-  p.eventos.push({ quien, texto: `¡Flor! ${p.flor[quien].valor}` });
-  return sumar(p, quien, 3, "cobra la flor");
 }
 
 /** El equipo se lleva la partida entera: es lo que paga una contraflor al resto. */
@@ -233,9 +259,25 @@ function sumar(p: Partida, quien: Jugador, puntos: number, motivo: string) {
 
 // ─── Qué se puede hacer ─────────────────────────────────────────────────────
 
-/** El envido sólo vive en la primera baza (reglas.txt 9.1 y 14.2). */
-function envidoDisponible(p: Partida): boolean {
-  return !p.envidoCerrado && p.bazas.length === 1 && !p.pendiente;
+/** La ventana del envido: primera baza y todavía nadie tiró la segunda carta. */
+function ventanaEnvidoAbierta(p: Partida): boolean {
+  return !p.envidoCerrado && p.bazas.length === 1;
+}
+
+/**
+ * ¿Este jugador todavía puede cantar su flor?
+ *
+ * Tiene que tenerla, no haberla cantado ya, estar en la primera baza y no
+ * haber gastado su turno de hablar. Eso último es "flor no cantada, flor
+ * perdida" (reglas.txt 8.2): si tiraste carta, se te fue.
+ */
+function puedeCantarFlor(p: Partida, quien: Jugador): boolean {
+  return (
+    p.flor[quien].tiene &&
+    !p.florCantada[quien] &&
+    p.bazas.length === 1 &&
+    !p.yaHablo[quien]
+  );
 }
 
 /** Los cantos de envido que se pueden encadenar arriba de lo ya cantado. */
@@ -249,42 +291,81 @@ function envidosPosibles(cadena: readonly CantoEnvido[]): CantoEnvido[] {
     : ["real-envido", "falta-envido"];
 }
 
+/** Los tres cantos con los que se declara flor: a secas o subiendo la apuesta. */
+function cantosDeFlor(): Accion[] {
+  return [
+    { tipo: "flor" },
+    { tipo: "flor-canto", canto: "con-flor-envido" },
+    { tipo: "flor-canto", canto: "contraflor-al-resto" },
+  ];
+}
+
 export function accionesPosibles(p: Partida, quien: Jugador): Accion[] {
   if (p.fase !== "jugando" || p.turno !== quien) return [];
 
   if (p.pendiente) {
     if (p.pendiente.de === quien) return []; // no te respondés a vos mismo
-    const acciones: Accion[] = [{ tipo: "quiero" }, { tipo: "no-quiero" }];
+    const acciones: Accion[] = [];
 
-    if (p.pendiente.tipo === "envido") {
-      for (const c of envidosPosibles(p.pendiente.cadena as CantoEnvido[])) {
-        acciones.push({ tipo: "envido", canto: c });
+    // ── Te cantaron flor ──────────────────────────────────────────────────
+    if (p.pendiente.tipo === "flor") {
+      const aSecas = p.pendiente.cadena.length === 0;
+      if (aSecas) {
+        // La flor a secas no se quiere ni se rechaza (reglas 8.5, escalón 1):
+        // o tenés flor y se comparan, o te achicás.
+        if (puedeCantarFlor(p, quien)) acciones.push(...cantosDeFlor());
+        acciones.push({ tipo: "no-quiero" }); // "con flor me achico"
+        return acciones;
       }
-    } else if (p.pendiente.tipo === "flor") {
-      // de con-flor-envido se puede subir directo a contraflor al resto
+      acciones.push({ tipo: "quiero" }, { tipo: "no-quiero" });
       if (!p.pendiente.cadena.includes("contraflor-al-resto")) {
         acciones.push({ tipo: "flor-canto", canto: "contraflor-al-resto" });
       }
-    } else if (p.truco.nivel < 3) {
-      acciones.push({ tipo: "truco" }); // subir: retruco o vale cuatro
+      return acciones;
+    }
+
+    acciones.push({ tipo: "quiero" }, { tipo: "no-quiero" });
+
+    // ── Te cantaron envido ────────────────────────────────────────────────
+    if (p.pendiente.tipo === "envido") {
+      // La flor anula el envido (reglas 14.2 y 14.3.3). Si la tenés, es lo
+      // único que podés cantar arriba: no vas a envidar teniendo flor.
+      if (puedeCantarFlor(p, quien)) {
+        acciones.push(...cantosDeFlor());
+      } else {
+        for (const c of envidosPosibles(p.pendiente.cadena as CantoEnvido[])) {
+          acciones.push({ tipo: "envido", canto: c });
+        }
+      }
+      return acciones;
+    }
+
+    // ── Te cantaron truco ─────────────────────────────────────────────────
+    if (p.truco.nivel < 3) acciones.push({ tipo: "truco" }); // retruco o vale cuatro
+
+    // EL ENVIDO VA PRIMERO (reglas.txt 14.1 y 14.2): sólo si todavía no
+    // gastaste tu turno de hablar en esta primera baza. Si el mano tiró carta
+    // y el pie le cantó truco, el mano ya habló y se jode.
+    if (!p.yaHablo[quien] && ventanaEnvidoAbierta(p)) {
+      if (puedeCantarFlor(p, quien)) {
+        acciones.push(...cantosDeFlor());
+      } else if (!p.flor[quien].tiene) {
+        for (const c of envidosPosibles([])) acciones.push({ tipo: "envido", canto: c });
+      }
     }
     return acciones;
   }
 
-  // Los dos tienen flor y todavía no se decidió: no se puede hacer otra cosa
-  // hasta resolver eso (reglas.txt 8.5, y paso 3 de la sección 6).
-  if (!p.florResuelta) {
-    return [
-      { tipo: "flor" },
-      { tipo: "flor-canto", canto: "con-flor-envido" },
-      { tipo: "flor-canto", canto: "contraflor-al-resto" },
-    ];
-  }
-
+  // ── Turno libre ───────────────────────────────────────────────────────────
   const acciones: Accion[] = [];
   for (const carta of p.cartas[quien]) acciones.push({ tipo: "jugar", carta });
 
-  if (envidoDisponible(p)) {
+  if (puedeCantarFlor(p, quien)) acciones.push(...cantosDeFlor());
+
+  // El envido también es cosa de tu primera oportunidad de hablar (reglas 9.1):
+  // si ya tiraste carta o ya cantaste truco, se te fue. Y con flor no se canta,
+  // porque la flor lo anula (reglas 8.3).
+  if (ventanaEnvidoAbierta(p) && !p.yaHablo[quien] && !p.flor[quien].tiene) {
     for (const c of envidosPosibles([])) acciones.push({ tipo: "envido", canto: c });
   }
 
@@ -309,9 +390,24 @@ const clonar = (p: Partida): Partida => ({
   manoInicial: { vos: [...p.manoInicial.vos], rival: [...p.manoInicial.rival] },
   bazas: p.bazas.map((b) => ({ ...b })),
   truco: { ...p.truco },
+  florCantada: { ...p.florCantada },
+  yaHablo: { ...p.yaHablo },
   pendiente: p.pendiente ? { ...p.pendiente, cadena: [...p.pendiente.cadena] } : null,
+  trucoEnEspera: p.trucoEnEspera
+    ? { ...p.trucoEnEspera, cadena: [...p.trucoEnEspera.cadena] }
+    : null,
   eventos: [...p.eventos],
+  historial: [...p.historial],
 });
+
+/** Hablar gasta el turno, salvo que hables para cantar envido o flor. */
+const GASTA_EL_TURNO: ReadonlySet<Accion["tipo"]> = new Set([
+  "jugar",
+  "truco",
+  "quiero",
+  "no-quiero",
+  "mazo",
+]);
 
 export function aplicar(previo: Partida, accion: Accion, quien: Jugador): Partida {
   const valida = accionesPosibles(previo, quien).some(
@@ -328,37 +424,34 @@ export function aplicar(previo: Partida, accion: Accion, quien: Jugador): Partid
 
   const p = clonar(previo);
 
+  p.historial.push({
+    quien,
+    tipo: accion.tipo,
+    canto: accion.tipo === "envido" || accion.tipo === "flor-canto" ? accion.canto : undefined,
+    baza: p.bazas.length - 1,
+  });
+  if (GASTA_EL_TURNO.has(accion.tipo)) p.yaHablo[quien] = true;
+
   switch (accion.tipo) {
     case "jugar":
       return jugarCarta(p, quien, accion.carta);
 
     case "envido": {
-      const cadena = p.pendiente ? [...p.pendiente.cadena, accion.canto] : [accion.canto];
+      // Si venía un truco sin contestar, queda esperando: el envido va primero
+      if (p.pendiente?.tipo === "truco") p.trucoEnEspera = p.pendiente;
+      const cadena =
+        p.pendiente?.tipo === "envido" ? [...p.pendiente.cadena, accion.canto] : [accion.canto];
       p.pendiente = { tipo: "envido", cadena, de: quien };
       p.turno = otro(quien);
       p.eventos.push({ quien, texto: textoCanto(accion.canto, p) });
       return p;
     }
 
-    case "flor": {
-      const ganador = compararFlores(p);
-      revelarFlores(p);
-      p.florResuelta = true;
-      sumar(p, ganador, 3, "se lleva la flor");
-      p.turno = turnoDeLaBaza(p);
-      return p;
-    }
+    case "flor":
+      return cantarFlor(p, quien, null);
 
-    case "flor-canto": {
-      const cadena = p.pendiente ? [...p.pendiente.cadena, accion.canto] : [accion.canto];
-      p.pendiente = { tipo: "flor", cadena, de: quien };
-      p.turno = otro(quien);
-      p.eventos.push({
-        quien,
-        texto: accion.canto === "con-flor-envido" ? "¡Con flor envido!" : "¡Contraflor al resto!",
-      });
-      return p;
-    }
+    case "flor-canto":
+      return cantarFlor(p, quien, accion.canto);
 
     case "truco": {
       p.truco.nivel += 1;
@@ -387,6 +480,104 @@ function textoCanto(canto: CantoEnvido, p: Partida): string {
   return canto === "real-envido" ? "¡Real envido!" : "¡Envido!";
 }
 
+/**
+ * Cantar la flor, a secas o subiendo la apuesta de una.
+ *
+ * Si el rival también tiene flor y todavía puede contestar, se abre la
+ * discusión (reglas 8.5). Si no, no hay con quién discutir: se cobran los 3 y
+ * la mano sigue. Ojo con esto último: los tres cantos se ofrecen SIEMPRE que
+ * tengas flor, tenga el rival o no, justamente para no soplar si el otro la
+ * tiene.
+ */
+function cantarFlor(p: Partida, quien: Jugador, canto: CantoFlor | null): Partida {
+  p.florCantada[quien] = true;
+  p.eventos.push({
+    quien,
+    texto:
+      canto === "con-flor-envido"
+        ? "¡Con flor envido!"
+        : canto === "contraflor-al-resto"
+          ? "¡Contraflor al resto!"
+          : "¡Flor!",
+  });
+
+  // Si venía un truco sin contestar, queda esperando su turno: la flor también
+  // va antes que el truco (reglas.txt 14.1). Sin esto el truco quedaba
+  // huérfano —nadie a quien preguntarle— y la mano se trababa para siempre.
+  if (p.pendiente?.tipo === "truco") {
+    p.trucoEnEspera = p.pendiente;
+    p.pendiente = null;
+  }
+
+  // La flor anula el envido, y lo cantado antes no se cobra (reglas 14.3.3)
+  if (p.pendiente?.tipo === "envido") {
+    p.eventos.push({ quien: "sistema", texto: "La flor anula el envido" });
+    p.pendiente = null;
+  }
+  p.envidoCerrado = true;
+
+  const rival = otro(quien);
+
+  // ¿El rival estaba contestando una flor ya cantada? Entonces esto la iguala
+  // o la sube.
+  const respondiendo = p.pendiente?.tipo === "flor";
+  const cadenaPrevia = respondiendo ? [...p.pendiente!.cadena] : [];
+
+  if (canto === null && respondiendo) {
+    // "Yo también tengo flor": se comparan y la más alta se lleva los 3.
+    return resolverFlorASecas(p);
+  }
+
+  // Si ya estamos discutiendo la flor, el otro sigue en la conversación aunque
+  // ya haya cantado la suya: es él quien tiene que contestar la subida.
+  const rivalPuedeContestar =
+    respondiendo ||
+    (p.flor[rival].tiene && !p.florCantada[rival] && !p.yaHablo[rival] && p.bazas.length === 1);
+
+  if (!rivalPuedeContestar) {
+    // Nadie con quién discutirla: se cobran los 3 y se sigue jugando.
+    revelarFlores(p);
+    p.florResuelta = true;
+    sumar(p, quien, 3, "cobra la flor");
+    return seguirDespuesDeApuesta(p);
+  }
+
+  p.florResuelta = false;
+  p.pendiente = {
+    tipo: "flor",
+    cadena: canto === null ? cadenaPrevia : [...cadenaPrevia, canto],
+    de: quien,
+  };
+  p.turno = rival;
+  return p;
+}
+
+/** Los dos cantaron flor y nadie subió: gana la más alta (reglas 8.5, escalón 1). */
+function resolverFlorASecas(p: Partida): Partida {
+  const ganador = compararFlores(p);
+  revelarFlores(p);
+  p.pendiente = null;
+  p.florResuelta = true;
+  sumar(p, ganador, 3, "se lleva la flor");
+  return seguirDespuesDeApuesta(p);
+}
+
+/**
+ * Se terminó de resolver una apuesta. Si había un truco esperando porque el
+ * envido iba primero, ahora sí toca contestarlo.
+ */
+function seguirDespuesDeApuesta(p: Partida): Partida {
+  if (p.fase !== "jugando") return p;
+  if (p.trucoEnEspera) {
+    p.pendiente = p.trucoEnEspera;
+    p.trucoEnEspera = null;
+    p.turno = otro(p.pendiente.de);
+    return p;
+  }
+  p.turno = turnoDeLaBaza(p);
+  return p;
+}
+
 function responderQuiero(p: Partida, quien: Jugador): Partida {
   const pendiente = p.pendiente!;
   p.pendiente = null;
@@ -406,8 +597,7 @@ function responderQuiero(p: Partida, quien: Jugador): Partida {
       return ganarLaPartida(p, ganador, "gana la contraflor al resto");
     }
     sumar(p, ganador, 6, "gana la flor con envido");
-    p.turno = turnoDeLaBaza(p);
-    return p;
+    return seguirDespuesDeApuesta(p);
   }
 
   // Envido querido: se cantan los tantos y se cobra al instante (reglas 6, paso 3)
@@ -428,14 +618,16 @@ function responderQuiero(p: Partida, quien: Jugador): Partida {
 
   const { querido } = puntosEnvido(pendiente.cadena as CantoEnvido[], p.puntos);
   sumar(p, ganador, querido, "gana el envido");
-  p.turno = turnoDeLaBaza(p);
-  return p;
+  return seguirDespuesDeApuesta(p);
 }
 
 function responderNoQuiero(p: Partida, quien: Jugador): Partida {
   const pendiente = p.pendiente!;
   p.pendiente = null;
-  p.eventos.push({ quien, texto: "No quiero" });
+  p.eventos.push({
+    quien,
+    texto: pendiente.tipo === "flor" ? "Con flor me achico" : "No quiero",
+  });
 
   if (pendiente.tipo === "truco") {
     // El que cantó se lleva la mano con lo que valía antes de su canto
@@ -450,15 +642,13 @@ function responderNoQuiero(p: Partida, quien: Jugador): Partida {
     const ultimo = pendiente.cadena[pendiente.cadena.length - 1];
     const valorAntes = ultimo === "contraflor-al-resto" && pendiente.cadena.length > 1 ? 6 : 3;
     sumar(p, pendiente.de, valorAntes, "cobra la flor no querida");
-    p.turno = turnoDeLaBaza(p);
-    return p;
+    return seguirDespuesDeApuesta(p);
   }
 
   p.envidoCerrado = true;
   const { noQuerido } = puntosEnvido(pendiente.cadena as CantoEnvido[], p.puntos);
   sumar(p, pendiente.de, noQuerido, "cobra el envido no querido");
-  p.turno = turnoDeLaBaza(p);
-  return p;
+  return seguirDespuesDeApuesta(p);
 }
 
 /** A quién le toca tirar en la baza en curso. */

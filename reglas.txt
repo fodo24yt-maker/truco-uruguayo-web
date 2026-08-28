@@ -368,9 +368,12 @@ variantes, no se acuerda antes de empezar: está siempre.
     En la mesa rige "flor no cantada, flor perdida": si dejás pasar tu turno,
     la perdiste.
 
-    >> EN ESTE JUEGO: el sistema detecta la flor y la canta automáticamente en
-       el momento correcto, para que un principiante no pierda puntos por no
-       darse cuenta de que la tenía. (Ver APÉNDICE A, decisión 6.)
+    >> EN ESTE JUEGO: la flor la cantás vos, con un botón que aparece sólo
+       cuando de verdad la podés cantar. Si dejás pasar tu turno, la perdés,
+       igual que en la mesa.
+       Con las AYUDAS prendidas hay una red: si ibas a perderla, se canta sola
+       y te avisa. Apagalas para jugar con la regla completa.
+       (Ver APÉNDICE A, decisión 6.)
 
 8.3 CUÁNTO VALE
     - Si nadie más tiene flor: 3 PUNTOS, sin discusión. No se acepta ni se
@@ -927,11 +930,25 @@ proyecto, para que el motor y los textos no se contradigan entre sí.
     variante "falta en malas" (que la falta valga hasta las buenas, o sea 15,
     cuando el que gana está en malas).
 
-  DECISIÓN 6 - La flor se canta sola
-    En el juego, el sistema detecta la flor y la canta automáticamente en el
-    momento correcto. En la mesa rige "flor no cantada, flor perdida", pero un
-    principiante perdería 3 puntos por no darse cuenta de que la tenía.
-    Se puede volver opcional más adelante, en un modo avanzado.
+  DECISIÓN 6 - La flor se canta a mano, con red para el que empieza
+    En la mesa rige "flor no cantada, flor perdida", y así se juega acá: hay un
+    botón de FLOR y sos vos quien la canta, en tu primera oportunidad de hablar
+    de la primera baza.
+
+    La primera versión del juego la cantaba sola, para que un principiante no
+    perdiera 3 puntos por distraído. El problema es que cantar la flor ES parte
+    de aprender a jugar: si la canta el sistema, nunca aprendés a acordarte. Y
+    encima, con la flor apareciendo en casi 3 de cada 10 manos, el aviso
+    automático saltaba todo el tiempo.
+
+    La red quedó atada a las AYUDAS, que ya estaban: prendidas, si se te iba a
+    pasar la ventana la flor se canta sola y te avisa; apagadas, la perdés.
+
+    Detalle que importa para que no se filtre información: teniendo flor no
+    podés cantar envido (la flor lo anula), pero el envido SIGUE disponible
+    para el que no tiene flor, aunque el rival sí la tenga. Si el juego cerrara
+    el envido apenas alguien tiene flor, verías el botón apagado y sabrías que
+    el rival tiene flor sin que haya cantado nada.
 
   DECISIÓN 7 - La muestra es una pieza
     El 12 (rey) de ese palo ocupa su lugar: toma su posición en la jerarquía Y

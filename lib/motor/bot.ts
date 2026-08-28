@@ -4,13 +4,16 @@
  * Hay uno solo: lo que cambia de rival en rival es la personalidad que se le
  * pasa (ver personalidades.ts). El mentiroso de Rocha y el mozo de Ciudad
  * Vieja corren exactamente este código; lo único distinto son los umbrales con
- * los que canta, quiere y miente.
+ * los que canta, quiere y miente, cuántos errores comete con las cartas, y
+ * cuánto te lee.
  *
  * Sólo mira SUS cartas y lo que está sobre la mesa. Nunca lee la mano del
- * jugador: eso sería hacer trampa, y además arruinaría el aprendizaje.
+ * jugador: eso sería hacer trampa, y además arruinaría el aprendizaje. Lo que
+ * sabe de vos sale de la ficha (lectura.ts), que se arma con lo que jugaste a
+ * la vista de todos.
  */
 
-import { type Carta, fuerza } from "./baraja.ts";
+import { type Carta, calidadDeMano, fuerza } from "./baraja.ts";
 import { valorEnvido } from "./tantos.ts";
 import {
   type Accion,
@@ -20,16 +23,7 @@ import {
   laFalta,
 } from "./partida.ts";
 import { LUKI, type Personalidad } from "./personalidades.ts";
-
-/** Qué tan buena es la mano, de 0 a 1, según la fuerza de sus cartas. */
-function calidadDeMano(cartas: readonly Carta[], muestra: Carta): number {
-  if (cartas.length === 0) return 0;
-  // fuerza va de 82 (el cuatro) a 100 (el 2 de la muestra)
-  const normalizar = (c: Carta) => (fuerza(c, muestra) - 82) / 18;
-  const mejor = Math.max(...cartas.map(normalizar));
-  const promedio = cartas.reduce((t, c) => t + normalizar(c), 0) / cartas.length;
-  return mejor * 0.6 + promedio * 0.4;
-}
+import { type Ficha, ajustePorLectura, fichaVacia } from "./lectura.ts";
 
 /**
  * ¿Esta baza ya está perdida?
@@ -108,12 +102,16 @@ function seAnima(
  * Qué haría el bot en el lugar de `quien`. Por defecto juega de rival, pero
  * puede razonar por cualquiera de los dos lados: eso es lo que después permite
  * ofrecer una sugerencia al jugador en modo aprendizaje.
+ *
+ * `ficha` es lo que tiene anotado del rival. Si no se le pasa nada, juega sin
+ * prejuicios: es lo que hacen los primeros de la gira, que no leen a nadie.
  */
 export function decidirJugada(
   p: Partida,
   quien: Jugador = "rival",
   azar: () => number = Math.random,
   personalidad: Personalidad = LUKI,
+  ficha: Ficha = fichaVacia(),
 ): Accion | null {
   const posibles = accionesPosibles(p, quien);
   if (posibles.length === 0) return null;
@@ -124,12 +122,21 @@ export function decidirJugada(
   const tanto = valorEnvido(p.manoInicial[quien], p.muestra);
   const puede = (tipo: Accion["tipo"]) => posibles.some((a) => a.tipo === tipo);
 
-  // ── Los dos tienen flor: hay que decidir si se sube la apuesta ───────────
-  // El bot sólo mira su propio tanto de flor, nunca el del rival.
+  // Lo que tiene anotado del rival corre los umbrales. Con `lectura` en 0 —los
+  // niveles 1 y 2— el ajuste es exactamente cero y juega como jugó siempre.
+  const ajuste = ajustePorLectura(ficha, personalidad.lectura);
+  const cantaEnvidoCon = personalidad.cantaEnvidoCon + ajuste.cantaEnvido;
+  const quiereEnvidoCon = personalidad.quiereEnvidoCon + ajuste.quiereEnvido;
+  const quiereTrucoCon = personalidad.quiereTrucoCon + ajuste.quiereTruco;
+
+  // ── Tiene flor: la canta ─────────────────────────────────────────────────
+  // Son 3 puntos seguros; guardársela es regalarlos. Lo único que decide es si
+  // la sube. El bot sólo mira su propio tanto de flor, nunca el del rival.
   if (puede("flor") || puede("flor-canto")) {
     const miFlor = p.flor[quien].valor;
+    const meSubieron = p.pendiente?.tipo === "flor" && p.pendiente.cadena.length > 0;
 
-    if (p.pendiente?.tipo === "flor") {
+    if (meSubieron) {
       if (miFlor >= personalidad.contraflorCon && puede("flor-canto")) {
         return { tipo: "flor-canto", canto: "contraflor-al-resto" };
       }
@@ -138,10 +145,13 @@ export function decidirJugada(
         : { tipo: "no-quiero" };
     }
 
-    if (miFlor >= personalidad.contraflorCon) {
+    if (miFlor >= personalidad.contraflorCon && puede("flor-canto")) {
       return { tipo: "flor-canto", canto: "contraflor-al-resto" };
     }
-    if (seAnima(miFlor, personalidad.conFlorEnvidoCon, personalidad, azar)) {
+    if (
+      puede("flor-canto") &&
+      seAnima(miFlor, personalidad.conFlorEnvidoCon, personalidad, azar)
+    ) {
       return { tipo: "flor-canto", canto: "con-flor-envido" };
     }
     return { tipo: "flor" };
@@ -152,9 +162,7 @@ export function decidirJugada(
     if (p.pendiente.tipo === "envido") {
       // Con la falta en juego se pone exigente: se juega la partida
       const enJuegoLaFalta = p.pendiente.cadena.includes("falta-envido");
-      const umbral = enJuegoLaFalta
-        ? personalidad.quiereEnvidoCon + 4
-        : personalidad.quiereEnvidoCon;
+      const umbral = enJuegoLaFalta ? quiereEnvidoCon + 4 : quiereEnvidoCon;
 
       if (
         tanto >= personalidad.subeEnvidoCon &&
@@ -172,6 +180,18 @@ export function decidirJugada(
       return tanto >= umbral ? { tipo: "quiero" } : { tipo: "no-quiero" };
     }
 
+    // EL ENVIDO VA PRIMERO. Si le cantaron truco y todavía no habló, el envido
+    // se juega antes: es la jugada, no una picardía (reglas.txt 14.1).
+    if (
+      p.pendiente.tipo === "truco" &&
+      puedeCantar(posibles, "envido") &&
+      seAnima(tanto, cantaEnvidoCon, personalidad, azar)
+    ) {
+      return tanto >= personalidad.subeEnvidoCon
+        ? { tipo: "envido", canto: "real-envido" }
+        : { tipo: "envido", canto: "envido" };
+    }
+
     // Truco: quiere con cartas, sube sólo con cartas muy buenas. Y no sube
     // nunca si la baza que está sobre la mesa ya la perdió.
     if (
@@ -181,9 +201,7 @@ export function decidirJugada(
     ) {
       return { tipo: "truco" };
     }
-    return calidad > personalidad.quiereTrucoCon
-      ? { tipo: "quiero" }
-      : { tipo: "no-quiero" };
+    return calidad > quiereTrucoCon ? { tipo: "quiero" } : { tipo: "no-quiero" };
   }
 
   // ── Turno libre ──────────────────────────────────────────────────────────
@@ -192,7 +210,7 @@ export function decidirJugada(
   // guarde: si cantara siempre que puede, le leerías el tanto exacto.
   if (
     puedeCantar(posibles, "envido") &&
-    seAnima(tanto, personalidad.cantaEnvidoCon, personalidad, azar)
+    seAnima(tanto, cantaEnvidoCon, personalidad, azar)
   ) {
     if (tanto >= personalidad.subeEnvidoCon) {
       return { tipo: "envido", canto: "real-envido" };
@@ -213,7 +231,7 @@ export function decidirJugada(
     return { tipo: "truco" };
   }
 
-  return { tipo: "jugar", carta: elegirCarta(p, quien) };
+  return { tipo: "jugar", carta: elegirCarta(p, quien, personalidad, azar) };
 }
 
 const puedeCantar = (posibles: Accion[], canto: string) =>
@@ -224,17 +242,39 @@ const puedeCantar = (posibles: Accion[], canto: string) =>
  * gane; si no le puede ganar, la más baja de todas (no se regalan cartas).
  * Si abre la baza, tira la más alta: guardar la mata para la tercera es el
  * error clásico (reglas.txt 16.3).
+ *
+ * Eso es lo que hace un jugador con criterio. Los que recién empiezan se
+ * equivocan, y ahí está `criterio`: cuanto más bajo, más seguido cometen
+ * justamente los dos errores que las reglas nombran. Es lo que más se nota
+ * jugando contra ellos —mucho más que con qué tanto cantan—, porque las manos
+ * de truco se ganan y se pierden acá.
  */
-function elegirCarta(p: Partida, quien: Jugador): Carta {
+function elegirCarta(
+  p: Partida,
+  quien: Jugador,
+  personalidad: Personalidad,
+  azar: () => number,
+): Carta {
   const misCartas = [...p.cartas[quien]].sort(
     (a, b) => fuerza(a, p.muestra) - fuerza(b, p.muestra),
   );
   const baza = p.bazas[p.bazas.length - 1];
   const cartaRival = quien === "rival" ? baza.vos : baza.rival;
+  const seEquivoca = azar() > personalidad.criterio;
 
-  if (!cartaRival) return misCartas[misCartas.length - 1];
+  if (!cartaRival) {
+    // Abre la baza. Lo correcto es salir con la más alta.
+    // El error de manual es el contrario: guardarse la mata para la tercera,
+    // que muchas veces no llega, y abrir con la más chica (reglas.txt 16.3).
+    return seEquivoca ? misCartas[0] : misCartas[misCartas.length - 1];
+  }
 
   const fuerzaRival = fuerza(cartaRival, p.muestra);
   const ganadora = misCartas.find((c) => fuerza(c, p.muestra) > fuerzaRival);
-  return ganadora ?? misCartas[0];
+  if (!ganadora) return misCartas[0];
+
+  // El otro error del que recién empieza: podía ganar la baza y no la gana,
+  // por miedo a gastar la carta buena. Regalar bazas es la forma más cara de
+  // perder una mano.
+  return seEquivoca ? misCartas[0] : ganadora;
 }

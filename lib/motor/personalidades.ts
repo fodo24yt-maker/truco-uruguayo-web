@@ -48,6 +48,24 @@ export interface Personalidad {
    * regala puntos.
    */
   sentidoComun: number;
+  /**
+   * Qué tan bien elige la carta que tira, de 0 a 1.
+   *
+   * En 1 juega el manual: la más baja que gana, y la más alta al abrir. Más
+   * abajo se le escapan los dos errores que nombra reglas.txt 16.3 —guardarse
+   * la mata para la tercera, matar con la más alta cuando alcanzaba una chica—.
+   * Es la diferencia que MÁS se siente jugando contra ellos: las manos de truco
+   * se ganan y se pierden acá, no en con qué tanto se canta.
+   */
+  criterio: number;
+  /**
+   * Cuánto te lee, de 0 a 1. Multiplica todo el ajuste de lectura.ts.
+   *
+   * En 0 no mira nada de lo que hacés: juega sus cartas y ya. En 1 te tiene
+   * fichado y te cobra las mentiras. Es el dial que mantiene la gira en
+   * escalera sin tener que tocar todo lo demás.
+   */
+  lectura: number;
 
   // ── Flor ──────────────────────────────────────────────────────────────
   contraflorCon: number;
@@ -60,22 +78,61 @@ export interface Personalidad {
  * los mismos números. Después cada rival ajusta lo suyo.
  */
 function segunNivel(nivel: 1 | 2 | 3 | 4 | 5) {
+  // OJO CON ESTA TABLA: la versión anterior estaba dada vuelta.
+  //
+  // Se había armado suponiendo que "más difícil = canta más, quiere más,
+  // miente más". Midiéndolo resultó al revés: querer con el umbral bajo es
+  // pagar apuestas perdidas, y mentir sólo rinde si el otro te cree. Luki, el
+  // primero de la gira, le ganaba a El Melo el 61% de las veces.
+  //
+  // Ahora los umbrales de QUERER bajan hacia el punto que conviene a medida que
+  // sube el nivel, en vez de pasarse de largo. Los de abajo se van demasiado
+  // seguido —lo que los hace fáciles de mentir, y transparentes: si cantan,
+  // tienen— y los de arriba pagan a ver en el momento justo.
+  //
+  // Se calibra con `node herramientas/medir-bots.mjs`, que saca la tabla de
+  // winrates. Hay un test (dificultad.test.ts) que no deja que se vuelva a dar
+  // vuelta sin que nadie se entere.
+  // Los dos umbrales de QUERER son los que más pesan, y cada uno tiene su punto
+  // justo, medido con el banco de pruebas: el envido conviene quererlo con 29 y
+  // el truco con 0,29. Los niveles bajos se alejan de ahí, cada uno para el
+  // lado que le da carácter:
+  //
+  //   · del TRUCO se van de más (0,55): por eso es tan fácil mentirles. Le
+  //     cantás truco con un cuatro y se achican.
+  //   · el ENVIDO lo pagan de más (22): todavía no saben cuándo su tanto es
+  //     malo, así que te quieren cualquier cosa. Es el vicio más caro que hay
+  //     —13 puntos de winrate— y el que más rápido se aprende a explotar.
+  //
+  // Los de arriba juegan los dos en el punto y encima te leen.
   const tabla = {
-    1: { cantaEnvidoCon: 27, quiereEnvidoCon: 26, subeEnvidoCon: 32, cantaTrucoCon: 0.74, quiereTrucoCon: 0.44, subeTrucoCon: 0.82, sentidoComun: 0.15 },
-    2: { cantaEnvidoCon: 26, quiereEnvidoCon: 25, subeEnvidoCon: 31, cantaTrucoCon: 0.7, quiereTrucoCon: 0.4, subeTrucoCon: 0.76, sentidoComun: 0.4 },
-    3: { cantaEnvidoCon: 26, quiereEnvidoCon: 25, subeEnvidoCon: 30, cantaTrucoCon: 0.66, quiereTrucoCon: 0.36, subeTrucoCon: 0.72, sentidoComun: 0.65 },
-    4: { cantaEnvidoCon: 25, quiereEnvidoCon: 24, subeEnvidoCon: 29, cantaTrucoCon: 0.62, quiereTrucoCon: 0.33, subeTrucoCon: 0.68, sentidoComun: 0.85 },
-    5: { cantaEnvidoCon: 24, quiereEnvidoCon: 23, subeEnvidoCon: 28, cantaTrucoCon: 0.58, quiereTrucoCon: 0.3, subeTrucoCon: 0.64, sentidoComun: 1 },
+    1: { cantaEnvidoCon: 30, quiereEnvidoCon: 20, subeEnvidoCon: 34, cantaTrucoCon: 0.82, quiereTrucoCon: 0.58, subeTrucoCon: 0.88, sentidoComun: 0.15 },
+    2: { cantaEnvidoCon: 29, quiereEnvidoCon: 22, subeEnvidoCon: 33, cantaTrucoCon: 0.78, quiereTrucoCon: 0.5, subeTrucoCon: 0.82, sentidoComun: 0.35 },
+    3: { cantaEnvidoCon: 28, quiereEnvidoCon: 24, subeEnvidoCon: 32, cantaTrucoCon: 0.73, quiereTrucoCon: 0.44, subeTrucoCon: 0.75, sentidoComun: 0.6 },
+    4: { cantaEnvidoCon: 26, quiereEnvidoCon: 26, subeEnvidoCon: 31, cantaTrucoCon: 0.67, quiereTrucoCon: 0.36, subeTrucoCon: 0.68, sentidoComun: 0.85 },
+    5: { cantaEnvidoCon: 25, quiereEnvidoCon: 28, subeEnvidoCon: 30, cantaTrucoCon: 0.62, quiereTrucoCon: 0.29, subeTrucoCon: 0.55, sentidoComun: 1 },
   } as const;
   return tabla[nivel];
 }
 
+// La flor promedio anda por 34. Querer un "con flor envido" con menos que eso
+// es regalar 6 puntos, así que el umbral bueno está ARRIBA, no abajo: los de
+// nivel alto quieren cerca del promedio y los principiantes se achican de más.
 const FLOR_POR_NIVEL = {
-  1: { contraflorCon: 44, conFlorEnvidoCon: 37, quiereFlorCon: 35 },
-  2: { contraflorCon: 42, conFlorEnvidoCon: 35, quiereFlorCon: 33 },
-  3: { contraflorCon: 40, conFlorEnvidoCon: 34, quiereFlorCon: 32 },
-  4: { contraflorCon: 37, conFlorEnvidoCon: 31, quiereFlorCon: 29 },
-  5: { contraflorCon: 35, conFlorEnvidoCon: 29, quiereFlorCon: 27 },
+  1: { contraflorCon: 45, conFlorEnvidoCon: 40, quiereFlorCon: 37 },
+  2: { contraflorCon: 43, conFlorEnvidoCon: 38, quiereFlorCon: 36 },
+  3: { contraflorCon: 41, conFlorEnvidoCon: 36, quiereFlorCon: 35 },
+  4: { contraflorCon: 39, conFlorEnvidoCon: 35, quiereFlorCon: 34 },
+  5: { contraflorCon: 38, conFlorEnvidoCon: 34, quiereFlorCon: 33 },
+} as const;
+
+/** Cuántos errores comete con las cartas, y cuánto te lee, según el nivel. */
+const OFICIO_POR_NIVEL = {
+  1: { criterio: 0.35, lectura: 0 },
+  2: { criterio: 0.52, lectura: 0 },
+  3: { criterio: 0.62, lectura: 0.3 },
+  4: { criterio: 0.72, lectura: 0.55 },
+  5: { criterio: 1, lectura: 1 },
 } as const;
 
 interface Semilla {
@@ -102,8 +159,8 @@ const SEMILLAS: Semilla[] = [
   // ── ★1 · El área metropolitana: acá se aprende ──────────────────────────
   {
     id: "luki", nombre: "Luki", departamento: "Montevideo", lugar: "La Blanqueada",
-    nivel: 1, mentira: 0.05, silencio: 0.1,
-    descripcion: "Juega en el liceo y no salió nunca de ahí. Canta lo que tiene, nada más.",
+    nivel: 1, mentira: 0.02, silencio: 0.05,
+    descripcion: "Juega en el liceo y no salió nunca de ahí. Si canta, tiene: no sabe mentir.",
   },
   {
     id: "la-coca", nombre: "La Coca", departamento: "Canelones", lugar: "Las Piedras",
@@ -217,6 +274,7 @@ export const PERSONALIDADES: Personalidad[] = SEMILLAS.map((s, i) => ({
   silencio: s.silencio,
   ...segunNivel(s.nivel),
   ...FLOR_POR_NIVEL[s.nivel],
+  ...OFICIO_POR_NIVEL[s.nivel],
 }));
 
 /** El primero de la gira: el rival con el que conviene aprender. */

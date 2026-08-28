@@ -148,3 +148,19 @@ export function desdeTexto(txt: string): Carta {
   }
   return { numero, palo };
 }
+
+/**
+ * Qué tan buena es una mano, de 0 a 1, según la fuerza de sus cartas.
+ *
+ * Vive acá y no en el bot porque la usan los dos: el bot para decidir si canta,
+ * y la lectura del rival (lectura.ts) para juzgar, con las cartas que quedaron
+ * sobre la mesa, si el que cantó truco tenía con qué o estaba mintiendo.
+ */
+export function calidadDeMano(cartas: readonly Carta[], muestra: Carta): number {
+  if (cartas.length === 0) return 0;
+  // fuerza va de 82 (el cuatro) a 100 (el 2 de la muestra)
+  const normalizar = (c: Carta) => (fuerza(c, muestra) - 82) / 18;
+  const mejor = Math.max(...cartas.map(normalizar));
+  const promedio = cartas.reduce((t, c) => t + normalizar(c), 0) / cartas.length;
+  return mejor * 0.6 + promedio * 0.4;
+}

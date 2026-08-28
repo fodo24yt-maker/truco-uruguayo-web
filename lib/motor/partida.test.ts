@@ -131,17 +131,31 @@ test("el envido vive sólo en la primera baza (reglas 9.1)", () => {
   assert.ok(!accionesPosibles(p, p.turno).some((a) => a.tipo === "envido"));
 });
 
-test("con flor, el envido no se juega y se cobran 3 puntos (reglas 8.3)", () => {
-  // busca un reparto donde alguien tenga flor
+test("la flor ya no se canta sola: hay que cantarla (reglas 8.2)", () => {
+  // busca un reparto donde el que es mano tenga flor
   let p = nuevaPartida(azarFijo(1));
-  for (let i = 2; i < 400 && !p.flor.vos.tiene && !p.flor.rival.tiene; i++) {
-    p = nuevaPartida(azarFijo(i));
-  }
-  assert.ok(p.flor.vos.tiene || p.flor.rival.tiene, "no apareció ninguna flor");
+  for (let i = 2; i < 400 && !p.flor[p.turno].tiene; i++) p = nuevaPartida(azarFijo(i));
+  assert.ok(p.flor[p.turno].tiene, "no apareció ninguna flor");
 
+  // Al repartir no se cobró nada y el envido sigue ABIERTO. Cerrarlo acá
+  // delataría que alguien tiene flor sin que nadie haya cantado.
+  assert.equal(p.puntos.vos + p.puntos.rival, 0);
+  assert.equal(p.envidoCerrado, false);
+
+  // El que la tiene puede cantarla, y ahí sí se cobra y se cierra el envido.
+  const quien = p.turno;
+  assert.ok(accionesPosibles(p, quien).some((a) => a.tipo === "flor"));
+  p = aplicar(p, { tipo: "flor" }, quien);
   assert.equal(p.envidoCerrado, true);
   assert.ok(!accionesPosibles(p, p.turno).some((a) => a.tipo === "envido"));
-  assert.equal(p.puntos.vos + p.puntos.rival, 3);
+  // 3 puntos si el otro no tenía flor; si tenía, queda la discusión abierta
+  assert.ok(p.puntos[quien] === 3 || p.pendiente?.tipo === "flor");
+});
+
+test("el que tiene flor no puede cantar envido: la flor lo anula (reglas 9.1)", () => {
+  let p = nuevaPartida(azarFijo(1));
+  for (let i = 2; i < 400 && !p.flor[p.turno].tiene; i++) p = nuevaPartida(azarFijo(i));
+  assert.ok(!accionesPosibles(p, p.turno).some((a) => a.tipo === "envido"));
 });
 
 test("una acción inválida no cambia el estado", () => {
@@ -267,19 +281,49 @@ test("contraflor al resto querida y ganada: se lleva la partida entera", () => {
 
 test("con flor a secas: 3 puntos, gana la más alta, sin subir la apuesta", () => {
   let p = partidaConDobleFlor(["7C", "6C", "3C"], ["2B", "4B", "5B"], "3B");
-  p = aplicarFlor(p, { tipo: "flor" }, "vos");
 
-  assert.equal(p.puntos.rival, 3);
+  // Ahora son dos pasos: uno canta y el otro contesta que también tiene.
+  p = aplicarFlor(p, { tipo: "flor" }, "vos");
+  assert.equal(p.pendiente?.tipo, "flor");
+  assert.equal(p.turno, "rival");
+
+  p = aplicarFlor(p, { tipo: "flor" }, "rival");
+  assert.equal(p.puntos.rival, 3); // 47 le gana a 36
   assert.equal(p.puntos.vos, 0);
   assert.equal(p.florResuelta, true);
   assert.equal(p.fase, "jugando"); // la mano sigue, ahora a jugar cartas
 });
 
-test("mientras la flor está sin resolver, no se puede jugar ni cantar otra cosa", () => {
+test("con flor me achico: el que cantó cobra 3 sin comparar (reglas 8.5)", () => {
+  let p = partidaConDobleFlor(["7C", "6C", "3C"], ["2B", "4B", "5B"], "3B");
+  p = aplicarFlor(p, { tipo: "flor" }, "vos");
+  // El rival tiene 47 y ganaría, pero si se achica los 3 son del que cantó
+  p = aplicarFlor(p, { tipo: "no-quiero" }, "rival");
+  assert.equal(p.puntos.vos, 3);
+  assert.equal(p.puntos.rival, 0);
+});
+
+test("con flor podés cantarla o no, pero el envido no está entre las opciones", () => {
   const p = partidaConDobleFlor(["7C", "6C", "3C"], ["2B", "4B", "5B"], "3B");
-  const tipos = accionesPosibles(p, "vos").map((a) => a.tipo);
-  assert.deepEqual(new Set(tipos), new Set(["flor", "flor-canto"]));
+  const tipos = new Set(accionesPosibles(p, "vos").map((a) => a.tipo));
+  // Ahora la flor es una decisión tuya: podés cantarla, tirar carta o cantar
+  // truco. Lo que no podés es envidar, porque la flor anula el envido.
+  assert.ok(tipos.has("flor"));
+  assert.ok(tipos.has("flor-canto"));
+  assert.ok(tipos.has("jugar"), "tenés que poder tirar carta sin cantar la flor");
+  assert.ok(tipos.has("truco"));
+  assert.ok(!tipos.has("envido"), "con flor no se canta envido");
   assert.deepEqual(accionesPosibles(p, "rival"), []); // no es su turno
+});
+
+test("flor no cantada, flor perdida: si tirás carta, se te fue (reglas 8.2)", () => {
+  let p = partidaConDobleFlor(["7C", "6C", "3C"], ["2B", "4B", "5B"], "3B");
+  p = aplicarFlor(p, { tipo: "jugar", carta: cFlor("3C") }, "vos");
+  assert.equal(p.yaHablo.vos, true);
+  // Le toca al rival; cuando vuelva a ser tu turno la flor ya no está
+  assert.ok(!accionesPosibles(p, "rival").some((a) => a.tipo === "jugar" && false));
+  const tipos = new Set(accionesPosibles(p, "vos").map((a) => a.tipo));
+  assert.ok(!tipos.has("flor"), "la flor tenía que perderse al tirar carta");
 });
 
 // ─── El tanto se cuenta con la mano del reparto, no con lo que queda ─────────

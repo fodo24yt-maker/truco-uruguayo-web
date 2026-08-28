@@ -34,15 +34,21 @@ la que ninguna guía argentina te da.
 
 **Jugar** — mesa mano a mano contra un bot, con las reglas completas: muestra,
 piezas, envido encadenado, flor con sus apuestas (con flor envido, contraflor
-al resto), truco/retruco/vale cuatro y pardas. Ambientada en un bar de noche:
+al resto), truco/retruco/vale cuatro y pardas. La flor la cantás vos, con su
+botón, y el envido va primero: si te cantan truco antes de que hayas hablado,
+podés contestarle envido y se resuelve eso primero. Ambientada en un bar de noche:
 mesa de madera en perspectiva, la lámpara colgando y el rival sentado enfrente.
 Con las ayudas prendidas te muestra tu tanto ya calculado y te marca cuáles de
 tus cartas son piezas; se apagan cuando querés.
 
-**El motor** — las reglas en TypeScript, con 29 tests que las verifican contra
-`reglas.txt`, incluida una pasada por fuerza bruta sobre las 40 cartas y todas
-las muestras posibles, y 40 partidas de bot contra bot que terminan sin una
-sola jugada inválida.
+**El motor** — las reglas en TypeScript, con 113 tests que las verifican contra
+`reglas.txt`: una pasada por fuerza bruta sobre las 40 cartas y todas las
+muestras posibles, 40 partidas de bot contra bot que terminan sin una sola
+jugada inválida, y una enumeración de las 365.560 manos posibles que confirma
+que la flor sale el 15,5% de las veces. Ese último salió de una sospecha
+jugando —"me tocan demasiadas flores"— y la respuesta fue que el reparto está
+bien: el truco uruguayo hace la flor 3,2 veces más frecuente que el argentino,
+porque una pieza más dos cartas del mismo palo ya es flor.
 
 **La gira** — un mapa del tesoro del Uruguay con un rival por departamento,
 cada uno con su forma de jugar. Se desbloquea de a uno: arrancás en Montevideo
@@ -56,10 +62,29 @@ y simplificada por
 la rosa de los vientos, el mate y el sombrero también están dibujados por
 código: sigue sin haber una sola imagen, son coordenadas.
 
-**El bot** — no juega al azar. Evalúa la fuerza de su mano, decide qué cantar
-según su tanto y el marcador, y elige la carta más baja que le gane a la tuya
-(o la más baja de todas si no te puede ganar). Nunca mira tus cartas: hay un
-test que lo verifica.
+**El bot** — no juega al azar, y de a poco te va conociendo. Evalúa la fuerza
+de su mano, decide qué cantar según su tanto y el marcador, y elige la carta
+más baja que le gane a la tuya. Además te arma una ficha mientras juegan: si
+cantás envido y después mostrás un 21, lo anota; si te callás con 33 esperando
+que cante él para subirle, también. Con eso te quiere el envido con menos tanto
+si sos mentiroso, y te cree si sos de los que sólo cantan con algo. Los rivales
+de una y dos estrellas no hacen nada de esto —juegan sus cartas y ya—, y los de
+cinco te tienen fichado.
+
+Nunca mira tus cartas: la ficha se arma sólo con lo que dejaste sobre la mesa y
+los tantos que se cantaron en voz alta. Hay tests que lo verifican, incluido uno
+que juega la misma mano con distinta carta guardada sin tirar y exige que la
+ficha salga idéntica.
+
+**La dificultad, medida.** Los 19 rivales corren el mismo código con distintos
+números, así que la única forma de saber si la gira sube de verdad es hacerlos
+jugar entre ellos. `herramientas/medir-bots.mjs` los enfrenta y saca la tabla.
+La primera vez que se corrió apareció que la escala estaba **dada vuelta**: Luki,
+el primero de la gira, le ganaba a El Melo, el último, el 61% de las veces. La
+tabla se había armado suponiendo que "más difícil = canta más, quiere más,
+miente más", y resulta que querer con el umbral bajo es pagar apuestas perdidas.
+Recalibrada, cada nivel le gana al anterior y el ★5 le gana al ★1 por 63%. Hay
+un test que no la deja volver a darse vuelta sin que nadie se entere.
 
 ## Qué falta
 
@@ -95,6 +120,7 @@ app/                    Las páginas (Next.js)
 components/             Las piezas visuales, incluida la baraja en SVG
 lib/
   motor/                Las reglas en código, con sus tests
+    lectura.ts            La ficha que el bot te arma de cómo jugás
   lecciones/            El contenido de la sección Aprender
   mapa-uruguay.ts       La geometría del mapa. GENERADO: no se edita a mano.
   mapa-colores.ts       El color de cada departamento. Eso sí se elige a mano.
@@ -102,6 +128,7 @@ lib/
   gira-camino.ts        La geometría del camino punteado, con sus pruebas
 herramientas/
   generar-mapa.mjs      Rehace mapa-uruguay.ts desde datos cartográficos
+  medir-bots.mjs        Enfrenta a los 19 rivales y mide si la gira sube
 ideas/
   concepto.md           Qué juego queremos hacer
   estetica.md           Cómo se tiene que ver
@@ -143,7 +170,7 @@ reglas del truco valen y cuáles no, y qué se deja afuera por no hacer falta.
 
 Las reglas de [`reglas.txt`](reglas.txt) se contrastaron entre varias fuentes
 —que se contradecían bastante— y las decisiones sobre cuál tomar en cada caso
-están explicadas en el apéndice A del documento. Además hay 29 pruebas
+están explicadas en el apéndice A del documento. Además hay 113 pruebas
 automáticas que verifican que el juego se comporte exactamente como dice ese
 archivo.
 

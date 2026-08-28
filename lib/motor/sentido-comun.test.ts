@@ -123,9 +123,15 @@ test("cuanto más duro el rival, menos veces canta con la mano perdida", () => {
   // Y los principiantes fallan seguido, que es lo que los hace principiantes.
   // Se compara contra uno de nivel 5, que es el que nunca se equivoca: contra
   // un nivel 4 la diferencia se mezcla con lo mentiroso que sea cada uno.
-  const luki = vecesQueCanta(mesa, "luki", 200);
+  //
+  // Se usa a La Coca y no a Luki, aunque los dos sean ★1: para cantar con la
+  // mano perdida hacen falta DOS cosas, poco sentido común y algo de ganas de
+  // mentir. Luki tiene lo primero pero no lo segundo —es el rival transparente
+  // de la gira, si canta es porque tiene—, así que directamente no canta.
+  const coca = vecesQueCanta(mesa, "la-coca", 200);
   const melo = vecesQueCanta(mesa, "el-melo", 200);
-  assert.ok(luki > melo, "Luki debería equivocarse más que el Melo");
+  assert.equal(melo, 0, "el Melo no tiene que cantar nunca con la mano perdida");
+  assert.ok(coca > 0, `La Coca debería entusiasmarse alguna vez: cantó ${coca}/200`);
 });
 
 test("pero SÍ canta cuando la carta de la mesa se le puede ganar", () => {
