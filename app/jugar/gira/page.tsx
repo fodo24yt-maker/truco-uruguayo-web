@@ -32,8 +32,12 @@ export default function Gira() {
   const rival = elegido ? porDepartamento(elegido) : undefined;
   const total = PERSONALIDADES.length;
 
+  // Pantalla completa, igual que la mesa: la gira es una pantalla de juego, no
+  // una página para leer. Sin esto el mapa queda encajonado entre el pie de
+  // página y la barra, y en escritorio los nombres no se leen. La clase
+  // `mesa-pantalla-completa` ya existe y esconde el pie.
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#0d0906]">
+    <div className="mesa-pantalla-completa flex min-h-0 flex-1 flex-col bg-noche">
       {/* Barra de arriba, como la del mapa de la referencia */}
       <header className="madera flex shrink-0 items-center justify-between border-b-2 filo-dorado px-3 py-2.5">
         <Link
@@ -51,15 +55,17 @@ export default function Gira() {
         </span>
       </header>
 
-      {/* El mapa */}
-      <div className="relative min-h-0 flex-1 bg-[#e8dcc0]">
+      {/* El mapa. Va sobre el fondo de noche del sitio, no sobre una caja
+          crema: el mapa es el papel, y el papel está apoyado en la mesa oscura
+          del boliche. El ancho máximo evita que en pantalla ancha se estire a
+          lo largo y quede una franja de mapa perdida en el medio. */}
+      <div className="relative mx-auto min-h-0 w-full max-w-[min(100%,calc(100vh-13rem))] flex-1">
         <MapaUruguay
           rivales={PERSONALIDADES}
           elegido={elegido}
           onElegir={setElegido}
           ganados={ganados}
         />
-
       </div>
 
       {/* Sin nada elegido, una franja discreta invita a tocar el mapa. Antes

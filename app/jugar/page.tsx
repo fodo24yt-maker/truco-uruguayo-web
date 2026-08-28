@@ -42,8 +42,8 @@ export default function ElegirModo() {
             Gira nacional
           </span>
           <span className="mt-1 text-sm leading-snug text-crema/65">
-            Diecinueve rivales, uno por departamento. Arrancás en Montevideo y
-            terminás en Carmelo, contra el Tucho.
+            Diecinueve rivales, uno por departamento. Recorrés todo el Uruguay
+            jugando truco.
           </span>
         </Link>
       </div>

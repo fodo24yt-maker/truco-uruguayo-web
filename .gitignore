@@ -133,6 +133,9 @@ capturas/
 *.swp
 .DS_Store
 Thumbs.db
+# Los deja WSL al arrastrar un archivo desde Windows: sólo dicen
+# "esto se bajó de internet". Basura pura.
+*:Zone.Identifier
 *.log
 npm-debug.log*
 coverage/

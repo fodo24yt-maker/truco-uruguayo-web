@@ -44,6 +44,13 @@ tus cartas son piezas; se apagan cuando querés.
 las muestras posibles, y 40 partidas de bot contra bot que terminan sin una
 sola jugada inválida.
 
+**La gira** — el mapa del Uruguay con un rival por departamento, cada uno con
+su forma de jugar. El mapa está dibujado en SVG sobre la geometría real de los
+19 departamentos, sacada de [Natural Earth](https://www.naturalearthdata.com/)
+—que es de dominio público— y simplificada por
+[`herramientas/generar-mapa.mjs`](herramientas/generar-mapa.mjs). Sigue sin
+haber una sola imagen: son coordenadas.
+
 **El bot** — no juega al azar. Evalúa la fuerza de su mano, decide qué cantar
 según su tanto y el marcador, y elige la carta más baja que le gane a la tuya
 (o la más baja de todas si no te puede ganar). Nunca mira tus cartas: hay un
@@ -51,8 +58,8 @@ test que lo verifica.
 
 ## Qué falta
 
-- La gira por el país y los 9 rivales con personalidad (está diseñada en
-  `ideas/concepto.md`).
+- El desbloqueo en cadena de la gira: hoy están los 19 habilitados desde el
+  principio.
 - El modo situaciones y la práctica de tanto contrarreloj.
 - 2 contra 2, con compañero y señas.
 - Un bot de verdad, con un modelo de IA open source detrás.
@@ -81,11 +88,15 @@ reglas.txt              Las reglas completas del truco uruguayo. Es la fuente de
 app/                    Las páginas (Next.js)
   page.tsx                inicio
   aprender/               índice y lecciones
-  jugar/                  la mesa
+  jugar/                  la mesa y la gira
 components/             Las piezas visuales, incluida la baraja en SVG
 lib/
   motor/                Las reglas en código, con sus tests
   lecciones/            El contenido de la sección Aprender
+  mapa-uruguay.ts       La geometría del mapa. GENERADO: no se edita a mano.
+  mapa-colores.ts       El color de cada departamento. Eso sí se elige a mano.
+herramientas/
+  generar-mapa.mjs      Rehace mapa-uruguay.ts desde datos cartográficos
 ideas/
   concepto.md           Qué juego queremos hacer
   estetica.md           Cómo se tiene que ver

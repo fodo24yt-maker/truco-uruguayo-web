@@ -3,21 +3,37 @@
 /**
  * El mapa de la gira: el Uruguay dibujado en SVG, con un rival por departamento.
  *
- * La estética es la de un mapa viejo de papel —pergamino, tinta marrón y
- * chapitas negras con el nombre— como el de la referencia. Todo se dibuja con
- * SVG y CSS: ni una sola imagen que descargar.
+ * La geometría —las formas, la silueta y dónde va cada etiqueta— sale entera de
+ * `lib/mapa-uruguay.ts`, que se genera con `herramientas/generar-mapa.mjs` a
+ * partir de datos cartográficos reales. Acá sólo se decide cómo se ve.
+ *
+ * La estética es la de un mapa de papel apoyado en la mesa del boliche: papel
+ * gastado, tinta marrón y chapitas negras con el nombre. Todo con SVG y CSS: ni
+ * una sola imagen que descargar.
  */
 
-import { AGUA, DEPARTAMENTOS } from "@/lib/mapa-uruguay";
+import { COLOR_DEPARTAMENTO } from "@/lib/mapa-colores";
+import { DEPARTAMENTOS, LIENZO, SILUETA } from "@/lib/mapa-uruguay";
 import type { Personalidad } from "@/lib/motor/personalidades";
 
-/** Cada nivel tiene su color: la progresión se ve de un vistazo. */
-const COLOR_POR_NIVEL: Record<number, string> = {
-  1: "#c9ba8c",
-  2: "#c5a96b",
-  3: "#c1904f",
-  4: "#b1723d",
-  5: "#975130",
+/** Aire alrededor del país, para que entre la orla de agua. */
+const MARGEN = 42;
+const VISTA = `${-MARGEN} ${-MARGEN} ${LIENZO.ancho + MARGEN * 2} ${LIENZO.alto + MARGEN * 2}`;
+
+/**
+ * Cuánto se achica la chapita según el aire que tenga el departamento. Sale de
+ * la `holgura` calculada, así que no hay listas de nombres a mano: si mañana
+ * cambia una forma, la etiqueta se reacomoda sola.
+ */
+const escalaEtiqueta = (holgura: number) => Math.max(0.7, Math.min(1, holgura / 80));
+
+/**
+ * El único corrimiento a mano de todo el mapa. Montevideo es tan chico que su
+ * punto más hondo cae casi sobre la costa, y la chapita terminaba flotando
+ * sobre el Río de la Plata. Se la sube apenas para que se apoye en tierra.
+ */
+const DESVIO: Record<string, [number, number]> = {
+  Montevideo: [0, -13],
 };
 
 export interface PropsMapa {
@@ -30,10 +46,11 @@ export interface PropsMapa {
 
 export function MapaUruguay({ rivales, elegido, onElegir, ganados }: PropsMapa) {
   const rivalDe = (d: string) => rivales.find((r) => r.departamento === d);
+  const deptoElegido = DEPARTAMENTOS.find((d) => d.nombre === elegido);
 
   return (
     <svg
-      viewBox="140 50 780 830"
+      viewBox={VISTA}
       preserveAspectRatio="xMidYMid meet"
       // Anclado al contenedor: con h-full dependía de que el padre tuviera
       // altura explícita, y dentro de un flex crecía de más.
@@ -42,38 +59,44 @@ export function MapaUruguay({ rivales, elegido, onElegir, ganados }: PropsMapa) 
       aria-label="Mapa del Uruguay: elegí un departamento para jugar"
     >
       <defs>
-        <filter id="papel-viejo" x="-5%" y="-5%" width="110%" height="110%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.022" numOctaves="4" seed="11" />
+        {/* Papel gastado. El feComposite es lo que importa: sin él, el ruido
+            rellena el rectángulo entero de la región del filtro y queda una
+            mancha cuadrada flotando al lado del país. */}
+        <filter id="papel-viejo" x="-6%" y="-6%" width="112%" height="112%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.024" numOctaves="3" seed="11" />
           <feColorMatrix
             type="matrix"
-            values="0 0 0 0 0.42  0 0 0 0 0.32  0 0 0 0 0.18  0 0 0 0.13 0"
+            values="0 0 0 0 0.42  0 0 0 0 0.32  0 0 0 0 0.18  0 0 0 0.16 0"
+            result="ruido"
           />
+          <feComposite in="ruido" in2="SourceGraphic" operator="in" />
         </filter>
-        {/* El realce del elegido: un halo, no una caja. El filtro con
-            dropShadow recortaba un rectángulo visible sobre el papel. */}
       </defs>
 
-      {/* El agua: el río Uruguay de un lado, el Río de la Plata abajo */}
-      <g opacity="0.45">
-        <path d={AGUA.rioUruguay} fill="#7f9ba0" />
-        <path d={AGUA.rioDeLaPlata} fill="#7f9ba0" />
+      {/* El agua. No es un polígono: es el CONTORNO del país engordado tres
+          veces, cada vez más fino. Como el trazo va centrado sobre la costa, la
+          mitad se derrama hacia afuera y queda la orla de los mapas viejos. Al
+          ser el borde real, es imposible que se salga en un rectángulo. */}
+      <g fill="none" strokeLinejoin="round" className="pointer-events-none">
+        <path d={SILUETA} stroke="#2b3a38" strokeWidth={52} opacity={0.55} />
+        <path d={SILUETA} stroke="#38504c" strokeWidth={30} opacity={0.6} />
+        <path d={SILUETA} stroke="#46635c" strokeWidth={12} opacity={0.7} />
       </g>
 
-      {DEPARTAMENTOS.map((depto) => {
-        const rival = rivalDe(depto.nombre);
-        const esElegido = elegido === depto.nombre;
-        const ganado = ganados.has(depto.nombre);
+      {/* Los departamentos */}
+      <g strokeLinejoin="round">
+        {DEPARTAMENTOS.map((depto) => {
+          const rival = rivalDe(depto.nombre);
+          const ganado = ganados.has(depto.nombre);
 
-        return (
-          <g key={depto.nombre}>
+          return (
             <path
+              key={depto.nombre}
               d={depto.forma}
-              fill={COLOR_POR_NIVEL[rival?.dificultad ?? 1]}
-              stroke={esElegido ? "#2a1808" : "#7a5c33"}
-              strokeWidth={esElegido ? 7 : 2.5}
-              strokeLinejoin="round"
-              fillOpacity={esElegido ? 1 : 0.92}
-              className="cursor-pointer"
+              fill={COLOR_DEPARTAMENTO[depto.nombre]}
+              stroke="#5d4326"
+              strokeWidth={2.2}
+              className="depto cursor-pointer"
               onClick={() => onElegir(depto.nombre)}
               role="button"
               tabIndex={0}
@@ -85,37 +108,62 @@ export function MapaUruguay({ rivales, elegido, onElegir, ganados }: PropsMapa) 
                 }
               }}
             />
-            <path
-              d={depto.forma}
-              filter="url(#papel-viejo)"
-              className="pointer-events-none"
-            />
-          </g>
-        );
-      })}
+          );
+        })}
+      </g>
 
+      {/* La textura del papel, recortada a la silueta y aplicada una sola vez.
+          Antes iba una por departamento: 19 filtros de ruido son caros en
+          celular y no se notaba la diferencia. */}
+      <path
+        d={SILUETA}
+        fill="#000"
+        filter="url(#papel-viejo)"
+        className="pointer-events-none"
+      />
+
+      {/* El borde del país, más firme que las divisiones de adentro */}
+      <path
+        d={SILUETA}
+        fill="none"
+        stroke="#3a2418"
+        strokeWidth={3.4}
+        strokeLinejoin="round"
+        className="pointer-events-none"
+      />
+
+      {/* El elegido se vuelve a dibujar encima: si no, el vecino que se pinta
+          después le tapa medio contorno y el realce queda cortado. */}
+      {deptoElegido && (
+        <path
+          d={deptoElegido.forma}
+          fill={COLOR_DEPARTAMENTO[deptoElegido.nombre]}
+          stroke="#e8b95c"
+          strokeWidth={5}
+          strokeLinejoin="round"
+          className="pointer-events-none"
+        />
+      )}
+
+      {/* Las chapitas con el nombre y las estrellas */}
       {DEPARTAMENTOS.map((depto) => {
         const rival = rivalDe(depto.nombre);
         const ganado = ganados.has(depto.nombre);
-        const [x, y] = depto.centro;
-        // En el sur los departamentos son chicos y las chapitas se pisaban:
-        // ahí van más compactas.
-        const apretado = ["Montevideo", "Canelones", "San José", "Maldonado", "Flores"].includes(
-          depto.nombre,
-        );
-        const escala = apretado ? 0.76 : 1;
-        const ancho = Math.max(depto.nombre.length * 14 + 24, 88);
+        const [dx, dy] = DESVIO[depto.nombre] ?? [0, 0];
+        const [x, y] = [depto.centro[0] + dx, depto.centro[1] + dy];
+        const escala = escalaEtiqueta(depto.holgura);
+        const ancho = Math.max(depto.nombre.length * 13.5 + 26, 86);
 
         return (
           <g
             key={`et-${depto.nombre}`}
             className="pointer-events-none"
-            transform={`translate(${x}, ${y}) scale(${escala})`}
+            transform={`translate(${x}, ${y}) scale(${escala.toFixed(3)})`}
           >
-            <rect x={-ancho / 2} y={-16} width={ancho} height={32} rx={3} fill="#181008" opacity={0.88} />
+            <rect x={-ancho / 2} y={-17} width={ancho} height={32} rx={3} fill="#181008" opacity={0.9} />
             <text
               x={0}
-              y={5}
+              y={4}
               textAnchor="middle"
               fill="#f2e6d0"
               fontSize={19}
@@ -123,8 +171,8 @@ export function MapaUruguay({ rivales, elegido, onElegir, ganados }: PropsMapa) 
             >
               {depto.nombre.toUpperCase()}
             </text>
-            <g transform="translate(0, 30)">
-              <rect x={-24} y={-13} width={48} height={25} rx={3} fill="#181008" opacity={0.82} />
+            <g transform="translate(0, 34)">
+              <rect x={-24} y={-13} width={48} height={25} rx={3} fill="#181008" opacity={0.84} />
               <text
                 x={0}
                 y={5}
