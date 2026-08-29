@@ -152,3 +152,21 @@ test("la dificultad no baja a medida que avanza la gira", () => {
     );
   }
 });
+
+test("versean sólo los de tres estrellas para arriba, y cada vez más", () => {
+  // El verso es oficio de mesa: los dos primeros niveles todavía están
+  // aprendiendo el juego, no la mesa, y cantan pelado.
+  for (const p of PERSONALIDADES) {
+    if (p.dificultad <= 2) {
+      assert.equal(p.verso, 0, `${p.nombre} es ★${p.dificultad} y no debería versear`);
+    } else {
+      assert.ok(p.verso > 0, `${p.nombre} es ★${p.dificultad} y tendría que versear`);
+      assert.ok(p.verso <= 1, `${p.nombre} tiene una probabilidad imposible`);
+    }
+  }
+
+  const ordenados = [...PERSONALIDADES].sort((a, b) => a.dificultad - b.dificultad);
+  for (let i = 1; i < ordenados.length; i++) {
+    assert.ok(ordenados[i].verso >= ordenados[i - 1].verso, "el verso bajó al subir de nivel");
+  }
+});

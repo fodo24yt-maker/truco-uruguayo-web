@@ -38,10 +38,15 @@ al resto), truco/retruco/vale cuatro y pardas. La flor la cantás vos, con su
 botón, y el envido va primero: si te cantan truco antes de que hayas hablado,
 podés contestarle envido y se resuelve eso primero. Ambientada en un bar de noche:
 mesa de madera en perspectiva, la lámpara colgando y el rival sentado enfrente.
+Cada mano arranca repartiendo de a una carta —mano, pie, mano, pie— y recién
+cuando terminó se dan vuelta. El mazo tiene la muestra metida abajo, atravesada
+y asomando lo justo para verle el número y el palo, y cambia de lado según de
+quién sea el reparto: si sos mano te queda a la izquierda, si sos pie a la
+derecha.
 Con las ayudas prendidas te muestra tu tanto ya calculado y te marca cuáles de
 tus cartas son piezas; se apagan cuando querés.
 
-**El motor** — las reglas en TypeScript, con 113 tests que las verifican contra
+**El motor** — las reglas en TypeScript, con 128 tests que las verifican contra
 `reglas.txt`: una pasada por fuerza bruta sobre las 40 cartas y todas las
 muestras posibles, 40 partidas de bot contra bot que terminan sin una sola
 jugada inválida, y una enumeración de las 365.560 manos posibles que confirma
@@ -75,6 +80,16 @@ Nunca mira tus cartas: la ficha se arma sólo con lo que dejaste sobre la mesa y
 los tantos que se cantaron en voz alta. Hay tests que lo verifican, incluido uno
 que juega la misma mano con distinta carta guardada sin tirar y exige que la
 ficha salga idéntica.
+
+**Los versos.** De tres estrellas para arriba, los rivales no cantan pelado: te
+tiran una copla. Son versos de payada de dominio público, de los que se dicen
+hace más de un siglo en las mesas de acá y del litoral. Cuanto más arriba en la
+gira, más versean. No cambian una sola regla —el canto es el mismo y va escrito
+abajo de la copla—, y están archivados por canto en
+[`lib/motor/versos.ts`](lib/motor/versos.ts), con dos marcados aparte porque no
+se sostienen solos: "no se ponga tan contento por el envite que ha echao" le
+contesta a un envido ajeno, y "le digo quiero y retruco" acepta y sube en el
+mismo aire, así que sólo van cuando en la mesa está pasando eso.
 
 **La dificultad, medida.** Los 19 rivales corren el mismo código con distintos
 números, así que la única forma de saber si la gira sube de verdad es hacerlos
@@ -121,6 +136,7 @@ components/             Las piezas visuales, incluida la baraja en SVG
 lib/
   motor/                Las reglas en código, con sus tests
     lectura.ts            La ficha que el bot te arma de cómo jugás
+    versos.ts             Las coplas con las que cantan los rivales duros
   lecciones/            El contenido de la sección Aprender
   mapa-uruguay.ts       La geometría del mapa. GENERADO: no se edita a mano.
   mapa-colores.ts       El color de cada departamento. Eso sí se elige a mano.
@@ -170,7 +186,7 @@ reglas del truco valen y cuáles no, y qué se deja afuera por no hacer falta.
 
 Las reglas de [`reglas.txt`](reglas.txt) se contrastaron entre varias fuentes
 —que se contradecían bastante— y las decisiones sobre cuál tomar en cada caso
-están explicadas en el apéndice A del documento. Además hay 113 pruebas
+están explicadas en el apéndice A del documento. Además hay 128 pruebas
 automáticas que verifican que el juego se comporte exactamente como dice ese
 archivo.
 

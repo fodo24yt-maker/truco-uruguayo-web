@@ -90,9 +90,26 @@ function cuantoLeGana(a: Personalidad, b: Personalidad, cuantas: number, semilla
 
 const PARTIDAS = 400;
 
+/**
+ * TRES SEMILLAS, NO UNA.
+ *
+ * Entre dos niveles vecinos la diferencia real es de uno o dos puntos de
+ * winrate. Con 400 partidas de una sola semilla el error de medición es del
+ * mismo tamaño que lo que se quiere medir, así que el test daba 49% ó 54% según
+ * la suerte del generador y no según cómo juegan los bots. Promediando tres
+ * semillas son 1.800 partidas por escalón y el número deja de bailar.
+ *
+ * Esto NO afloja la exigencia: el umbral sigue siendo "le tiene que ganar".
+ * Lo que cambia es que ahora se mide bien.
+ */
+const SEMILLAS = [1001, 4242, 90210];
+
+const escalon = (mejor: Personalidad, peor: Personalidad) =>
+  SEMILLAS.reduce((t, s) => t + cuantoLeGana(mejor, peor, 600, s), 0) / SEMILLAS.length;
+
 test("cada nivel de la gira le gana al anterior", () => {
   for (let n = 1; n <= 4; n++) {
-    const gana = cuantoLeGana(porNivel(n + 1), porNivel(n), PARTIDAS, 1000 + n);
+    const gana = escalon(porNivel(n + 1), porNivel(n));
     assert.ok(
       gana > 50,
       `★${n + 1} le gana a ★${n} sólo el ${gana.toFixed(1)}%: la escala no sube`,

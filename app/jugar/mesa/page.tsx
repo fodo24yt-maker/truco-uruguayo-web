@@ -7,10 +7,12 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { Carta } from "@/components/Carta";
 import { FondoBar, Rival, TexturaMadera } from "@/components/mesa/Escenario";
 import { Marcador } from "@/components/mesa/Marcador";
+import { Mazo } from "@/components/mesa/Mazo";
 import { type Carta as CartaType, esPieza } from "@/lib/motor/baraja";
 import { decidirJugada } from "@/lib/motor/bot";
 import {
   type Accion,
+  type Jugador,
   type Partida,
   accionesPosibles,
   aplicar,
@@ -18,6 +20,7 @@ import {
   nuevaPartida,
   siguienteMano,
 } from "@/lib/motor/partida";
+import { versoDelCanto } from "@/lib/motor/versos";
 import {
   LUKI,
   PERSONALIDADES,
@@ -30,6 +33,54 @@ import { porSlugDeDepartamento } from "@/lib/gira";
 import { anotarPartida, guardarPreferencia, leerProgreso } from "@/lib/progreso";
 
 const DEMORA_BOT = 900; // lo que el bot "piensa", para que se pueda seguir
+
+/* ─── El reloj del reparto ──────────────────────────────────────────────────
+   Antes la mano aparecía entera y dada vuelta de un saque: empezabas a jugar
+   sin haber visto repartir. Ahora salen del mazo de a una —mano, pie, mano,
+   pie— y se dan vuelta recién cuando terminó, que es como se reparte en la
+   mesa. Los números están acá arriba y no desparramados en el código porque
+   tienen que encajar entre ellos: si el volteo empieza antes de que aterrice
+   la última carta, se ve la mano armándose sola. */
+
+/** Lo que pasa entre que sale una carta y sale la siguiente. */
+const ENTRE_CARTAS = 110;
+/** Lo que tarda cada carta en llegar del mazo a su lugar. Igual que el CSS. */
+const VUELO = 320;
+/** Entre carta y carta al darlas vuelta: se abren en abanico, no de golpe. */
+const ENTRE_VOLTEOS = 80;
+/** Cuánto dura el giro de una carta al darla vuelta. Igual que el CSS. */
+const VOLTEO = 280;
+
+/** Cuándo se dan vuelta: cuando aterrizó la última de las seis, y un respiro. */
+const MOMENTO_VOLTEO = 5 * ENTRE_CARTAS + VUELO + 60;
+/** Cuándo se puede volver a jugar: cuando terminó de girar la última. */
+const FIN_REPARTO = MOMENTO_VOLTEO + 2 * ENTRE_VOLTEOS + VOLTEO;
+/** Lo que queda un verso en pantalla si no lo cerrás ni contestás. */
+const DURA_VERSO = 6500;
+
+/**
+ * Cuánto espera cada carta antes de salir del mazo.
+ *
+ * Se reparte de a una y empezando por el mano (reglas.txt 6, paso 1), así que
+ * se van alternando: mano, pie, mano, pie, mano, pie.
+ */
+function retrasoDeReparto(quien: Jugador, indice: number, soyMano: boolean): number {
+  const empieza = quien === "vos" ? soyMano : !soyMano;
+  return (indice * 2 + (empieza ? 0 : 1)) * ENTRE_CARTAS;
+}
+
+/**
+ * ¿Se anima el reparto?
+ *
+ * Si el sistema pidió menos movimiento, no: se muestra la mano y se juega. El
+ * CSS ya apaga las animaciones en ese caso, pero acá hay ADEMÁS una espera de
+ * segundo y medio antes de poder tocar nada, y eso el CSS no lo apaga. Sin
+ * esta comprobación, quien pidió menos movimiento se comía la espera mirando
+ * una mesa quieta.
+ */
+const animacionesPrendidas = () =>
+  typeof window !== "undefined" &&
+  !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** Giro fijo por carta, para que al tirarla caiga siempre igual y no baile. */
 function giroDe(carta: CartaType): number {
@@ -101,6 +152,55 @@ function Mesa() {
   /** Se prende cuando las ayudas te salvan una flor que ibas a perder. */
   const [florSalvada, setFlorSalvada] = useState(false);
 
+  /**
+   * En qué anda el reparto. "repartiendo": las cartas salen del mazo y están
+   * boca abajo. "volteando": ya están todas y se dan vuelta. "listo": se juega.
+   *
+   * Mientras no está en "listo" no se puede tocar nada y el bot tampoco piensa:
+   * el que reparte no juega al mismo tiempo.
+   */
+  const [faseReparto, setFaseReparto] = useState<"repartiendo" | "volteando" | "listo">(
+    "listo",
+  );
+  /** Sube de a uno con cada mano nueva. Es lo que dispara el reloj del reparto. */
+  const [manoNro, setManoNro] = useState(0);
+  /**
+   * Si ESTA mano se está repartiendo con animación.
+   *
+   * Se decide una sola vez, al repartir, y el reloj de abajo lee de acá. Si
+   * cada uno preguntara por su cuenta si hay animaciones, podrían contestarse
+   * distinto —alcanza con que el sistema cambie la preferencia justo en el
+   * medio— y la mesa quedaba trabada en "repartiendo" para siempre, sin cartas
+   * que tocar y sin reloj que la destrabe.
+   */
+  const animandoReparto = useRef(false);
+  const repartiendo = faseReparto !== "listo";
+  const carasArriba = faseReparto !== "repartiendo";
+
+  /**
+   * El verso que está diciendo el rival, si le tocó versear. Es puro color: el
+   * canto de verdad ya está aplicado en la partida cuando esto aparece.
+   */
+  const [verso, setVerso] = useState<{ lineas: readonly string[]; canto: string } | null>(
+    null,
+  );
+  /** El último que dijo, para no repetirle la misma copla dos veces seguidas. */
+  const ultimoVerso = useRef<string | undefined>(undefined);
+
+  /** Empieza una mano nueva y larga el reparto. Todas las manos pasan por acá. */
+  const repartirNueva = (nueva: Partida) => {
+    setVerso(null);
+    setFlorSalvada(false);
+    setMenuEnvido(false);
+    // La fase se pone ACÁ y no en el efecto de abajo a propósito: si esperara al
+    // efecto, habría un cuadro con la mano nueva ya dada vuelta antes de que
+    // arranque la animación, y se vería el parpadeo.
+    animandoReparto.current = animacionesPrendidas();
+    setFaseReparto(animandoReparto.current ? "repartiendo" : "listo");
+    setP(nueva);
+    setManoNro((n) => n + 1);
+  };
+
   // El reparto se hace en el navegador: si se hiciera al generar la página,
   // todos verían siempre las mismas cartas.
   useEffect(() => {
@@ -111,18 +211,59 @@ function Mesa() {
     if (rivalPedido) setRivalElegido(buscarPersonalidad(rivalPedido));
     else if (progreso.ultimoRival) setRivalElegido(buscarPersonalidad(progreso.ultimoRival));
     ficha.current = fichaVacia();
-    setP(nuevaPartida());
+    ultimoVerso.current = undefined;
+    repartirNueva(nuevaPartida());
+    // Sólo se vuelve a repartir de cero si cambió a quién enfrentás: si acá
+    // entrara `repartirNueva`, se rearmaría la partida en cada dibujado.
   }, [rivalPedido, rivalDelDepto]);
+
+  // El reloj del reparto: darlas vuelta, y después soltar el juego.
+  useEffect(() => {
+    if (manoNro === 0 || !animandoReparto.current) return;
+    const alVoltear = setTimeout(() => setFaseReparto("volteando"), MOMENTO_VOLTEO);
+    const alTerminar = setTimeout(() => setFaseReparto("listo"), FIN_REPARTO);
+    return () => {
+      clearTimeout(alVoltear);
+      clearTimeout(alTerminar);
+    };
+  }, [manoNro]);
+
+  // El verso se borra solo. Si contestás antes, lo borra `hacer`.
+  useEffect(() => {
+    if (!verso) return;
+    const reloj = setTimeout(() => setVerso(null), DURA_VERSO);
+    return () => clearTimeout(reloj);
+  }, [verso]);
 
   // El turno del bot, con la personalidad del rival elegido
   useEffect(() => {
-    if (!p || p.fase !== "jugando" || p.turno !== "rival") return;
+    if (!p || p.fase !== "jugando" || p.turno !== "rival" || repartiendo) return;
     const reloj = setTimeout(() => {
       const accion = decidirJugada(p, "rival", Math.random, rival, ficha.current);
-      if (accion) setP((actual) => (actual ? aplicar(actual, accion, "rival") : actual));
+      if (!accion) return;
+
+      // Con qué verso lo canta, si es de los que versean. Se decide ANTES de
+      // aplicar la acción porque el verso depende de cómo está la mesa en ese
+      // momento: un "no se ponga tan contento" le contesta a un envido que
+      // todavía está sin resolver.
+      const copla = versoDelCanto(
+        accion,
+        p,
+        rival.verso,
+        Math.random,
+        ultimoVerso.current,
+      );
+      const despues = aplicar(p, accion, "rival");
+      if (copla) {
+        ultimoVerso.current = copla.id;
+        // El primer evento nuevo ES el canto. El último no sirve: una flor que
+        // se cobra sola deja abajo el "+3" y ahí se leería eso en vez del canto.
+        setVerso({ lineas: copla.lineas, canto: despues.eventos[p.eventos.length]?.texto ?? "" });
+      }
+      setP(despues);
     }, DEMORA_BOT);
     return () => clearTimeout(reloj);
-  }, [p, rival]);
+  }, [p, rival, repartiendo]);
 
   // Al cerrar cada mano el rival repasa lo que te vio hacer. Sólo mira las
   // cartas que quedaron sobre la mesa y los tantos que se cantaron en voz alta:
@@ -145,6 +286,8 @@ function Mesa() {
   const hacer = (accion: Accion) => {
     setMenuEnvido(false);
     setFlorSalvada(false);
+    setVerso(null); // contestaste: el verso ya cumplió
+    if (repartiendo) return; // todavía se está repartiendo
 
     /**
      * RED DE SEGURIDAD. En la mesa rige "flor no cantada, flor perdida": si
@@ -168,11 +311,23 @@ function Mesa() {
     setP(aplicar(p, accion, "vos"));
   };
 
-  const posibles = accionesPosibles(p, "vos");
+  // Mientras se reparte no hay nada que hacer: la lista vacía apaga TODOS los
+  // botones de una, sin tener que acordarse de deshabilitar cada uno.
+  const posibles = repartiendo ? [] : accionesPosibles(p, "vos");
   const puede = (tipo: Accion["tipo"]) => posibles.some((a) => a.tipo === tipo);
   const envidosPosibles = posibles.filter((a) => a.tipo === "envido");
   const florCantos = posibles.filter((a) => a.tipo === "flor-canto");
-  const miTurno = p.turno === "vos" && p.fase === "jugando";
+  const miTurno = p.turno === "vos" && p.fase === "jugando" && !repartiendo;
+  /**
+   * De qué lado de la mesa está el mazo.
+   *
+   * Del lado del que reparte, que en mano a mano es el pie. Si sos mano te
+   * queda a la izquierda; si sos pie, a la derecha. Cambia solo de mano en
+   * mano, igual que en la mesa, y es la única señal que te dice de quién es el
+   * reparto sin que haya que escribirlo.
+   */
+  const ladoMazo = p.quienEsMano === "vos" ? "izquierda" : "derecha";
+  const soyMano = p.quienEsMano === "vos";
   /** Te cantaron flor a secas y te toca contestar: ahí "no quiero" es achicarse. */
   const meCantaronFlor = p.pendiente?.tipo === "flor" && p.pendiente.cadena.length === 0;
   /** Si ya hay un envido en la mesa, lo que hacés es subirlo; si no, abrirlo. */
@@ -198,19 +353,45 @@ function Mesa() {
             <Rival nombre={rival.nombre} />
           </div>
 
-          {/* Sus cartas, sostenidas delante de él */}
+          {/* Sus cartas, sostenidas delante de él.
+              El viaje desde el mazo va en un <span> de afuera y el abanico en la
+              carta de adentro: si los dos transform vivieran en el mismo
+              elemento, la animación le pisaría el abanico y al terminar las tres
+              cartas pegarían un salto para acomodarse. */}
           <div className="absolute bottom-[6px] left-1/2 flex -translate-x-1/2 gap-1">
             {p.cartas.rival.map((_, i) => (
-              <Carta
+              <span
                 key={i}
-                oculta
-                className="w-[30px] sm:w-[40px]"
-                style={{
-                  transform: `rotate(${(i - 1) * 7}deg) translateY(${Math.abs(i - 1) * 3}px)`,
-                }}
-              />
+                className={repartiendo ? "anim-reparte" : ""}
+                style={
+                  repartiendo
+                    ? ({
+                        animationDelay: `${retrasoDeReparto("rival", i, soyMano)}ms`,
+                        "--desde-x": `${ladoMazo === "izquierda" ? -110 : 110}px`,
+                        "--desde-y": "96px",
+                      } as React.CSSProperties)
+                    : undefined
+                }
+              >
+                <Carta
+                  oculta
+                  className="w-[30px] sm:w-[40px]"
+                  style={{
+                    transform: `rotate(${(i - 1) * 7}deg) translateY(${Math.abs(i - 1) * 3}px)`,
+                  }}
+                />
+              </span>
             ))}
           </div>
+
+          {/* Lo que está diciendo el rival, cuando canta con verso */}
+          {verso && (
+            <BocadilloVerso
+              lineas={verso.lineas}
+              canto={verso.canto}
+              onCerrar={() => setVerso(null)}
+            />
+          )}
 
           {/* En historia va una placa fija con el departamento y el rival; el
               selector NO se monta. En libre, el botón de siempre. */}
@@ -272,8 +453,11 @@ function Mesa() {
               </p>
             )}
 
+            {/* La chapa del último canto. Con un verso en pantalla se esconde: el
+                globo ya lo dice abajo de la copla y leerlo dos veces distrae.
+                Cuando el globo se va, la chapa vuelve y queda como registro. */}
             <div className="flex min-h-[1.75rem] shrink-0 items-center justify-center sm:min-h-[2.1rem]">
-              {ultimoEvento && (
+              {ultimoEvento && !verso && (
                 <p
                   key={p.eventos.length}
                   className={`anim-pop rounded-full px-4 py-1.5 font-[family-name:var(--font-ui)] text-sm uppercase tracking-wide ${
@@ -287,33 +471,19 @@ function Mesa() {
               )}
             </div>
 
-            {/* Centro: la muestra a un costado, las bazas en el medio */}
+            {/* Centro: el mazo a un costado, las bazas en el medio */}
             <div className="relative flex min-h-0 flex-1 items-center justify-center py-1 sm:py-2">
-              {/* La muestra, apoyada en el borde izquierdo de la mesa */}
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-center sm:left-8">
-                <Carta
-                  carta={p.muestra}
-                  className="halo-pieza mx-auto w-[42px] rotate-90 sm:w-[50px]"
-                />
-                <p className="mt-4 font-[family-name:var(--font-ui)] text-[9px] uppercase leading-tight tracking-[0.12em] text-dorado drop-shadow-[0_1px_3px_rgba(0,0,0,1)] sm:mt-5 sm:text-[10px]">
-                  muestra
-                  <br />
-                  <span className="text-crema/80">manda {p.muestra.palo}</span>
-                </p>
-              </div>
-
-              {/* El mazo, apoyado del otro lado. No se toca: es el objeto que
-                  hace que la mesa se lea como una mesa. */}
+              {/* El mazo con la muestra metida abajo, del lado del que reparte.
+                  Antes eran dos objetos separados en las dos puntas de la mesa;
+                  en la mesa de verdad son uno solo. */}
               <div
-                className="absolute right-2 top-1/2 hidden -translate-y-1/2 sm:right-8 sm:block"
-                aria-hidden="true"
+                className={`absolute top-1/2 -translate-y-1/2 ${
+                  ladoMazo === "izquierda"
+                    ? "left-0 origin-left sm:left-4"
+                    : "right-0 origin-right sm:right-4"
+                } sm:scale-[1.14]`}
               >
-                <div className="relative h-[74px] w-[50px]">
-                  <div className="absolute inset-x-0 bottom-[-4px] h-3 rounded-full bg-black/70 blur-[5px]" />
-                  <Carta oculta ancho={50} className="absolute left-[3px] top-[3px] opacity-70" />
-                  <Carta oculta ancho={50} className="absolute left-[1px] top-[1px] opacity-85" />
-                  <Carta oculta ancho={50} className="absolute inset-0" />
-                </div>
+                <Mazo muestra={p.muestra} lado={ladoMazo} revelada={carasArriba} />
               </div>
 
               <div className="flex gap-3 sm:gap-4">
@@ -337,7 +507,9 @@ function Mesa() {
 
             {/* Tu mano */}
             <div className="mt-auto shrink-0 pb-1">
-              {ayudas && (
+              {/* La ayuda espera a que las cartas estén dadas vuelta: cantarte el
+                  tanto de una mano que todavía no viste rompe el reparto. */}
+              {ayudas && carasArriba && (
                 <p className="mb-1 text-center font-[family-name:var(--font-ui)] text-[11px] uppercase leading-tight tracking-wide text-dorado drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] sm:text-xs">
                   {miFlor.tiene ? (
                     <>
@@ -368,6 +540,11 @@ function Mesa() {
                     total={p.cartas.vos.length}
                     pieza={ayudas && esPieza(carta, p.muestra)}
                     habilitada={miTurno && puede("jugar")}
+                    tapada={!carasArriba}
+                    viajando={faseReparto === "repartiendo"}
+                    retrasoViaje={retrasoDeReparto("vos", i, soyMano)}
+                    retrasoVolteo={i * ENTRE_VOLTEOS}
+                    desdeX={ladoMazo === "izquierda" ? -140 : 140}
                     onClick={() => hacer({ tipo: "jugar", carta })}
                   />
                 ))}
@@ -384,7 +561,7 @@ function Mesa() {
           desdeLaGira={esHistoria}
           onSeguir={() => {
             anotada.current = null;
-            setP(p.fase === "partida-terminada" ? nuevaPartida() : siguienteMano(p));
+            repartirNueva(p.fase === "partida-terminada" ? nuevaPartida() : siguienteMano(p));
           }}
           onCambiarRival={() => setEligiendo(true)}
         />
@@ -402,7 +579,8 @@ function Mesa() {
             setRivalElegido(nuevo);
             guardarPreferencia("ultimoRival", nuevo.id);
             anotada.current = null;
-            setP(nuevaPartida());
+            ultimoVerso.current = undefined;
+            repartirNueva(nuevaPartida());
             setEligiendo(false);
           }}
           onCerrar={() => setEligiendo(false)}
@@ -524,6 +702,11 @@ function RanuraCarta({ carta }: { carta: CartaType | null }) {
  * Una carta sostenida en la mano: va en abanico, con su rotación y su altura
  * según el lugar que ocupa. Al tocarla se levanta y se endereza, como cuando
  * la separás del resto con el pulgar.
+ *
+ * TRES TRANSFORM, TRES ELEMENTOS. El abanico va en el <button>, el viaje desde
+ * el mazo en el <span> y el giro al darla vuelta en la carta. Amontonados en un
+ * solo elemento se pisan entre ellos: la animación gana mientras corre y al
+ * soltar, la carta pega un salto para volver a su lugar del abanico.
  */
 function CartaEnMano({
   carta,
@@ -531,6 +714,11 @@ function CartaEnMano({
   total,
   pieza,
   habilitada,
+  tapada,
+  viajando,
+  retrasoViaje,
+  retrasoVolteo,
+  desdeX,
   onClick,
 }: {
   carta: CartaType;
@@ -538,6 +726,16 @@ function CartaEnMano({
   total: number;
   pieza: boolean;
   habilitada: boolean;
+  /** Todavía boca abajo: se está repartiendo. */
+  tapada: boolean;
+  /** Viniendo del mazo en este momento. */
+  viajando: boolean;
+  /** Su lugar en la ronda de reparto, en milisegundos. */
+  retrasoViaje: number;
+  /** Su lugar en la ronda de volteo, en milisegundos. */
+  retrasoVolteo: number;
+  /** De qué lado sale, según dónde esté el mazo. */
+  desdeX: number;
   onClick: () => void;
 }) {
   const centro = (total - 1) / 2;
@@ -549,7 +747,9 @@ function CartaEnMano({
     <button
       onClick={onClick}
       disabled={!habilitada}
-      aria-label={`Tirar el ${carta.numero} de ${carta.palo}`}
+      aria-label={
+        tapada ? "Carta boca abajo, repartiendo" : `Tirar el ${carta.numero} de ${carta.palo}`
+      }
       className={`group relative -mx-2 rounded-lg transition-transform duration-150 ${
         habilitada ? "cursor-pointer" : "cursor-default opacity-70"
       }`}
@@ -560,16 +760,88 @@ function CartaEnMano({
       }}
     >
       <span
-        className={`block transition-transform duration-150 ${
+        className={`block perspectiva-carta transition-transform duration-150 ${
+          viajando ? "anim-reparte" : ""
+        } ${
           habilitada
             ? "group-hover:-translate-y-3 group-focus-visible:-translate-y-3"
             : ""
         }`}
-        style={{ filter: "drop-shadow(0 10px 12px rgba(0,0,0,0.75))" }}
+        style={
+          {
+            filter: "drop-shadow(0 10px 12px rgba(0,0,0,0.75))",
+            ...(viajando
+              ? {
+                  animationDelay: `${retrasoViaje}ms`,
+                  "--desde-x": `${desdeX}px`,
+                  "--desde-y": "-118px",
+                }
+              : {}),
+          } as React.CSSProperties
+        }
       >
-        <Carta carta={carta} pieza={pieza} className="w-[74px] sm:w-[92px]" />
+        {tapada ? (
+          <Carta oculta className="w-[74px] sm:w-[92px]" />
+        ) : (
+          <Carta
+            carta={carta}
+            pieza={pieza}
+            className="w-[74px] anim-voltea sm:w-[92px]"
+            style={{ animationDelay: `${retrasoVolteo}ms` }}
+          />
+        )}
       </span>
     </button>
+  );
+}
+
+/**
+ * Lo que el rival está recitando cuando canta con verso.
+ *
+ * Sale de la boca del rival y se mete sobre la mesa: es una persona hablando,
+ * no un cartel del sistema. Abajo, separado por una línea, va el canto en
+ * limpio —"¡Truco!"— porque el verso es lindo pero lo que hay que contestar es
+ * el canto, y el globo tapa por un rato la chapa donde se lee.
+ *
+ * Se cierra tocándolo, contestando, o solo a los seis segundos y medio.
+ */
+function BocadilloVerso({
+  lineas,
+  canto,
+  onCerrar,
+}: {
+  lineas: readonly string[];
+  canto: string;
+  onCerrar: () => void;
+}) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="absolute left-1/2 top-[44px] z-30 w-[min(90vw,320px)] -translate-x-1/2 sm:top-[76px]"
+    >
+      <button
+        onClick={onCerrar}
+        className="papel anim-pop relative w-full rounded-sm px-4 py-3 text-center shadow-2xl shadow-black/80"
+      >
+        {/* la puntita que lo ata a la boca del rival */}
+        <span
+          className="absolute left-1/2 top-[-5px] h-[11px] w-[11px] -translate-x-1/2 rotate-45"
+          style={{ background: "var(--color-papel)" }}
+        />
+        {lineas.map((linea, i) => (
+          <span
+            key={i}
+            className="block font-[family-name:var(--font-mano)] text-[15px] leading-[1.4] text-tinta sm:text-[17px]"
+          >
+            {linea}
+          </span>
+        ))}
+        <span className="mt-2 block border-t border-tinta/15 pt-1.5 font-[family-name:var(--font-ui)] text-[11px] uppercase tracking-wide text-bordo">
+          {canto}
+        </span>
+      </button>
+    </div>
   );
 }
 

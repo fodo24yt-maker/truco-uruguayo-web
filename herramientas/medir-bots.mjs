@@ -35,7 +35,7 @@ export const SPARRING = {
   cantaEnvidoCon: 27, quiereEnvidoCon: 26, subeEnvidoCon: 32,
   cantaTrucoCon: 0.72, quiereTrucoCon: 0.42, subeTrucoCon: 0.75,
   mentira: 0.2, silencio: 0.2, sentidoComun: 0.6,
-  criterio: 0.75, lectura: 0,
+  criterio: 0.75, lectura: 0, verso: 0,
   contraflorCon: 41, conFlorEnvidoCon: 36, quiereFlorCon: 35,
 };
 import { fichaVacia, observarMano } from "../lib/motor/lectura.ts";

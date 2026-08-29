@@ -232,47 +232,53 @@ function repartirManoFalsa(
 
 test("con flor envido: 6 al que gana, 3 al que cantó si se rechaza", () => {
   // vos: 7,6,3 de copa (36) — rival: 2,4,5 de la muestra (47, la máxima)
+  // Los escalones SIEMPRE suben una flor ya cantada (reglas 8.5), así que
+  // primero alguien tiene que poner la suya sobre la mesa.
   let p = partidaConDobleFlor(["7C", "6C", "3C"], ["2B", "4B", "5B"], "3B");
   assert.equal(p.flor.vos.valor, 36);
   assert.equal(p.flor.rival.valor, 47);
 
-  p = aplicarFlor(p, { tipo: "flor-canto", canto: "con-flor-envido" }, "vos");
+  p = aplicarFlor(p, { tipo: "flor" }, "vos");
+  p = aplicarFlor(p, { tipo: "flor-canto", canto: "con-flor-envido" }, "rival");
   assert.equal(p.pendiente?.tipo, "flor");
-  assert.equal(p.turno, "rival");
+  assert.equal(p.turno, "vos");
 
-  const querido = aplicarFlor(p, { tipo: "quiero" }, "rival");
+  const querido = aplicarFlor(p, { tipo: "quiero" }, "vos");
   assert.equal(querido.puntos.rival, 6); // tiene más flor, se lleva los 6
   assert.equal(querido.puntos.vos, 0);
   assert.equal(querido.florResuelta, true);
 
-  const rechazado = aplicarFlor(p, { tipo: "no-quiero" }, "rival");
-  assert.equal(rechazado.puntos.vos, 3); // el que cantó cobra lo de antes: 3
-  assert.equal(rechazado.puntos.rival, 0);
+  const rechazado = aplicarFlor(p, { tipo: "no-quiero" }, "vos");
+  assert.equal(rechazado.puntos.rival, 3); // el que subió cobra lo de antes: 3
+  assert.equal(rechazado.puntos.vos, 0);
 });
 
 test("contraflor al resto directo desde flor: si se rechaza, 3 (no 6)", () => {
   let p = partidaConDobleFlor(["7C", "6C", "3C"], ["2B", "4B", "5B"], "3B");
-  p = aplicarFlor(p, { tipo: "flor-canto", canto: "contraflor-al-resto" }, "vos");
+  p = aplicarFlor(p, { tipo: "flor" }, "vos");
+  p = aplicarFlor(p, { tipo: "flor-canto", canto: "contraflor-al-resto" }, "rival");
 
-  const rechazado = aplicarFlor(p, { tipo: "no-quiero" }, "rival");
-  assert.equal(rechazado.puntos.vos, 3); // no pasó por "con flor envido": vale 3
+  const rechazado = aplicarFlor(p, { tipo: "no-quiero" }, "vos");
+  assert.equal(rechazado.puntos.rival, 3); // no pasó por "con flor envido": vale 3
 });
 
 test("contraflor al resto después de con flor envido: si se rechaza, 6", () => {
   let p = partidaConDobleFlor(["7C", "6C", "3C"], ["2B", "4B", "5B"], "3B");
-  p = aplicarFlor(p, { tipo: "flor-canto", canto: "con-flor-envido" }, "vos");
-  p = aplicarFlor(p, { tipo: "flor-canto", canto: "contraflor-al-resto" }, "rival");
+  p = aplicarFlor(p, { tipo: "flor" }, "vos");
+  p = aplicarFlor(p, { tipo: "flor-canto", canto: "con-flor-envido" }, "rival");
+  p = aplicarFlor(p, { tipo: "flor-canto", canto: "contraflor-al-resto" }, "vos");
 
-  assert.equal(p.pendiente?.de, "rival");
-  const rechazado = aplicarFlor(p, { tipo: "no-quiero" }, "vos");
-  assert.equal(rechazado.puntos.rival, 6); // ya había pasado por con flor envido
+  assert.equal(p.pendiente?.de, "vos");
+  const rechazado = aplicarFlor(p, { tipo: "no-quiero" }, "rival");
+  assert.equal(rechazado.puntos.vos, 6); // ya había pasado por con flor envido
 });
 
 test("contraflor al resto querida y ganada: se lleva la partida entera", () => {
   let p = partidaConDobleFlor(["2B", "4B", "5B"], ["7C", "6C", "3C"], "3B");
   p = { ...p, puntos: { vos: 5, rival: 5 } }; // lejos de los 30
-  p = aplicarFlor(p, { tipo: "flor-canto", canto: "contraflor-al-resto" }, "vos");
-  p = aplicarFlor(p, { tipo: "quiero" }, "rival");
+  p = aplicarFlor(p, { tipo: "flor" }, "vos"); // abrís con la tuya (47)
+  p = aplicarFlor(p, { tipo: "flor-canto", canto: "contraflor-al-resto" }, "rival");
+  p = aplicarFlor(p, { tipo: "quiero" }, "vos");
 
   assert.equal(p.fase, "partida-terminada");
   assert.equal(p.ganadorPartida, "vos"); // 47 le gana a 36
@@ -309,7 +315,9 @@ test("con flor podés cantarla o no, pero el envido no está entre las opciones"
   // Ahora la flor es una decisión tuya: podés cantarla, tirar carta o cantar
   // truco. Lo que no podés es envidar, porque la flor anula el envido.
   assert.ok(tipos.has("flor"));
-  assert.ok(tipos.has("flor-canto"));
+  // Los escalones (con flor envido / contraflor al resto) NO: suben una flor
+  // que ya está sobre la mesa, y todavía no cantó nadie.
+  assert.ok(!tipos.has("flor-canto"));
   assert.ok(tipos.has("jugar"), "tenés que poder tirar carta sin cantar la flor");
   assert.ok(tipos.has("truco"));
   assert.ok(!tipos.has("envido"), "con flor no se canta envido");

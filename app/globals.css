@@ -287,6 +287,58 @@ body {
   animation: sombra-aterriza 380ms cubic-bezier(0.18, 0.9, 0.28, 1) both;
 }
 
+/* ─── El reparto ────────────────────────────────────────────────────────────
+   Antes la mano aparecía entera de golpe, con las cartas ya dadas vuelta. Ahora
+   salen del mazo de a una, como se reparte de verdad, y se dan vuelta recién
+   cuando terminó de repartir.
+
+   El viaje se hace con `backwards` y NO con `both`: `both` deja el último
+   fotograma pegado para siempre y le pisa el transform a la carta, así que
+   después el efecto de levantarla al pasar el mouse no se ve. Con `backwards`
+   la carta se queda quieta e invisible durante su retraso —que es lo que hace
+   que salgan de a una— y al terminar suelta el control y vuelve a mandar el CSS
+   de siempre. */
+@keyframes reparte-carta {
+  0% {
+    opacity: 0;
+    transform: translate(var(--desde-x, 0px), var(--desde-y, -60px))
+      rotate(var(--desde-giro, -100deg)) scale(0.7);
+  }
+  16% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+}
+.anim-reparte {
+  animation: reparte-carta 320ms cubic-bezier(0.2, 0.86, 0.32, 1) backwards;
+}
+
+/* Darla vuelta: gira sobre su eje vertical y se pasa apenas de largo al frenar,
+   que es lo que hace que se sienta una carta y no un cartel que aparece. */
+@keyframes da-vuelta-carta {
+  0% {
+    transform: rotateY(86deg) scale(0.93);
+  }
+  58% {
+    transform: rotateY(-9deg) scale(1.03);
+  }
+  100% {
+    transform: rotateY(0deg) scale(1);
+  }
+}
+.anim-voltea {
+  animation: da-vuelta-carta 280ms cubic-bezier(0.3, 0.8, 0.4, 1) backwards;
+}
+
+/* El giro de arriba necesita que el PADRE tenga perspectiva: sin esto la carta
+   se achica de ancho y parece una persiana, no una carta que se da vuelta. */
+.perspectiva-carta {
+  perspective: 620px;
+}
+
 /* Cuando una carta sale de la mano, las que quedan cierran el hueco */
 .mano-abanico > * {
   transition:

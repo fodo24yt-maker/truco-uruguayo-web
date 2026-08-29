@@ -66,6 +66,15 @@ export interface Personalidad {
    * escalera sin tener que tocar todo lo demás.
    */
   lectura: number;
+  /**
+   * Cada cuánto canta con un verso en vez de cantar pelado, de 0 a 1.
+   *
+   * Es puro color: no cambia una sola regla ni una sola decisión, sólo cómo
+   * suena. Los de 1 y 2 estrellas están en 0 —recién están aprendiendo el
+   * juego, no la mesa— y de ★3 para arriba empiezan a versear cada vez más.
+   * Las coplas están en versos.ts.
+   */
+  verso: number;
 
   // ── Flor ──────────────────────────────────────────────────────────────
   contraflorCon: number;
@@ -126,13 +135,31 @@ const FLOR_POR_NIVEL = {
   5: { contraflorCon: 38, conFlorEnvidoCon: 34, quiereFlorCon: 33 },
 } as const;
 
-/** Cuántos errores comete con las cartas, y cuánto te lee, según el nivel. */
+/**
+ * Cuántos errores comete con las cartas, cuánto te lee y cuánto versea.
+ *
+ * `verso` no toca el juego: es cada cuánto canta con una copla en vez de decir
+ * el canto pelado. Va de la mano del oficio a propósito —el que sabe jugar es
+ * el que sabe versear— y arranca recién en ★3, para que se note el salto
+ * cuando la gira sale del área metropolitana.
+ */
 const OFICIO_POR_NIVEL = {
-  1: { criterio: 0.35, lectura: 0 },
-  2: { criterio: 0.52, lectura: 0 },
-  3: { criterio: 0.62, lectura: 0.3 },
-  4: { criterio: 0.72, lectura: 0.55 },
-  5: { criterio: 1, lectura: 1 },
+  // `criterio` se volvió a medir al arreglar la flor. Antes iba
+  // 0,35 · 0,52 · 0,62 · 0,72 · 1: apretado en el medio y con un salto grande
+  // al final. Eso no se notaba porque la contraflor al resto tapaba el hueco
+  // —los niveles altos la cantaban de entrada y se llevaban partidas enteras—,
+  // y esa jugada NO EXISTE: contraflorearle a nadie no se puede. Sacada de la
+  // lista de cantos válidos, el escalón ★4→★5 quedó en 50,1% y ★3→★2 en 49,3%:
+  // dos niveles seguidos que jugaban igual.
+  //
+  // Repartido parejo, cada escalón vuelve a ganarle al anterior por 51-54% y
+  // el ★5 le gana al ★1 por 62%. Medido con 3.600 partidas por escalón:
+  //     node herramientas/medir-bots.mjs
+  1: { criterio: 0.3, lectura: 0, verso: 0 },
+  2: { criterio: 0.46, lectura: 0, verso: 0 },
+  3: { criterio: 0.62, lectura: 0.3, verso: 0.3 },
+  4: { criterio: 0.8, lectura: 0.55, verso: 0.45 },
+  5: { criterio: 1, lectura: 1, verso: 0.6 },
 } as const;
 
 interface Semilla {

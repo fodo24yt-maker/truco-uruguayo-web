@@ -291,13 +291,30 @@ function envidosPosibles(cadena: readonly CantoEnvido[]): CantoEnvido[] {
     : ["real-envido", "falta-envido"];
 }
 
-/** Los tres cantos con los que se declara flor: a secas o subiendo la apuesta. */
-function cantosDeFlor(): Accion[] {
-  return [
-    { tipo: "flor" },
-    { tipo: "flor-canto", canto: "con-flor-envido" },
-    { tipo: "flor-canto", canto: "contraflor-al-resto" },
-  ];
+/**
+ * Los cantos con los que se declara flor.
+ *
+ * "¡Flor!" a secas SIEMPRE que la tengas. "Con flor envido" y "contraflor al
+ * resto" SÓLO si el rival ya cantó la suya: las dos son subidas de una flor
+ * que ya está sobre la mesa (reglas.txt 8.5, escalones 2 y 3), no formas de
+ * abrir. Contraflorearle a nadie no existe.
+ *
+ * ESTO NO SOPLA NADA. La condición mira `florCantada`, que es lo que el rival
+ * DIJO en voz alta, no `flor[rival].tiene`, que son sus cartas. Con esas dos
+ * cosas mezcladas sí habría filtración: verías aparecer "contraflor" y sabrías
+ * que el otro tiene flor antes de que la cante. Acá los botones salen del
+ * registro de la mesa, que es información que cualquiera que esté sentado ahí
+ * ya escuchó.
+ */
+function cantosDeFlor(p: Partida, quien: Jugador): Accion[] {
+  const acciones: Accion[] = [{ tipo: "flor" }];
+  if (p.florCantada[otro(quien)]) {
+    acciones.push(
+      { tipo: "flor-canto", canto: "con-flor-envido" },
+      { tipo: "flor-canto", canto: "contraflor-al-resto" },
+    );
+  }
+  return acciones;
 }
 
 export function accionesPosibles(p: Partida, quien: Jugador): Accion[] {
@@ -313,7 +330,7 @@ export function accionesPosibles(p: Partida, quien: Jugador): Accion[] {
       if (aSecas) {
         // La flor a secas no se quiere ni se rechaza (reglas 8.5, escalón 1):
         // o tenés flor y se comparan, o te achicás.
-        if (puedeCantarFlor(p, quien)) acciones.push(...cantosDeFlor());
+        if (puedeCantarFlor(p, quien)) acciones.push(...cantosDeFlor(p, quien));
         acciones.push({ tipo: "no-quiero" }); // "con flor me achico"
         return acciones;
       }
@@ -331,7 +348,7 @@ export function accionesPosibles(p: Partida, quien: Jugador): Accion[] {
       // La flor anula el envido (reglas 14.2 y 14.3.3). Si la tenés, es lo
       // único que podés cantar arriba: no vas a envidar teniendo flor.
       if (puedeCantarFlor(p, quien)) {
-        acciones.push(...cantosDeFlor());
+        acciones.push(...cantosDeFlor(p, quien));
       } else {
         for (const c of envidosPosibles(p.pendiente.cadena as CantoEnvido[])) {
           acciones.push({ tipo: "envido", canto: c });
@@ -348,7 +365,7 @@ export function accionesPosibles(p: Partida, quien: Jugador): Accion[] {
     // y el pie le cantó truco, el mano ya habló y se jode.
     if (!p.yaHablo[quien] && ventanaEnvidoAbierta(p)) {
       if (puedeCantarFlor(p, quien)) {
-        acciones.push(...cantosDeFlor());
+        acciones.push(...cantosDeFlor(p, quien));
       } else if (!p.flor[quien].tiene) {
         for (const c of envidosPosibles([])) acciones.push({ tipo: "envido", canto: c });
       }
@@ -360,7 +377,7 @@ export function accionesPosibles(p: Partida, quien: Jugador): Accion[] {
   const acciones: Accion[] = [];
   for (const carta of p.cartas[quien]) acciones.push({ tipo: "jugar", carta });
 
-  if (puedeCantarFlor(p, quien)) acciones.push(...cantosDeFlor());
+  if (puedeCantarFlor(p, quien)) acciones.push(...cantosDeFlor(p, quien));
 
   // El envido también es cosa de tu primera oportunidad de hablar (reglas 9.1):
   // si ya tiraste carta o ya cantaste truco, se te fue. Y con flor no se canta,

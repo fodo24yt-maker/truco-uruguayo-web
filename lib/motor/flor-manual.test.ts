@@ -133,18 +133,47 @@ test("ANTI-FILTRACIÓN: el envido sigue disponible para el que no tiene flor", (
   assert.ok(puede(p, "vos", "envido"), "tenés que poder cantar envido igual");
 });
 
-test("los tres cantos de flor aparecen tenga o no tenga flor el rival", () => {
-  // Si "con flor envido" sólo apareciera cuando el rival tiene flor, el botón
-  // sería un soplo. Aparecen siempre; si el otro no tiene, se cobran los 3.
+test("ANTI-FILTRACIÓN: las opciones de flor son iguales tenga o no tenga el rival", () => {
+  // Si los botones cambiaran según las cartas del rival, serían un soplo:
+  // verías aparecer "contraflor" y sabrías que el otro tiene flor sin que
+  // haya abierto la boca. Salen iguales en los dos casos.
   const conRival = tipos(mesa(FLOR_VOS, FLOR_RIVAL, "3B"), "vos");
   const sinRival = tipos(mesa(FLOR_VOS, SIN_FLOR_RIVAL, "3B"), "vos");
   assert.deepEqual(conRival, sinRival, "las opciones no pueden delatar al rival");
 });
 
-test("cantar con flor envido cuando el rival no tiene: se cobran los 3 y sigue", () => {
+test("abriendo sólo se puede cantar ¡Flor!: contraflorearle a nadie no existe", () => {
+  // El bug que se reportó jugando: cantabas flor y te salían los tres botones
+  // —flor, con flor envido y contraflor al resto— sin que el rival hubiera
+  // cantado nada. "Con flor envido" y "contraflor al resto" SUBEN una flor que
+  // ya está sobre la mesa (reglas.txt 8.5): sin flor enfrente no hay qué subir.
+  for (const rivalConFlor of [FLOR_RIVAL, SIN_FLOR_RIVAL]) {
+    const p = mesa(FLOR_VOS, rivalConFlor, "3B");
+    assert.ok(puede(p, "vos", "flor"), "la flor a secas siempre");
+    assert.ok(!puede(p, "vos", "flor-canto"), "todavía no hay flor a la que subirle");
+  }
+});
+
+test("con la flor del rival sobre la mesa sí se puede subir", () => {
+  // El rival es mano y canta la suya. Recién ahí aparecen los otros dos.
+  let p = mesa(FLOR_VOS, FLOR_RIVAL, "3B", "rival");
+  p = aplicar(p, { tipo: "flor" }, "rival");
+
+  assert.equal(p.turno, "vos");
+  const opciones = accionesPosibles(p, "vos").filter(
+    (a: Accion) => a.tipo === "flor-canto",
+  );
+  assert.deepEqual(
+    opciones.map((a) => (a.tipo === "flor-canto" ? a.canto : "")).sort(),
+    ["con-flor-envido", "contraflor-al-resto"],
+  );
+  assert.ok(puede(p, "vos", "flor"), "y también podés contestarle con la tuya a secas");
+});
+
+test("cantar flor sola cuando el rival no tiene: se cobran los 3 y sigue", () => {
   let p = mesa(FLOR_VOS, SIN_FLOR_RIVAL, "3B");
-  p = aplicar(p, { tipo: "flor-canto", canto: "con-flor-envido" }, "vos");
-  assert.equal(p.puntos.vos, 3, "no había con quién subirla");
+  p = aplicar(p, { tipo: "flor" }, "vos");
+  assert.equal(p.puntos.vos, 3, "no había con quién discutirla");
   assert.equal(p.fase, "jugando");
   assert.equal(p.pendiente, null);
 });
@@ -228,26 +257,44 @@ test("el envido sigue vivo en turno libre mientras no se tire la segunda carta",
 
 // ─── Que las partidas no se traben ──────────────────────────────────────────
 
+/** Juega la mano sola hasta que cierre. Si alguien se queda sin jugadas, se
+ *  trabó para siempre y el test lo tiene que cantar. */
+function jugarHastaElFinal(p: Partida, caso: string) {
+  for (let i = 0; i < 60 && p.fase === "jugando"; i++) {
+    const posibles = accionesPosibles(p, p.turno);
+    assert.ok(posibles.length > 0, `se trabó: ${caso}`);
+    p = aplicar(p, posibles[0], p.turno);
+  }
+  assert.notEqual(p.fase, "jugando", `no cerró: ${caso}`);
+}
+
 test("cantar flor arriba de un truco nunca deja la mano trabada", () => {
-  // Recorre las dos combinaciones de quién es mano y verifica que siempre haya
-  // algo que hacer: si en algún momento el que tiene el turno se queda sin
-  // acciones posibles, la mano se cuelga para siempre.
+  // Recorre las dos combinaciones de quién es mano. Arriba de un truco la flor
+  // sólo va a secas: el que cantó el truco ya gastó su turno de hablar, así
+  // que se quedó sin flor con la cual discutir y no hay nada que subir.
   for (const esMano of ["vos", "rival"] as Jugador[]) {
-    for (const canto of ["flor", "con-flor-envido", "contraflor-al-resto"] as const) {
+    let p = mesa(FLOR_VOS, FLOR_RIVAL, "3B", esMano);
+    const otroJugador: Jugador = esMano === "vos" ? "rival" : "vos";
+    p = aplicar(p, { tipo: "truco" }, esMano);
+    assert.ok(!puede(p, otroJugador, "flor-canto"), "no hay flor enfrente que subir");
+
+    p = aplicar(p, { tipo: "flor" }, otroJugador);
+    jugarHastaElFinal(p, `flor arriba del truco, mano ${esMano}`);
+  }
+});
+
+test("subir la flor del otro nunca deja la mano trabada", () => {
+  // El mano abre con su flor y el pie se la sube. Los dos escalones, por las
+  // dos sillas: la contraflor al resto termina la partida entera, y eso
+  // también es cerrar bien.
+  for (const esMano of ["vos", "rival"] as Jugador[]) {
+    for (const canto of ["con-flor-envido", "contraflor-al-resto"] as const) {
       let p = mesa(FLOR_VOS, FLOR_RIVAL, "3B", esMano);
       const otroJugador: Jugador = esMano === "vos" ? "rival" : "vos";
-      p = aplicar(p, { tipo: "truco" }, esMano);
-      const accion: Accion =
-        canto === "flor" ? { tipo: "flor" } : { tipo: "flor-canto", canto };
-      p = aplicar(p, accion, otroJugador);
-
-      // Se juega hasta que la mano cierre, sin quedarse nunca sin jugadas
-      for (let i = 0; i < 60 && p.fase === "jugando"; i++) {
-        const posibles = accionesPosibles(p, p.turno);
-        assert.ok(posibles.length > 0, `se trabó con ${canto}, mano ${esMano}`);
-        p = aplicar(p, posibles[0], p.turno);
-      }
-      assert.notEqual(p.fase, "jugando", `no cerró con ${canto}, mano ${esMano}`);
+      p = aplicar(p, { tipo: "flor" }, esMano);
+      p = aplicar(p, { tipo: "flor-canto", canto }, otroJugador);
+      assert.equal(p.pendiente?.tipo, "flor", `${canto} tenía que quedar pendiente`);
+      jugarHastaElFinal(p, `${canto}, mano ${esMano}`);
     }
   }
 });
