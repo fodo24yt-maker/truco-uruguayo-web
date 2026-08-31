@@ -12,6 +12,56 @@
 
 ---
 
+## 2026-08-31 (séptima pasada) — Se vuelve a una sola rama
+
+**Se terminó la rama `diseno-nivel-alfa`. De acá en adelante se trabaja directo
+en `main`.**
+
+La rama no la había pedido nadie. La creó una sesión mía el 31/8 a las 00:20:17,
+31 segundos antes del primer commit, aplicando la regla por defecto de Claude
+Code de "si estás en la rama principal, creá una rama antes de commitear". En un
+repo de una sola persona eso no compra nada y cuesta caro: obligó a abrir PR #1,
+después PR #2, y a ir a apretar botones en la web de GitHub para cada push.
+
+El "3 atrás / 4 adelante" que mostraba GitHub asustaba pero era mentira: los 3
+commits "atrás" eran las versiones con el hash viejo de commits que la rama ya
+tenía, secuela de la reescritura de la pasada anterior. Se verificó con
+`git diff main origin/main`: sólo borrados, ningún archivo que estuviera en
+`main` y no en la rama.
+
+Qué se hizo:
+
+- `git branch -f main diseno-nivel-alfa` — mueve el puntero de `main` al último
+  commit del trabajo sin tocar un solo archivo del disco. Se prefirió esto a
+  `reset --hard` justamente porque no toca el árbol de trabajo.
+- Se agregó a `CLAUDE.md` la sección **"Git: una sola rama, y es `main`"**, que
+  anula explícitamente la regla por defecto. Las instrucciones del proyecto
+  pisan el comportamiento de fábrica, así que ninguna sesión futura debería
+  volver a ramificar.
+
+Con esto también se cierra lo que quedó pendiente de la quinta pasada: al
+pushear `main` por la fuerza, los commits viejos con el trailer
+`Co-Authored-By: Claude` quedan inalcanzables y Claude desaparece de
+Contributors. Se verificó que en lo que se va a pushear el trailer aparece 0
+veces.
+
+**Los tags `respaldo/*` ya no existen** (se borraron en la pasada anterior). El
+respaldo real mientras tanto es `origin/main`, que sigue teniendo el estado
+viejo hasta el force-push. Después del push, el reflog local.
+
+### Pendiente
+
+Correr desde la terminal, en este orden:
+
+1. `git checkout main`
+2. commitear este `Historial.md` y el `CLAUDE.md`
+3. `git push --force-with-lease origin main`
+4. `git push origin --delete diseno-nivel-alfa` — esto **cierra solo el PR #2**,
+   no hace falta entrar a la web
+5. `git branch -d diseno-nivel-alfa`
+
+---
+
 ## 2026-08-31 (sexta pasada) — Jugadas que no se podían hacer, y portada nueva
 
 ### El bug: había cantos SIN BOTÓN
