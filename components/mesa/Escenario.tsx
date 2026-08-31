@@ -182,6 +182,95 @@ const MEDIA_ESPALDA: Record<Contextura, number> = {
    lo que cambia con la contextura es cuánto de ese ancho ocupa el cuerpo:
    el menudo llena el 56%, el medio el 65% y el recio el 75%. */
 
+/** Hasta dónde baja el torso. Del canto para abajo lo tapa la tabla. */
+const FONDO_TORSO = 252;
+
+/**
+ * EL PERFIL DEL TORSO, que es donde se decide todo.
+ *
+ * ── El quiebre del hombro ─────────────────────────────────────────────────
+ *
+ * La primera versión iba del cuello al canto abriéndose parejo, y el resultado
+ * era un trapecio: "muy cuadrado", que fue exactamente la devolución. Un hombro
+ * no es una diagonal. Hace tres cosas seguidas y en este orden:
+ *
+ *   1. el deltoides REDONDEA y ahí está el punto más ancho de arriba (y≈62)
+ *   2. el brazo cae pegado al cuerpo y la silueta se ANGOSTA un poco (y≈112)
+ *   3. y vuelve a abrirse abajo, en el codo, contra la mesa (y≈200)
+ *
+ * Ese ir y venir de dos unidades por ciento es toda la diferencia entre una
+ * persona y una plancha. No se ve como un detalle: se ve como que hay alguien.
+ *
+ * Y el ANCHO NO CAMBIA. El máximo sigue siendo `1,08·H` en el canto, que es la
+ * cuenta que hace que el rival entre en un celular y deje ver el ambiente por
+ * los costados. Lo que se movió es el camino, no el destino.
+ */
+function perfilTorso(H: number, abajo: number): string {
+  return (
+    `M${EJE - 0.44 * H} 0` +
+    // el cuello y la caída al hombro
+    ` C${EJE - 0.5 * H} 20 ${EJE - 0.76 * H} 36 ${EJE - 0.98 * H} 62` +
+    // el brazo colgando: acá se angosta
+    ` C${EJE - 1.02 * H} 84 ${EJE - 0.99 * H} 98 ${EJE - 0.99 * H} 112` +
+    // y se vuelve a abrir hacia el codo
+    ` C${EJE - 0.99 * H} 148 ${EJE - 1.06 * H} 172 ${EJE - 1.08 * H} ${abajo}` +
+    ` L${EJE + 1.08 * H} ${abajo}` +
+    ` C${EJE + 1.06 * H} 172 ${EJE + 0.99 * H} 148 ${EJE + 0.99 * H} 112` +
+    ` C${EJE + 0.99 * H} 98 ${EJE + 1.02 * H} 84 ${EJE + 0.98 * H} 62` +
+    ` C${EJE + 0.76 * H} 36 ${EJE + 0.5 * H} 20 ${EJE + 0.44 * H} 0 Z`
+  );
+}
+
+/**
+ * El rival, sentado del otro lado de la mesa.
+ *
+ * ── NO TIENE BRAZOS SOBRE LA MESA, Y ES A PROPÓSITO ───────────────────────
+ *
+ * Se probaron tres formas —los brazos sosteniendo el abanico, las manos
+ * entrelazadas como en la referencia, y esto— y se eligió ésta. Del canto de la
+ * mesa para abajo no se ve nada suyo: tiene las cartas abajo de la mesa y las
+ * mira ahí. **No volver a ponerle antebrazos ni manos encima de la madera.**
+ *
+ * Lo que sí lleva es la LÍNEA del brazo al costado. Sin ella la silueta se lee
+ * como un bloque; con ella se entiende que los brazos están, caídos, fuera de
+ * cuadro. Es una línea, no un brazo: no ensancha nada.
+ *
+ * ── LA CABEZA TAMPOCO ENTRA ───────────────────────────────────────────────
+ *
+ * De los hombros para arriba está fuera del encuadre. Eso cierra una discusión
+ * que se dio cuatro veces: se probó con silueta, con volumen, con desenfoque y
+ * con la cara del medallón, y la cabeza SIEMPRE terminaba leyéndose como un
+ * fantasma. Recortada por el marco deja de haber dónde ponerla. Los rasgos
+ * viven en el medallón, que es donde se mira para saber contra quién jugás.
+ *
+ * ── Y por eso la ropa es lo importante ────────────────────────────────────
+ *
+ * Sin cabeza y sin manos, la PRENDA es lo único que distingue a uno de otro. Un
+ * buzo con capucha, un poncho con fleco y un chaleco de señor se distinguen a
+ * cualquier tamaño, incluso desenfocados, porque son siluetas distintas y no
+ * colores distintos. El eje que las ordena es el viaje de la gira, **de la city
+ * para adentro**: Luquita es un liceal de Montevideo con buzo; el Gaucho
+ * Peralta, en Tacuarembó, lleva poncho.
+ *
+ * ── La proporción, que es la trampa de todo esto ──────────────────────────
+ *
+ * El canto de la mesa está al 27% del alto de la escena, así que el torso que se
+ * ve mide `0,27 × alto` y su ANCHO sale de multiplicar eso por la proporción del
+ * dibujo. Con una proporción de 1,66 el rival ocupaba el 85% del ancho de un
+ * celular y tapaba el fondo entero. Acá el cuadro es 400×300 con el canto en
+ * y=200, o sea 1,30 de ancho por alto visible: el ambiente se ve por los
+ * costados. **Si se toca `RIVAL_VB`, se toca esa cuenta.**
+ *
+ * ── El torso BAJA hasta 252 y lo tapa la tabla ────────────────────────────
+ *
+ * Cortado justo en el canto se lee un recorte de cartón apoyado detrás de la
+ * mesa. Metido abajo del canto es la MESA la que lo tapa, que es lo que pasa de
+ * verdad, y por eso se lee alguien sentado del otro lado. Para que eso funcione
+ * `page.tsx` lo dibuja ANTES de la tabla; la sombra va aparte, en `SombraRival`,
+ * porque una sombra cae SOBRE la madera y no debajo.
+ *
+ * Sigue DESENFOCADO: la cámara enfoca la mesa y él está un metro más atrás.
+ */
 export function RivalSentado({
   ficha,
   nombre,
@@ -198,8 +287,6 @@ export function RivalSentado({
   const telaLuz = mezclar(tela, "#ffffff", 0.22);
   const telaSombra = mezclar(tela, "#0e0904", 0.36);
   const telaHonda = mezclar(tela, "#0e0904", 0.6);
-  const piel = mezclar(ficha.piel, "#4a2c18", 0.22);
-  const pielHonda = mezclar(ficha.piel, "#2a170a", 0.55);
 
   /* La línea con la que se dibuja todo. Une la figura con la mesa, que también
      está dibujada con tinta. Y es lo único que sobrevive al desenfoque: una
@@ -212,52 +299,20 @@ export function RivalSentado({
     strokeLinejoin: "round",
   } as const;
 
-  /* El torso: cae del hombro y se abre apenas hacia abajo. Termina justo en el
-     canto de la mesa —206 contra 200, seis de más para que no quede una raya de
-     fondo entre la ropa y la madera—. Está sentado DETRÁS: de ahí para abajo lo
-     único suyo que se ve son los antebrazos apoyados. */
-  const torso =
-    `M${EJE - 0.44 * H} 0` +
-    ` C${EJE - 0.5 * H} 20 ${EJE - 0.74 * H} 38 ${EJE - H} 58` +
-    ` C${EJE - H - 8} 100 ${EJE - 1.04 * H} 150 ${EJE - 1.08 * H} 206` +
-    ` L${EJE + 1.08 * H} 206` +
-    ` C${EJE + 1.04 * H} 150 ${EJE + H + 8} 100 ${EJE + H} 58` +
-    ` C${EJE + 0.74 * H} 38 ${EJE + 0.5 * H} 20 ${EJE + 0.44 * H} 0 Z`;
+  const torso = perfilTorso(H, FONDO_TORSO);
 
-  /* EL ANTEBRAZO, apoyado sobre la madera.
-     Del codo —contra el canto de la mesa, afuera— a la muñeca, adentro y más
-     cerca. Es una cuña que se ANGOSTA: del mismo ancho de punta a punta se lee
-     un tubo.
-
-     El brazo de arriba no se dibuja, a propósito: está detrás de la ropa, que
-     es donde está en cualquier persona sentada. Dibujarlo era una tira fina
-     pegada al costado del torso que no se veía y encima ensanchaba la silueta. */
-  const antebrazo =
-    `M${EJE - 1.02 * H} 190` +
-    ` C${EJE - 1.0 * H} 218 ${EJE - 0.88 * H} 240 ${EJE - 0.6 * H} 252` +
-    ` L${EJE - 0.44 * H} 234` +
-    ` C${EJE - 0.68 * H} 226 ${EJE - 0.8 * H} 208 ${EJE - 0.84 * H} 188 Z`;
-
-  /** El puño y la mano, apoyados en la madera. */
-  const mano = (lado: 1 | -1) => {
-    const x = EJE + lado * 0.52 * H;
-    const y = 250;
-    return (
-      <g key={lado}>
-        <path
-          d={`M${x - 26} ${y} C${x - 30} ${y - 14} ${x - 17} ${y - 23} ${x} ${y - 23}
-              C${x + 17} ${y - 23} ${x + 30} ${y - 14} ${x + 26} ${y}
-              C${x + 22} ${y + 13} ${x - 22} ${y + 13} ${x - 26} ${y} Z`}
-          fill="url(#rival-mano)"
-          {...tinta}
-        />
-        {/* tres surcos y ya se lee mano en vez de manopla */}
-        <g stroke="#120a05" strokeOpacity="0.5" strokeWidth="2.2" strokeLinecap="round" fill="none">
-          <path d={`M${x - 10} ${y - 16} L${x - 11} ${y + 5} M${x} ${y - 18} L${x} ${y + 5} M${x + 10} ${y - 16} L${x + 11} ${y + 5}`} />
-        </g>
-      </g>
-    );
-  };
+  /* LA COSTURA DEL BRAZO, del hombro al canto. Es lo que pidió la devolución:
+     que se note que tiene brazos sin que los brazos estén sobre la mesa.
+     Sigue el mismo camino que la silueta pero por dentro, así que se lee como
+     el borde del brazo contra el torso y no como una raya puesta encima. */
+  /* VA BIEN ADENTRO, en 0,78·H y no en 0,9·H. Pegada al contorno se leía un
+     vivo, una cinta cosida al borde: el brazo quedaba de dos unidades de ancho.
+     Un brazo mide como un cuarto de la espalda, así que la costura tiene que
+     caer más o menos ahí para que entre la línea y el borde haya un BRAZO. */
+  const costura = (lado: 1 | -1) =>
+    `M${EJE + lado * 0.76 * H} 66` +
+    ` C${EJE + lado * 0.8 * H} 100 ${EJE + lado * 0.77 * H} 138 ${EJE + lado * 0.79 * H} 180` +
+    ` L${EJE + lado * 0.82 * H} 212`;
 
   return (
     <svg
@@ -272,15 +327,14 @@ export function RivalSentado({
           <stop offset="34%" stopColor={tela} />
           <stop offset="100%" stopColor={telaSombra} />
         </linearGradient>
-        {/* La manga va más oscura que el pecho: el brazo está por delante del
-            cuerpo y se tapa la luz a sí mismo. */}
-        <linearGradient id="rival-manga" x1="0" y1="0" x2="0.4" y2="1">
-          <stop offset="0%" stopColor={mezclar(tela, "#0e0904", 0.24)} />
-          <stop offset="100%" stopColor={mezclar(tela, "#0e0904", 0.54)} />
-        </linearGradient>
-        <linearGradient id="rival-mano" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={piel} />
-          <stop offset="100%" stopColor={pielHonda} />
+        {/* La sombra del brazo contra el costado: oscura pegada al borde y
+            transparente a media espalda. Es lo que hace que el brazo se lea
+            como un volumen redondo delante del pecho y no como una raya sobre
+            una plancha. Va en los dos costados, espejada. */}
+        <linearGradient id="rival-costado" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#150c04" stopOpacity="0.42" />
+          <stop offset="55%" stopColor="#150c04" stopOpacity="0.1" />
+          <stop offset="100%" stopColor="#150c04" stopOpacity="0" />
         </linearGradient>
         {/* Está a un metro y la cámara enfoca la mesa. Con más desenfoque se le
             van los hombros y vuelve a ser un bulto; con menos, se le empieza a
@@ -288,26 +342,15 @@ export function RivalSentado({
         <filter id="rival-foco" x="-14%" y="-14%" width="128%" height="128%">
           <feGaussianBlur stdDeviation="1.5" />
         </filter>
-        <filter id="rival-sombra" x="-40%" y="-40%" width="180%" height="180%">
-          <feGaussianBlur stdDeviation="8" />
-        </filter>
+        <clipPath id="rival-recorte">
+          <path d={torso} />
+        </clipPath>
       </defs>
-
-      {/* ── Su sombra sobre la madera ───────────────────────────────────
-          Va primero, debajo de todo: es lo que lo APOYA. Sin esto los brazos
-          quedan pegados encima de la mesa, como una calcomanía. */}
-      <g fill="rgba(0,0,0,0.5)" filter="url(#rival-sombra)">
-        <ellipse cx={EJE} cy={216} rx={1.1 * H} ry={13} opacity="0.5" />
-        <ellipse cx={EJE - 0.52 * H} cy={262} rx={38} ry={12} />
-        <ellipse cx={EJE + 0.52 * H} cy={262} rx={38} ry={12} />
-      </g>
 
       <g filter="url(#rival-foco)">
         <path d={torso} fill="url(#rival-tela)" {...tinta} />
 
-        {/* Lo que cuenta quién es. Va sobre el torso y DEBAJO de los
-            antebrazos, que es el orden real: la ropa le tapa el brazo hasta el
-            codo y del codo para adelante se ve el antebrazo sobre la madera. */}
+        {/* Lo que cuenta quién es. */}
         <VestidoDe
           prenda={ficha.prenda}
           H={H}
@@ -319,13 +362,26 @@ export function RivalSentado({
           tinta={tinta}
         />
 
-        {/* ── Los antebrazos, sobre la madera ─────────────────────────── */}
-        <g fill="url(#rival-manga)" {...tinta}>
-          <path d={antebrazo} />
-          <path d={antebrazo} transform={`translate(${2 * EJE} 0) scale(-1 1)`} />
+        {/* ── LOS BRAZOS, que son una línea y una sombra ────────────────────
+            Van DESPUÉS de la prenda: el brazo está por delante de la ropa, así
+            que su borde tiene que cortar el bolsillo del buzo y la cenefa del
+            poncho, no quedar tapado por ellos. Recortados al torso para que la
+            sombra no se salga por el contorno. */}
+        <g clipPath="url(#rival-recorte)">
+          <rect x={EJE - 1.1 * H} y="56" width={0.34 * H} height={FONDO_TORSO - 56} fill="url(#rival-costado)" />
+          <rect
+            x={EJE + 0.76 * H}
+            y="56"
+            width={0.34 * H}
+            height={FONDO_TORSO - 56}
+            fill="url(#rival-costado)"
+            transform={`translate(${2 * EJE + 1.52 * H} 0) scale(-1 1)`}
+          />
         </g>
-
-        {[-1, 1].map((lado) => mano(lado as 1 | -1))}
+        <g fill="none" stroke="#150c04" strokeOpacity="0.4" strokeWidth="2.8" strokeLinecap="round">
+          <path d={costura(-1)} />
+          <path d={costura(1)} />
+        </g>
 
         <DetalleDe
           detalle={ficha.detalle}
@@ -341,20 +397,53 @@ export function RivalSentado({
             que alguien se lea como un fantasma. */}
         <g fill="none" stroke={luz} strokeLinecap="round">
           <path
-            d={`M${EJE - H} 58 C${EJE - 0.74 * H} 38 ${EJE - 0.5 * H} 20 ${EJE - 0.44 * H} 0`}
+            d={`M${EJE - 0.98 * H} 62 C${EJE - 0.76 * H} 36 ${EJE - 0.5 * H} 20 ${EJE - 0.44 * H} 0`}
             strokeWidth="3.4"
             strokeOpacity="0.4"
           />
           <path
-            d={`M${EJE + H} 58 C${EJE + 0.74 * H} 38 ${EJE + 0.5 * H} 20 ${EJE + 0.44 * H} 0`}
+            d={`M${EJE + 0.98 * H} 62 C${EJE + 0.76 * H} 36 ${EJE + 0.5 * H} 20 ${EJE + 0.44 * H} 0`}
             strokeWidth="3.4"
             strokeOpacity="0.4"
           />
-          <path d={`M${EJE - 1.0 * H} 196 C${EJE - 0.96 * H} 218 ${EJE - 0.86 * H} 236 ${EJE - 0.64 * H} 248`} strokeWidth="2.6" strokeOpacity="0.3" />
-          <path d={`M${EJE + 1.0 * H} 196 C${EJE + 0.96 * H} 218 ${EJE + 0.86 * H} 236 ${EJE + 0.64 * H} 248`} strokeWidth="2.6" strokeOpacity="0.3" />
-          <path d={`M${EJE - 0.52 * H - 21} 236 C${EJE - 0.52 * H - 8} 228 ${EJE - 0.52 * H + 9} 228 ${EJE - 0.52 * H + 21} 236`} strokeWidth="2.2" strokeOpacity="0.32" />
-          <path d={`M${EJE + 0.52 * H - 21} 236 C${EJE + 0.52 * H - 8} 228 ${EJE + 0.52 * H + 9} 228 ${EJE + 0.52 * H + 21} 236`} strokeWidth="2.2" strokeOpacity="0.32" />
         </g>
+      </g>
+    </svg>
+  );
+}
+
+/**
+ * LA SOMBRA QUE TIRA EL RIVAL SOBRE LA MADERA. Sólo para la variante sin brazos.
+ *
+ * ── Por qué hace falta un componente aparte ───────────────────────────────
+ *
+ * Sin brazos el rival se dibuja DEBAJO de la tabla, que es lo que hace que la
+ * mesa lo tape y que se lea sentado del otro lado en vez de pegado atrás. Pero
+ * su sombra tiene que ir ARRIBA de la madera, porque una sombra cae sobre las
+ * cosas, no debajo. Estando las dos en el mismo SVG hay que elegir una, y sin
+ * la sombra el torso queda apoyado sobre la nada: es exactamente lo que hacía
+ * que se leyera una plancha de color y no una persona.
+ *
+ * Es una sola elipse ancha y baja, pegada al canto lejano.
+ */
+export function SombraRival({ ficha }: { ficha: Cara }) {
+  const H = MEDIA_ESPALDA[ficha.contextura];
+  return (
+    <svg
+      viewBox={`0 0 ${RIVAL_VB.ancho} ${RIVAL_VB.alto}`}
+      className="pointer-events-none h-full w-full"
+      aria-hidden="true"
+    >
+      <defs>
+        <filter id="rival-sombra-sola" x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur stdDeviation="9" />
+        </filter>
+      </defs>
+      <g fill="rgba(0,0,0,0.55)" filter="url(#rival-sombra-sola)">
+        <ellipse cx={EJE} cy={214} rx={1.12 * H} ry={15} />
+        {/* y una segunda, más chica y más oscura, pegada al cuerpo: es la de
+            contacto, la que dice dónde termina él y empieza la mesa */}
+        <ellipse cx={EJE} cy={206} rx={1.0 * H} ry={7} opacity="0.8" />
       </g>
     </svg>
   );
@@ -795,7 +884,15 @@ function DetalleDe({
       return null;
   }
 }
-/** Mezcla dos colores hex. Sin librerías: es una interpolación y nada más. */
+/**
+ * Mezcla dos colores hex. Sin librerías: es una interpolación y nada más.
+ *
+ * DEVUELVE HEX, no `rgb(...)`, y eso importa: sólo sabe LEER hex, así que
+ * devolviendo `rgb(…)` no se la podía anidar. El día que se quiso sacar un
+ * color de otro ya mezclado —la manga de la camisa abajo del poncho—,
+ * `parseInt("gb(214 190 170)", 16)` dio NaN y los brazos salieron negros. El
+ * resultado tiene que poder volver a entrar.
+ */
 function mezclar(hex: string, hacia: string, cuanto: number): string {
   const leer = (h: string) => {
     const n = parseInt(h.slice(1), 16);
@@ -804,7 +901,8 @@ function mezclar(hex: string, hacia: string, cuanto: number): string {
   const [r1, g1, b1] = leer(hex);
   const [r2, g2, b2] = leer(hacia);
   const m = (a: number, b: number) => Math.round(a + (b - a) * cuanto);
-  return `rgb(${m(r1, r2)} ${m(g1, g2)} ${m(b1, b2)})`;
+  const dosCifras = (n: number) => n.toString(16).padStart(2, "0");
+  return `#${dosCifras(m(r1, r2))}${dosCifras(m(g1, g2))}${dosCifras(m(b1, b2))}`;
 }
 
 /**

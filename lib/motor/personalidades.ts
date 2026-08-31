@@ -209,7 +209,7 @@ const SEMILLAS: Semilla[] = [
   {
     id: "la-nelly", nombre: "La Pocha", departamento: "Lavalleja", lugar: "Minas",
     nivel: 2, mentira: 0.1, silencio: 0.35,
-    descripcion: "Callada. Te deja hablar a vos y after te cobra.",
+    descripcion: "Callada. Te deja hablar a vos y despues te cobra.",
   },
   {
     id: "marito", nombre: "Marito", departamento: "Maldonado", lugar: "Piriápolis",

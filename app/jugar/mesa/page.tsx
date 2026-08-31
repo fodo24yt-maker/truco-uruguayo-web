@@ -11,6 +11,7 @@ import {
   Mate,
   RIVAL_VB,
   RivalSentado,
+  SombraRival,
   TablaMesa,
 } from "@/components/mesa/Escenario";
 import { DedosAtras, PulgarAdelante } from "@/components/mesa/Manos";
@@ -40,7 +41,7 @@ import {
 import { fichaVacia, observarMano } from "@/lib/motor/lectura";
 import { explicarEnvido, valorEnvido } from "@/lib/motor/tantos";
 import { acentoDe, ambienteDe } from "@/lib/ambientes";
-import { estiloEnMesa } from "@/lib/mesa-perspectiva";
+import { escalaEnMesa, estiloEnMesa } from "@/lib/mesa-perspectiva";
 import { ESCENAS } from "@/lib/escenas";
 import { caraDe } from "@/lib/caras";
 import { porSlugDeDepartamento } from "@/lib/gira";
@@ -88,8 +89,8 @@ const DURA_VERSO = 6500;
  *
  * El resto es mesa. Es más de lo que tenía el croquis (que le daba una franja
  * fina) porque el fondo dejó de ser un telón: ahora tiene tres capas de
- * profundidad y ahí está sentado el rival, con los brazos apoyados. Menos de
- * esto y el rival no entra; más, y se le come el alto a las cartas.
+ * profundidad y ahí está sentado el rival. Menos de esto y el rival no entra;
+ * más, y se le come el alto a las cartas.
  */
 const ALTO_FONDO = 27;
 
@@ -101,6 +102,52 @@ const ALTO_FONDO = 27;
  * `ALTO_FONDO` o el `viewBox` del rival, esto se acomoda solo.
  */
 const ALTO_RIVAL = (ALTO_FONDO * RIVAL_VB.alto) / RIVAL_VB.borde;
+
+/* ─── DÓNDE SE APOYA CADA COSA, en profundidad de mesa ──────────────────────
+   `v = 0` es el canto de él y `v = 1` el tuyo.
+
+   Al sacarle los brazos y las cartas al rival, la franja de allá quedó VACÍA y
+   todo esto subió. No es por prolijidad: lo que se gana arriba es lugar abajo
+   para las cartas jugadas y para tu mano, que es donde apretaba en el celular.
+
+   Ojo con subir de más: `estiloEnMesa` ancla por la BASE y los objetos crecen
+   HACIA ARRIBA, así que pasado cierto punto se le montan al rival encima del
+   pecho. El que decide cuánto entra es `herramientas/mirar-mesa-nueva.mjs`, que
+   mide el rectángulo de verdad en el navegador. No mover estos números a ojo. */
+/* El mate va DEBAJO de la libreta, no arriba. Subido a 0,18 quedaba apoyado
+   sobre la esquina del papel: una cosa más chica tapando la única que hay que
+   LEER. Acá queda a media mesa, del lado libre. */
+const V_MATE = 0.48;
+const V_MAZO = 0.3;
+const V_BAZA_SUYA = 0.44;
+const V_BAZA_TUYA = 0.6;
+const V_GANADOR = 0.3;
+/** Las que le reparten a él: caen contra el canto y de ahí se las lleva abajo. */
+const V_REPARTO_RIVAL = 0.13;
+/**
+ * LA LIBRETA, que es la excepción y va con dos números en vez de uno.
+ *
+ * Es lo más alto de la mesa —`clamp(122px, 25vh, 204px)`— así que es la primera
+ * que se le monta al rival encima si sube de más. Estaba en 0,44 justamente por
+ * eso.
+ *
+ * ── Y no puede achicarse, que es lo que complica ──────────────────────────
+ *
+ * Subir un objeto lo ALEJA, y alejarlo lo achica: la perspectiva lo hace sola.
+ * Pero la libreta se agrandó a propósito la sesión pasada porque los puntos no
+ * se leían en el celular, así que achicarla sería deshacer eso. Por eso van dos
+ * números: sube a `V_LIBRETA`, pero se dibuja del TAMAÑO que tendría en
+ * `V_LIBRETA_TAMANO`, que es donde estaba.
+ *
+ * Sí, eso le miente un poco a la perspectiva. Cinco por ciento, en el único
+ * objeto de la mesa que hay que LEER y no sólo mirar. Vale la pena.
+ *
+ * Los dos los fijó la medición de `mirar-mesa-nueva.mjs`, que saca el
+ * rectángulo de verdad en el navegador y falla si cruza el canto o si se
+ * solapa con una baza. No moverlos a ojo: cambiarlos y correr la herramienta.
+ */
+const V_LIBRETA = 0.23;
+const V_LIBRETA_TAMANO = 0.44;
 
 /**
  * Cuánto espera cada carta antes de salir del mazo.
@@ -447,18 +494,64 @@ function Mesa() {
   const bazasJugadas = p.bazas.filter((b) => b.vos || b.rival).length;
   const lugarDeBaza = (i: number) => (i - (Math.max(bazasJugadas, 1) - 1) / 2) * 0.19;
   const anchoAbanico = `calc(${nCartas} * ${ANCHO_MANO} - ${Math.max(0, nCartas - 1) * 16}px)`;
+  /**
+   * EL ANCHO DE LA MANO. Ojo: NO es el del abanico.
+   *
+   * Estaba escrito `anchoAbanico + 0,8 · ANCHO_MANO`, y como el SVG va en
+   * `h-auto` el alto sigue al ancho: de tres cartas a una la mano pasaba de
+   * 3,8 anchos de carta a 1,8, o sea **perdía más de la mitad**. Por eso con
+   * una sola carta —y durante el reparto, mientras las otras dos todavía
+   * vienen volando— se veía un bulto y no una mano.
+   *
+   * Una mano no se achica cuando tirás una carta: los dedos se CIERRAN un
+   * poco y nada más. Los dos números de acá abajo están elegidos para que con
+   * TRES cartas dé exactamente lo mismo que antes —eso ya estaba bien— y con
+   * una se cierre un 37% en vez de un 49%, que es la diferencia entre una mano
+   * que cierra los dedos y una que se achica.
+   *
+   * Que siga colgando del abanico y no sea fijo tampoco es capricho: una mano
+   * fija del tamaño de tres cartas, con una sola carta adelante, tapa media
+   * pantalla en un celular. Es un punto medio, y se cierra MIRANDO las
+   * capturas de 3, 2 y 1 que saca `herramientas/mirar-mesa-nueva.mjs`, no a
+   * ojo ni en papel.
+   */
+  const anchoMano = `calc(1.5 * ${ANCHO_MANO} + 0.745 * (${anchoAbanico}))`;
 
-  /** Del lado del mazo va el mazo; del otro, el mate y el descarte. */
+  /** Del lado del mazo va el mazo; del otro, el mate. */
   const uMazo = ladoMazo === "izquierda" ? 0.17 : 0.83;
   const uOtro = ladoMazo === "izquierda" ? 0.85 : 0.15;
   // La libreta es lo más ancho de la mesa: va más adentro que el mate para que
   // no se salga por el costado en el celular. Se corrió de 0,78 a 0,75 al
   // agrandarla: con el tamaño nuevo la birome se iba del cuadro en 390px.
   const uLibreta = ladoMazo === "izquierda" ? 0.75 : 0.25;
-  /** Las cartas ya jugadas, apiladas boca abajo a un costado. */
-  const descartadas = p.bazas.reduce(
-    (n, b) => n + (b.vos ? 1 : 0) + (b.rival ? 1 : 0),
-    0,
+  /**
+   * EL RIVAL, cruzando el borde de la mesa.
+   *
+   * Sale como variable porque el cajón —la medida y el anclaje— lo comparte con
+   * su sombra, que se dibuja del otro lado de la tabla.
+   *
+   * ── Se ancla al CANTO DE LA MESA, no a un `bottom` a ojo ──────────────
+   * Como la cabeza queda fuera del encuadre, la figura tiene que tocar el borde
+   * de arriba de la escena SIEMPRE: si le queda un hueco arriba deja de leerse
+   * "cortado por el marco" y pasa a leerse "torso flotando sin cabeza", que es
+   * peor que la cabeza.
+   *
+   * La cuenta: en el dibujo el canto de la mesa está en `borde` de `alto`, y en
+   * la escena está en ALTO_FONDO. Igualando las dos, el alto de la figura sale
+   * solo y el encuadre queda igual en las siete pantallas, de 320×568 a
+   * 1440×900. Por eso se mide en % del ALTO y el ancho lo pone `aspect-ratio`:
+   * al revés habría que saber el alto para calcular el `bottom`, y no se puede
+   * en CSS.
+   */
+  const cajonRival = {
+    height: `${ALTO_RIVAL}%`,
+    bottom: `${100 - ALTO_FONDO - (1 - RIVAL_VB.borde / RIVAL_VB.alto) * ALTO_RIVAL}%`,
+    aspectRatio: `${RIVAL_VB.ancho} / ${RIVAL_VB.alto}`,
+  };
+  const capaRival = (
+    <div className="pointer-events-none absolute left-1/2 -translate-x-1/2" style={cajonRival}>
+      <RivalSentado ficha={caraRival} nombre={rival.nombre} luz={ambiente.luz} />
+    </div>
   );
 
   return (
@@ -531,76 +624,34 @@ function Mesa() {
             <FondoAmbiente ambiente={ambiente} acento={acento} />
           </div>
 
-          {/* la tabla, ya en perspectiva */}
+          {/* EL RIVAL VA ANTES DE LA TABLA, y no es un detalle de orden.
+              No tiene brazos sobre la madera, así que nada suyo está delante de
+              la mesa. Dibujado por encima, el torso terminaría con un corte
+              recto justo sobre el canto y se leería un recorte de cartón
+              apoyado detrás. Metido debajo, es la MESA la que lo tapa —que es
+              lo que pasa de verdad— y por eso se lee alguien sentado del otro
+              lado. Su sombra va después: una sombra cae SOBRE la madera. */}
+          {capaRival}
           <div className="absolute inset-x-0 bottom-0" style={{ top: `${ALTO_FONDO}%` }}>
             <TablaMesa ambiente={ambiente} acento={acento} />
           </div>
-
-          {/* El rival, cruzando el borde de la mesa: el torso contra el fondo y
-              los brazos apoyados en la madera. Va DESPUÉS de la tabla porque
-              los antebrazos están arriba de ella, no atrás.
-
-              ── Se ancla al CANTO DE LA MESA, no a un `bottom` a ojo ──────
-              Como la cabeza queda fuera del encuadre, la figura tiene que
-              tocar el borde de arriba de la escena SIEMPRE: si le queda un
-              hueco arriba deja de leerse "cortado por el marco" y pasa a
-              leerse "torso flotando sin cabeza", que es peor que la cabeza.
-
-              La cuenta: en el dibujo el canto de la mesa está en `borde` de
-              `alto`, y en la escena está en ALTO_FONDO. Igualando las dos, el
-              alto de la figura sale solo y el encuadre queda igual en las siete
-              pantallas, de 320×568 a 1440×900. Por eso se mide en % del ALTO y
-              el ancho lo pone `aspect-ratio`: al revés habría que saber el alto
-              para calcular el `bottom`, y no se puede en CSS. */}
-          <div
-            className="pointer-events-none absolute left-1/2 -translate-x-1/2"
-            style={{
-              height: `${ALTO_RIVAL}%`,
-              bottom: `${100 - ALTO_FONDO - (1 - RIVAL_VB.borde / RIVAL_VB.alto) * ALTO_RIVAL}%`,
-              aspectRatio: `${RIVAL_VB.ancho} / ${RIVAL_VB.alto}`,
-            }}
-          >
-            <RivalSentado ficha={caraRival} nombre={rival.nombre} luz={ambiente.luz} />
-
-            {/* Sus cartas, sostenidas entre sus manos. Van ACÁ ADENTRO y no
-                sueltas en la escena: así siguen al rival cuando cambia de
-                tamaño, en vez de quedar flotando por encima de sus manos.
-
-                El viaje desde el mazo va en el <span> de afuera y el abanico en
-                la carta de adentro: si los dos transform vivieran en el mismo
-                elemento, la animación le pisaría el abanico y al terminar las
-                tres cartas pegarían un salto para acomodarse. */}
-            <div className="absolute bottom-[19%] left-1/2 flex -translate-x-1/2 gap-[1px]">
-              {p.cartas.rival.map((_, i) => (
-                <span
-                  key={i}
-                  className={repartiendo ? "anim-reparte" : ""}
-                  style={
-                    repartiendo
-                      ? ({
-                          animationDelay: `${retrasoDeReparto("rival", i, soyMano)}ms`,
-                          "--desde-x": `${ladoMazo === "izquierda" ? -110 : 110}px`,
-                          "--desde-y": "96px",
-                        } as React.CSSProperties)
-                      : undefined
-                  }
-                >
-                  <Carta
-                    oculta
-                    style={{
-                      width: "clamp(17px, 3.4vh, 28px)",
-                      transform: `rotate(${(i - 1) * 8}deg) translateY(${Math.abs(i - 1) * 2}px)`,
-                    }}
-                  />
-                </span>
-              ))}
-            </div>
+          <div className="pointer-events-none absolute left-1/2 -translate-x-1/2" style={cajonRival}>
+            <SombraRival ficha={caraRival} />
           </div>
+
 
           {/* ─── Lo que está APOYADO en la mesa ────────────────────────
               Todo acá adentro se ubica con (u, v) y recibe su escala sola: lo
-              que está lejos sale más chico sin que nadie lo escriba. */}
+              que está lejos sale más chico sin que nadie lo escriba.
+
+              Los `data-mesa` no son decoración: son el agarre con el que
+              `herramientas/mirar-mesa-nueva.mjs` mide el rectángulo REAL de cada
+              objeto en el navegador y verifica que ninguno se le monte al rival
+              ni se solape con otro. Es lo que decide cuánto puede subir la
+              libreta, que a ojo no se puede saber. Mismo papel que cumple
+              `.mano-abanico` para `mirar-mesa.mjs`. */}
           <div
+            data-mesa="tabla"
             className="absolute inset-x-0 bottom-0"
             style={{ top: `${ALTO_FONDO}%` }}
           >
@@ -608,12 +659,61 @@ function Mesa() {
                 lejano, o sea justo encima del pecho del rival, y encima salía
                 chica: allá la perspectiva achica todo. Ahora va al costado, a
                 la altura del mazo pero del lado libre, y bastante más grande. */}
-            <div style={estiloEnMesa(uLibreta, 0.44)}>
+            <div data-mesa="libreta" style={estiloEnMesa(uLibreta, V_LIBRETA, escalaEnMesa(V_LIBRETA_TAMANO) / escalaEnMesa(V_LIBRETA))}>
               <Marcador vos={p.puntos.vos} rival={p.puntos.rival} />
             </div>
 
+            {/* ── LAS TRES QUE LE REPARTEN A ÉL ───────────────────────────
+                Existen SÓLO mientras dura el reparto. Él no tiene las cartas
+                sobre la mesa —las mira abajo del canto—, pero el reparto tiene
+                que seguir mostrando las seis salir del mazo: si sólo salieran
+                las tuyas parecería que le reparten a nadie.
+
+                Así que llegan contra el canto lejano y de ahí bajan
+                desvaneciéndose, como si se las llevara. Cada una se va apenas
+                llega, con el mismo `retrasoDeReparto` que las tuyas, que es lo
+                que mantiene el ritmo mano-pie-mano-pie.
+
+                Van ACÁ y no en el cajón del rival: el cajón está debajo de la
+                tabla, así que ahí adentro la mesa las taparía. */}
+            {repartiendo && (
+              <div
+                data-mesa="reparto"
+                /* CORRIDAS AL LADO CONTRARIO DE LA LIBRETA. Repartidas al medio
+                   le caían justo encima del papel: se veía media hoja tapada
+                   por tres dorsos durante todo el reparto. La libreta está
+                   siempre del lado contrario al mazo, así que alcanza con
+                   mirar de qué lado quedó. */
+                style={estiloEnMesa(uLibreta > 0.5 ? 0.37 : 0.63, V_REPARTO_RIVAL)}
+                className="pointer-events-none"
+              >
+                {/* SEPARADAS Y CADA UNA TORCIDA DISTINTO. Pegadas y a escuadra
+                    formaban un bloque de dorsos rojos y, mientras duraba el
+                    reparto, se leía un segundo mazo allá arriba. Tres cartas
+                    que le acaban de tirar caen desparejas, no apiladas. */}
+                <div className="flex gap-[7px]">
+                  {p.cartas.rival.map((_, i) => (
+                    <span
+                      key={i}
+                      className="anim-reparte-baja block"
+                      style={
+                        {
+                          animationDelay: `${retrasoDeReparto("rival", i, soyMano)}ms`,
+                          "--desde-x": `${ladoMazo === "izquierda" ? -120 : 120}px`,
+                          "--desde-y": "78px",
+                          "--giro": `${[-8, 5, -3][i] ?? 0}deg`,
+                        } as React.CSSProperties
+                      }
+                    >
+                      <Carta oculta style={{ width: "clamp(28px, 5.6vh, 46px)" }} />
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* el mazo con la muestra metida abajo, del lado del que reparte */}
-            <div style={estiloEnMesa(uMazo, 0.42)}>
+            <div data-mesa="mazo" style={estiloEnMesa(uMazo, V_MAZO)}>
               <Mazo
                 muestra={p.muestra}
                 lado={ladoMazo}
@@ -623,35 +723,29 @@ function Mesa() {
             </div>
 
             {/* el mate, siempre del lado contrario al mazo */}
-            <div style={estiloEnMesa(uOtro, 0.30)}>
+            <div data-mesa="mate" style={estiloEnMesa(uOtro, V_MATE)}>
               <div className="relative" style={{ height: "clamp(54px, 11vh, 104px)", aspectRatio: "60 / 84" }}>
                 <SombraApoyada ancho={0.55} desvio={ladoMazo === "izquierda" ? 0.3 : -0.3} />
                 <Mate />
               </div>
             </div>
 
-            {/* El descarte: las cartas que ya se jugaron, boca abajo a un
-                costado. Está en las dos referencias grandes, y de paso llena el
-                hueco de madera pelada que le quedaba al croquis en el medio. */}
-            {descartadas > 0 && (
-              <div style={estiloEnMesa(uMazo, 0.76)}>
-                <div className="relative">
-                  <SombraApoyada ancho={0.8} peso={0.6} />
-                  {Array.from({ length: Math.min(descartadas, 4) }, (_, i) => (
-                    <Carta
-                      key={i}
-                      oculta
-                      style={{
-                        width: "clamp(34px, 6.6vh, 56px)",
-                        transform: `translate(${i * 1.5}px, ${-i * 1.5}px) rotate(${(i % 2 ? -1 : 1) * (3 + i)}deg)`,
-                        position: i === 0 ? "relative" : "absolute",
-                        inset: i === 0 ? undefined : 0,
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* ── ACÁ NO VA UN DESCARTE, Y ES A PROPÓSITO ─────────────────
+                Había una pila de dorsos boca abajo con las cartas ya jugadas,
+                apoyada en `uMazo`: o sea justo debajo del mazo, del mismo
+                color y del mismo tamaño. En la pantalla eran DOS MAZOS, que es
+                un error: el mazo es la única señal que dice de quién es el
+                reparto, y con dos no dice nada.
+
+                Y encima no agregaba nada. Contaba las mismas cartas de
+                `p.bazas` que están dibujadas más abajo BOCA ARRIBA: mostraba
+                tapado lo que al lado ya se ve destapado.
+
+                En una mesa de verdad las cartas de la baza se levantan. Acá
+                **se quedan a la vista toda la mano**, decidido así el
+                31/8/2026: poder ver qué se jugó vale más que la costumbre. Se
+                levantan recién cuando apretás "Siguiente mano", o sea cuando
+                vos decidís que ya miraste. No volver a poner una pila acá. */}
 
             {/* Las bazas: pares cruzando la mesa, CENTRADOS como grupo. La tuya
                 se monta sobre la de él, como quedan de verdad cuando las tirás
@@ -663,17 +757,17 @@ function Mesa() {
             {p.bazas.map((baza, i) => (
               <div key={i}>
                 {baza.rival && (
-                  <div style={estiloEnMesa(0.5 + lugarDeBaza(i), 0.50)}>
-                    <CartaApoyada carta={baza.rival} />
+                  <div data-mesa="baza" style={estiloEnMesa(0.5 + lugarDeBaza(i), V_BAZA_SUYA)}>
+                    <CartaApoyada carta={baza.rival} de="rival" />
                   </div>
                 )}
                 {baza.vos && (
-                  <div style={estiloEnMesa(0.53 + lugarDeBaza(i), 0.68)}>
-                    <CartaApoyada carta={baza.vos} />
+                  <div data-mesa="baza" style={estiloEnMesa(0.53 + lugarDeBaza(i), V_BAZA_TUYA)}>
+                    <CartaApoyada carta={baza.vos} de="vos" />
                   </div>
                 )}
                 {baza.ganador && (
-                  <div style={estiloEnMesa(0.5 + lugarDeBaza(i), 0.335)}>
+                  <div style={estiloEnMesa(0.5 + lugarDeBaza(i), V_GANADOR)}>
                     <span className="block whitespace-nowrap font-[family-name:var(--font-ui)] text-[9px] uppercase tracking-wide text-crema/70 drop-shadow-[0_1px_3px_rgba(0,0,0,1)]">
                       {baza.ganador === "parda" ? "parda" : baza.ganador === "vos" ? "tuya" : "suya"}
                     </span>
@@ -745,10 +839,13 @@ function Mesa() {
               style={{ paddingBottom: `calc(0.26 * ${ANCHO_MANO})` }}
             >
               <span
-                className="pointer-events-none absolute left-1/2 z-0 -translate-x-1/2"
+                className={`pointer-events-none absolute left-1/2 z-0 -translate-x-1/2 ${
+                  repartiendo ? "anim-entra-mano" : ""
+                }`}
                 style={{
                   bottom: `calc(-0.06 * ${ANCHO_MANO})`,
-                  width: `calc(${anchoAbanico} + 0.8 * ${ANCHO_MANO})`,
+                  width: anchoMano,
+                  animationDelay: `${retrasoDeReparto("vos", 0, soyMano)}ms`,
                 }}
               >
                 <DedosAtras ancho="100%" luz={ambiente.luz} />
@@ -773,12 +870,21 @@ function Mesa() {
                 ))}
               </div>
 
+              {/* El pulgar se mide contra LA MANO, no contra una carta.
+                  Clavado en 1,7 anchos de carta mientras la mano se achicaba,
+                  con una sola carta terminaba casi tan ancho como la mano
+                  entera: la proporción se rompía justo en el caso que se veía
+                  mal. 0,48 es la proporción que YA tenía con tres cartas, así
+                  que con tres no cambia nada y con una y dos se arregla. */}
               <span
-                className="pointer-events-none absolute left-1/2 z-20"
+                className={`pointer-events-none absolute left-1/2 z-20 ${
+                  repartiendo ? "anim-entra-mano" : ""
+                }`}
                 style={{
-                  bottom: `calc(-0.24 * ${ANCHO_MANO})`,
-                  width: `calc(1.7 * ${ANCHO_MANO})`,
+                  bottom: `calc(-0.068 * (${anchoMano}))`,
+                  width: `calc(0.48 * (${anchoMano}))`,
                   transform: "translateX(-56%)",
+                  animationDelay: `${retrasoDeReparto("vos", 0, soyMano)}ms`,
                 }}
               >
                 <PulgarAdelante ancho="100%" luz={ambiente.luz} />
@@ -920,9 +1026,32 @@ function Mesa() {
  * escala: la carta de él, que está más lejos, sale más chica que la tuya sin que
  * nadie escriba un número.
  */
-function CartaApoyada({ carta }: { carta: CartaType }) {
+/**
+ * Una carta ya jugada, apoyada en la mesa.
+ *
+ * ── DE DÓNDE VIENE ────────────────────────────────────────────────────────
+ *
+ * La animación de aterrizaje (`anim-caer`) ya estaba; lo que faltaba era
+ * DECIRLE DE DÓNDE SALE. Sin `--desde-x` y `--desde-y` las dos cartas usaban el
+ * valor por defecto y caían igual, desde arriba y desde ningún lado: la del
+ * rival parecía aparecer sola.
+ *
+ * La tuya sube desde tu mano, que está abajo del cuadro. La de él baja desde el
+ * canto lejano, que es de donde vendría si la tuviera abajo de la mesa —que es
+ * exactamente donde la tiene—.
+ */
+function CartaApoyada({ carta, de }: { carta: CartaType; de: Jugador }) {
   return (
-    <div className="carta-apoyada relative" style={{ width: "clamp(44px, 8.8vh, 72px)", aspectRatio: "2 / 3" }}>
+    <div
+      className="carta-apoyada relative"
+      style={
+        {
+          width: "clamp(44px, 8.8vh, 72px)",
+          aspectRatio: "2 / 3",
+          "--desde-y": de === "rival" ? "-72px" : "104px",
+        } as React.CSSProperties
+      }
+    >
       {/* la sombra proyectada sobre la mesa, que se cierra al aterrizar */}
       <div
         className="anim-sombra absolute inset-x-0 bottom-[-3px] top-3 rounded bg-black/70 blur-[3px]"
