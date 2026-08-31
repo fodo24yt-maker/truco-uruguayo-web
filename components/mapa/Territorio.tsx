@@ -10,7 +10,7 @@
  * borde del país va arriba de todo.
  *
  * Las paradas cerradas siguen siendo clicables a propósito: es mejor tocar y
- * que te digan "primero ganale a La Coca" que tocar y que no pase nada. El
+ * que te digan "primero ganale a La Porota" que tocar y que no pase nada. El
  * estado va en el `aria-label` y no en `aria-disabled`, que sería mentira para
  * algo que responde.
  */

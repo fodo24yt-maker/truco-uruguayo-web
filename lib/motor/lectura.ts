@@ -222,7 +222,7 @@ export function ajustePorLectura(ficha: Ficha, lectura: number): Ajuste {
   // montón, medido con el banco de pruebas. Así que hay mucho para ganar
   // bajándolos contra un mentiroso y poco para ganar subiéndolos: pasarse de
   // largo cuesta puntos. La primera versión de esto no tenía tope y empujaba a
-  // El Melo más allá de su propio óptimo, o sea que leer al rival lo hacía
+  // El Turco más allá de su propio óptimo, o sea que leer al rival lo hacía
   // jugar PEOR.
   const quiereEnvido = acotar((MENTIRA_NEUTRA - mentiraEnvido + seGuarda * 0.5) * 5 * peso, -5, 1.5);
   const quiereTruco = acotar((MENTIRA_NEUTRA - mentiraTruco + seGuarda * 0.5) * 0.15 * peso, -0.14, 0.05);

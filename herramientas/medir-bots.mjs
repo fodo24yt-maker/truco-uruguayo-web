@@ -2,8 +2,8 @@
  * El banco de pruebas del balance.
  *
  * Enfrenta a cada rival de la gira contra una referencia y saca la tabla de
- * winrates. Nació porque la escala de dificultad estaba dada vuelta —Luki, el
- * primero, le ganaba a El Melo, el último, el 61% de las veces— y a ojo eso no
+ * winrates. Nació porque la escala de dificultad estaba dada vuelta —Luquita, el
+ * primero, le ganaba a El Turco, el último, el 61% de las veces— y a ojo eso no
  * se ve: hay que jugarlo miles de veces.
  *
  * Correr con:   node herramientas/medir-bots.mjs

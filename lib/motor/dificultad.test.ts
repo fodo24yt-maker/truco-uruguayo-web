@@ -1,9 +1,9 @@
 /**
  * Que la gira sea de verdad una escalera.
  *
- * Esto nació de un reporte jugando: "no le gané una a Luki". Luki es el PRIMER
+ * Esto nació de un reporte jugando: "no le gané una a Luquita". Luquita es el PRIMER
  * rival de la gira, el de una estrella. Midiéndolo apareció que la escala
- * estaba dada vuelta: Luki le ganaba a El Melo —el último, el de cinco
+ * estaba dada vuelta: Luquita le ganaba a El Turco —el último, el de cinco
  * estrellas— el 61% de las veces.
  *
  * La tabla de niveles se había armado suponiendo que "más difícil = canta más,
@@ -127,7 +127,7 @@ test("NO AL REVÉS: el primero de la gira no puede ganarle al último", () => {
   const luki = PERSONALIDADES.find((p) => p.id === "luki")!;
   const melo = PERSONALIDADES.find((p) => p.id === "el-melo")!;
   const gana = cuantoLeGana(luki, melo, PARTIDAS, 5);
-  assert.ok(gana < 45, `Luki le gana a El Melo el ${gana.toFixed(1)}%: está dado vuelta otra vez`);
+  assert.ok(gana < 45, `Luquita le gana a El Turco el ${gana.toFixed(1)}%: está dado vuelta otra vez`);
 });
 
 test("el oficio y la lectura suben con la dificultad", () => {

@@ -26,3 +26,10 @@
 # Los archivos con huella digital en el nombre nunca cambian: se cachean fuerte.
 /_next/static/*
   Cache-Control: public, max-age=31536000, immutable
+
+# Las texturas de la mesa. Se cachean una semana y NO "immutable": el nombre no
+# lleva huella digital, así que si algún día se vuelve a hornear una escena hay
+# que poder reemplazarla. Con "immutable" el navegador se quedaría con la vieja
+# hasta el año que viene.
+/escenas/*
+  Cache-Control: public, max-age=604800

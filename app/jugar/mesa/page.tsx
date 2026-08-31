@@ -5,7 +5,17 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 
 import { Carta } from "@/components/Carta";
-import { FondoBar, Rival, TexturaMadera } from "@/components/mesa/Escenario";
+import { Dialogo } from "@/components/mesa/Dialogo";
+import {
+  FondoAmbiente,
+  Mate,
+  RIVAL_VB,
+  RivalSentado,
+  TablaMesa,
+} from "@/components/mesa/Escenario";
+import { DedosAtras, PulgarAdelante } from "@/components/mesa/Manos";
+import { SombraApoyada } from "@/components/mesa/Sombra";
+import { Medallon } from "@/components/mesa/Medallon";
 import { Marcador } from "@/components/mesa/Marcador";
 import { Mazo } from "@/components/mesa/Mazo";
 import { type Carta as CartaType, esPieza } from "@/lib/motor/baraja";
@@ -29,6 +39,10 @@ import {
 } from "@/lib/motor/personalidades";
 import { fichaVacia, observarMano } from "@/lib/motor/lectura";
 import { explicarEnvido, valorEnvido } from "@/lib/motor/tantos";
+import { acentoDe, ambienteDe } from "@/lib/ambientes";
+import { estiloEnMesa } from "@/lib/mesa-perspectiva";
+import { ESCENAS } from "@/lib/escenas";
+import { caraDe } from "@/lib/caras";
 import { porSlugDeDepartamento } from "@/lib/gira";
 import { anotarPartida, guardarPreferencia, leerProgreso } from "@/lib/progreso";
 
@@ -55,8 +69,38 @@ const VOLTEO = 280;
 const MOMENTO_VOLTEO = 5 * ENTRE_CARTAS + VUELO + 60;
 /** Cuándo se puede volver a jugar: cuando terminó de girar la última. */
 const FIN_REPARTO = MOMENTO_VOLTEO + 2 * ENTRE_VOLTEOS + VOLTEO;
+/**
+ * El ancho de una carta en la mano.
+ *
+ * Va atado al alto de la ventana y no a puntos de corte de ancho: el problema
+ * real nunca fue la pantalla angosta sino la BAJA —una ventana de 620px de alto
+ * dejaba tu propia mano cortada por la barra de cantos, que es lo único que no
+ * se puede permitir—. Con `clamp` se achica sola hasta donde haga falta y nunca
+ * pasa del tamaño lindo en una pantalla grande.
+ */
+const ANCHO_MANO = "clamp(72px, 15.6vh, 126px)";
+
 /** Lo que queda un verso en pantalla si no lo cerrás ni contestás. */
 const DURA_VERSO = 6500;
+
+/**
+ * Cuánto de la pantalla se lleva el ambiente, en porcentaje de la escena.
+ *
+ * El resto es mesa. Es más de lo que tenía el croquis (que le daba una franja
+ * fina) porque el fondo dejó de ser un telón: ahora tiene tres capas de
+ * profundidad y ahí está sentado el rival, con los brazos apoyados. Menos de
+ * esto y el rival no entra; más, y se le come el alto a las cartas.
+ */
+const ALTO_FONDO = 27;
+
+/**
+ * El alto del rival, en % del alto de la escena.
+ *
+ * No es un número elegido: sale de pedir que el canto de la mesa del DIBUJO
+ * caiga exactamente sobre el canto de la mesa de la ESCENA. Si un día cambia
+ * `ALTO_FONDO` o el `viewBox` del rival, esto se acomoda solo.
+ */
+const ALTO_RIVAL = (ALTO_FONDO * RIVAL_VB.alto) / RIVAL_VB.borde;
 
 /**
  * Cuánto espera cada carta antes de salir del mazo.
@@ -333,205 +377,384 @@ function Mesa() {
   /** Si ya hay un envido en la mesa, lo que hacés es subirlo; si no, abrirlo. */
   const subiendoEnvido = p.pendiente?.tipo === "envido";
   const bazaActual = p.bazas[p.bazas.length - 1];
+  /**
+   * POR QUÉ NO HAY ENVIDO.
+   *
+   * "El envido va primero": si te cantan truco antes de que hayas hablado,
+   * podés contestar con envido. Pero hay tres casos donde la regla dice que no,
+   * y hasta ahora el botón simplemente desaparecía sin decir nada. Desde tu
+   * silla eso se veía como un error del juego —sobre todo cuando el rival había
+   * cantado flor y el aviso se perdía debajo del canto siguiente—.
+   *
+   * Sólo se calcula en el momento exacto en que la regla tendría que aplicar:
+   * truco sin contestar, primera baza y todavía no hablaste.
+   *
+   * NO SOPLA NADA. Mira `florCantada`, que es lo que se dijo en voz alta, nunca
+   * `flor[rival].tiene`, que son sus cartas.
+   */
+  const motivoSinEnvido = (() => {
+    if (p.pendiente?.tipo !== "truco" || p.pendiente.de === "vos") return null;
+    if (p.bazas.length !== 1 || p.yaHablo.vos) return null;
+    // Si hay algo para cantar, no falta nada que explicar.
+    if (envidosPosibles.length > 0 || puede("flor") || florCantos.length > 0) return null;
+    if (p.florCantada.rival) return "Cantó flor: la flor anula el envido";
+    if (p.florCantada.vos) return "Cantaste flor: el envido queda anulado";
+    if (p.historial.some((h) => h.tipo === "envido")) return "El envido ya se jugó en esta mano";
+    return null;
+  })();
+
+  /**
+   * QUE LA BARRA NUNCA CORTE TU MANO.
+   *
+   * La barra crece hacia arriba: la fila de siempre, más la de la flor cuando se
+   * puede cantar, más el menú de envido cuando está abierto. Antes se calculaba
+   * su alto a ojo (`filas × 64 + …`) para reservarle un `padding` a la mesa, y
+   * el número había que mantenerlo a mano cada vez que se tocaba un botón.
+   *
+   * Ahora la barra está DENTRO del flujo, como última hermana de la escena, y
+   * la escena es `flex-1 min-h-0`: cuando la barra crece, la escena se achica
+   * sola. La invariante es la misma —la mano nunca queda debajo de la barra—
+   * pero ya no depende de que alguien acierte un número.
+   */
+
+  /** Dónde se juega y cómo es la cara del que tenés enfrente. */
+  const ambiente = ambienteDe(rival.departamento);
+  /* El tono del departamento, el mismo del mapa. Es lo que separa a Salto de
+     Paysandú, que comparten el ambiente del litoral y hasta ahora eran la
+     misma pantalla. */
+  const acento = acentoDe(rival.departamento);
+  const caraRival = caraDe(rival.id);
   // El tanto se cuenta con las tres cartas del reparto, nunca con las que quedan
   const miFlor = p.flor.vos;
   const miTanto = valorEnvido(p.manoInicial.vos, p.muestra);
-  const ultimoEvento = p.eventos[p.eventos.length - 1];
+
+  /**
+   * El ancho del abanico, para que la mano lo siga.
+   *
+   * Las cartas se montan 16px entre vecinas (el `-mx-2` de cada una). Si la mano
+   * se dimensionara con un múltiplo fijo del ancho de UNA carta, al quedarte una
+   * sola seguiría siendo la mano de tres y taparía media pantalla.
+   */
+  const nCartas = p.cartas.vos.length;
+
+  /**
+   * Cuántas bazas tienen algo puesto, y en qué lugar va cada una.
+   *
+   * `p.bazas` incluye SIEMPRE la que está abierta, todavía vacía. Si el par se
+   * centrara sobre esa cuenta, con una sola carta en la mesa el par quedaría
+   * corrido media posición a la izquierda y la mesa se vería torcida.
+   */
+  const bazasJugadas = p.bazas.filter((b) => b.vos || b.rival).length;
+  const lugarDeBaza = (i: number) => (i - (Math.max(bazasJugadas, 1) - 1) / 2) * 0.19;
+  const anchoAbanico = `calc(${nCartas} * ${ANCHO_MANO} - ${Math.max(0, nCartas - 1) * 16}px)`;
+
+  /** Del lado del mazo va el mazo; del otro, el mate y el descarte. */
+  const uMazo = ladoMazo === "izquierda" ? 0.17 : 0.83;
+  const uOtro = ladoMazo === "izquierda" ? 0.85 : 0.15;
+  // La libreta es lo más ancho de la mesa: va más adentro que el mate para que
+  // no se salga por el costado en el celular. Se corrió de 0,78 a 0,75 al
+  // agrandarla: con el tamaño nuevo la birome se iba del cuadro en 390px.
+  const uLibreta = ladoMazo === "izquierda" ? 0.75 : 0.25;
+  /** Las cartas ya jugadas, apiladas boca abajo a un costado. */
+  const descartadas = p.bazas.reduce(
+    (n, b) => n + (b.vos ? 1 : 0) + (b.rival ? 1 : 0),
+    0,
+  );
 
   return (
     // La mesa ocupa todo el alto que le queda a la pantalla y NUNCA hace
     // scroll: un juego que te obliga a scrollear para ver tus propias cartas
-    // no se puede jugar. Adentro, cada zona se reparte lo que hay.
-    <div className="mesa-pantalla-completa relative flex min-h-0 flex-1 justify-center overflow-hidden bg-[#0d0906]">
-      <div className="penumbra relative flex w-full max-w-[860px] flex-col">
-        {/* ─── El bar y el rival, al fondo ───────────────────────────── */}
-        <div className="relative h-[104px] shrink-0 sm:h-[168px]">
-          <FondoBar />
+    // no se puede jugar. Tres hermanas en columna —barra, escena, cantos— y la
+    // del medio es la que cede.
+    <div className="mesa-pantalla-completa relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#0d0906]">
+      {/* ─── La barra de juego ─────────────────────────────────────────
+          Reemplaza a la del sitio mientras jugás. En las referencias no hay
+          navegación adentro de la mesa: hay una franja finita con cómo salir y
+          poco más. Los ~45px que se ahorran son cartas, y en una pantalla de
+          640 de alto eso se nota. */}
+      <div className="barra-juego relative z-30 flex shrink-0 items-center justify-between gap-2 px-2">
+        <Link
+          href={esHistoria ? "/jugar/gira" : "/jugar"}
+          className="flex items-center gap-1 rounded px-1.5 py-1 font-[family-name:var(--font-ui)] text-[11px] uppercase tracking-wide text-crema/75 transition-colors hover:text-crema"
+        >
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" aria-hidden="true">
+            <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          {esHistoria ? "Mapa" : "Salir"}
+        </Link>
 
-          {/* El rival, sentado enfrente */}
-          <div className="absolute bottom-0 left-1/2 h-[86px] w-[148px] -translate-x-1/2 sm:h-[124px] sm:w-[212px]">
-            <Rival nombre={rival.nombre} />
+        <span className="truncate font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-[0.14em] text-dorado/70">
+          {rival.lugar}
+          <span className="hidden sm:inline"> · {ambiente.nombre}</span>
+        </span>
+
+        <button
+          onClick={() => {
+            const nuevo = !ayudas;
+            setAyudas(nuevo);
+            guardarPreferencia("ayudas", nuevo);
+          }}
+          className="shrink-0 whitespace-nowrap rounded border border-crema/20 px-2 py-0.5 font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-wide text-crema/70 transition-colors hover:border-crema/50 hover:text-crema"
+        >
+          Ayudas: {ayudas ? "sí" : "no"}
+        </button>
+      </div>
+
+      {/* ─── La escena ─────────────────────────────────────────────────
+          El ancho se limita CONTRA EL ALTO y no sólo con un máximo fijo. En una
+          ventana baja y ancha, un encuadre de 1280×400 deja la mesa como una
+          franja y no entra nada; atado al alto, la escena se angosta y queda el
+          mismo encuadre que en el celular, con la penumbra a los costados.
+
+          EL TOPE ES UN EQUILIBRIO, no un máximo cualquiera. Con 920px quedaban
+          dos barras negras de 180px a los costados y la mesa no llegaba a los
+          bordes como en la referencia. Pero llenar la ventana entera es peor:
+          los objetos se miden en `vh`, así que al crecer sólo el ancho TODO se
+          ve más chico, y la referencia tiene justamente lo contrario, un
+          encuadre cerrado con las cartas enormes. 1180px es donde la mesa llega
+          casi a los bordes sin que se achique lo que hay que mirar. */}
+      <div className="relative flex min-h-0 flex-1 justify-center">
+        <div
+          className="penumbra relative w-full overflow-hidden"
+          style={{ maxWidth: "min(1180px, 158vh)" }}
+        >
+          {/* El telón: el color del lugar, detrás de todo. Se ve por las
+              esquinas transparentes de la mesa, allá donde la madera se
+              terminó. */}
+          <div
+            className="absolute inset-0"
+            style={{ backgroundColor: ESCENAS[ambiente.clave].colorFondo }}
+          />
+
+          {/* el ambiente, al fondo */}
+          <div className="absolute inset-x-0 top-0" style={{ height: `${ALTO_FONDO}%` }}>
+            <FondoAmbiente ambiente={ambiente} acento={acento} />
           </div>
 
-          {/* Sus cartas, sostenidas delante de él.
-              El viaje desde el mazo va en un <span> de afuera y el abanico en la
-              carta de adentro: si los dos transform vivieran en el mismo
-              elemento, la animación le pisaría el abanico y al terminar las tres
-              cartas pegarían un salto para acomodarse. */}
-          <div className="absolute bottom-[6px] left-1/2 flex -translate-x-1/2 gap-1">
-            {p.cartas.rival.map((_, i) => (
-              <span
-                key={i}
-                className={repartiendo ? "anim-reparte" : ""}
-                style={
-                  repartiendo
-                    ? ({
-                        animationDelay: `${retrasoDeReparto("rival", i, soyMano)}ms`,
-                        "--desde-x": `${ladoMazo === "izquierda" ? -110 : 110}px`,
-                        "--desde-y": "96px",
-                      } as React.CSSProperties)
-                    : undefined
-                }
-              >
-                <Carta
-                  oculta
-                  className="w-[30px] sm:w-[40px]"
-                  style={{
-                    transform: `rotate(${(i - 1) * 7}deg) translateY(${Math.abs(i - 1) * 3}px)`,
-                  }}
-                />
-              </span>
+          {/* la tabla, ya en perspectiva */}
+          <div className="absolute inset-x-0 bottom-0" style={{ top: `${ALTO_FONDO}%` }}>
+            <TablaMesa ambiente={ambiente} acento={acento} />
+          </div>
+
+          {/* El rival, cruzando el borde de la mesa: el torso contra el fondo y
+              los brazos apoyados en la madera. Va DESPUÉS de la tabla porque
+              los antebrazos están arriba de ella, no atrás.
+
+              ── Se ancla al CANTO DE LA MESA, no a un `bottom` a ojo ──────
+              Como la cabeza queda fuera del encuadre, la figura tiene que
+              tocar el borde de arriba de la escena SIEMPRE: si le queda un
+              hueco arriba deja de leerse "cortado por el marco" y pasa a
+              leerse "torso flotando sin cabeza", que es peor que la cabeza.
+
+              La cuenta: en el dibujo el canto de la mesa está en `borde` de
+              `alto`, y en la escena está en ALTO_FONDO. Igualando las dos, el
+              alto de la figura sale solo y el encuadre queda igual en las siete
+              pantallas, de 320×568 a 1440×900. Por eso se mide en % del ALTO y
+              el ancho lo pone `aspect-ratio`: al revés habría que saber el alto
+              para calcular el `bottom`, y no se puede en CSS. */}
+          <div
+            className="pointer-events-none absolute left-1/2 -translate-x-1/2"
+            style={{
+              height: `${ALTO_RIVAL}%`,
+              bottom: `${100 - ALTO_FONDO - (1 - RIVAL_VB.borde / RIVAL_VB.alto) * ALTO_RIVAL}%`,
+              aspectRatio: `${RIVAL_VB.ancho} / ${RIVAL_VB.alto}`,
+            }}
+          >
+            <RivalSentado ficha={caraRival} nombre={rival.nombre} luz={ambiente.luz} />
+
+            {/* Sus cartas, sostenidas entre sus manos. Van ACÁ ADENTRO y no
+                sueltas en la escena: así siguen al rival cuando cambia de
+                tamaño, en vez de quedar flotando por encima de sus manos.
+
+                El viaje desde el mazo va en el <span> de afuera y el abanico en
+                la carta de adentro: si los dos transform vivieran en el mismo
+                elemento, la animación le pisaría el abanico y al terminar las
+                tres cartas pegarían un salto para acomodarse. */}
+            <div className="absolute bottom-[19%] left-1/2 flex -translate-x-1/2 gap-[1px]">
+              {p.cartas.rival.map((_, i) => (
+                <span
+                  key={i}
+                  className={repartiendo ? "anim-reparte" : ""}
+                  style={
+                    repartiendo
+                      ? ({
+                          animationDelay: `${retrasoDeReparto("rival", i, soyMano)}ms`,
+                          "--desde-x": `${ladoMazo === "izquierda" ? -110 : 110}px`,
+                          "--desde-y": "96px",
+                        } as React.CSSProperties)
+                      : undefined
+                  }
+                >
+                  <Carta
+                    oculta
+                    style={{
+                      width: "clamp(17px, 3.4vh, 28px)",
+                      transform: `rotate(${(i - 1) * 8}deg) translateY(${Math.abs(i - 1) * 2}px)`,
+                    }}
+                  />
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* ─── Lo que está APOYADO en la mesa ────────────────────────
+              Todo acá adentro se ubica con (u, v) y recibe su escala sola: lo
+              que está lejos sale más chico sin que nadie lo escriba. */}
+          <div
+            className="absolute inset-x-0 bottom-0"
+            style={{ top: `${ALTO_FONDO}%` }}
+          >
+            {/* LA LIBRETA, al costado y cerca. Estaba en el centro del borde
+                lejano, o sea justo encima del pecho del rival, y encima salía
+                chica: allá la perspectiva achica todo. Ahora va al costado, a
+                la altura del mazo pero del lado libre, y bastante más grande. */}
+            <div style={estiloEnMesa(uLibreta, 0.44)}>
+              <Marcador vos={p.puntos.vos} rival={p.puntos.rival} />
+            </div>
+
+            {/* el mazo con la muestra metida abajo, del lado del que reparte */}
+            <div style={estiloEnMesa(uMazo, 0.42)}>
+              <Mazo
+                muestra={p.muestra}
+                lado={ladoMazo}
+                revelada={carasArriba}
+                ancho="clamp(74px, 15vh, 122px)"
+              />
+            </div>
+
+            {/* el mate, siempre del lado contrario al mazo */}
+            <div style={estiloEnMesa(uOtro, 0.30)}>
+              <div className="relative" style={{ height: "clamp(54px, 11vh, 104px)", aspectRatio: "60 / 84" }}>
+                <SombraApoyada ancho={0.55} desvio={ladoMazo === "izquierda" ? 0.3 : -0.3} />
+                <Mate />
+              </div>
+            </div>
+
+            {/* El descarte: las cartas que ya se jugaron, boca abajo a un
+                costado. Está en las dos referencias grandes, y de paso llena el
+                hueco de madera pelada que le quedaba al croquis en el medio. */}
+            {descartadas > 0 && (
+              <div style={estiloEnMesa(uMazo, 0.76)}>
+                <div className="relative">
+                  <SombraApoyada ancho={0.8} peso={0.6} />
+                  {Array.from({ length: Math.min(descartadas, 4) }, (_, i) => (
+                    <Carta
+                      key={i}
+                      oculta
+                      style={{
+                        width: "clamp(34px, 6.6vh, 56px)",
+                        transform: `translate(${i * 1.5}px, ${-i * 1.5}px) rotate(${(i % 2 ? -1 : 1) * (3 + i)}deg)`,
+                        position: i === 0 ? "relative" : "absolute",
+                        inset: i === 0 ? undefined : 0,
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Las bazas: pares cruzando la mesa, CENTRADOS como grupo. La tuya
+                se monta sobre la de él, como quedan de verdad cuando las tirás
+                una encima de otra.
+
+                Centradas y no ancladas a la izquierda: con una sola baza en la
+                mesa —que es la mitad del tiempo— quedaba tirada contra el borde
+                y la mesa se veía torcida. */}
+            {p.bazas.map((baza, i) => (
+              <div key={i}>
+                {baza.rival && (
+                  <div style={estiloEnMesa(0.5 + lugarDeBaza(i), 0.50)}>
+                    <CartaApoyada carta={baza.rival} />
+                  </div>
+                )}
+                {baza.vos && (
+                  <div style={estiloEnMesa(0.53 + lugarDeBaza(i), 0.68)}>
+                    <CartaApoyada carta={baza.vos} />
+                  </div>
+                )}
+                {baza.ganador && (
+                  <div style={estiloEnMesa(0.5 + lugarDeBaza(i), 0.335)}>
+                    <span className="block whitespace-nowrap font-[family-name:var(--font-ui)] text-[9px] uppercase tracking-wide text-crema/70 drop-shadow-[0_1px_3px_rgba(0,0,0,1)]">
+                      {baza.ganador === "parda" ? "parda" : baza.ganador === "vos" ? "tuya" : "suya"}
+                    </span>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
 
-          {/* Lo que está diciendo el rival, cuando canta con verso */}
-          {verso && (
-            <BocadilloVerso
-              lineas={verso.lineas}
-              canto={verso.canto}
-              onCerrar={() => setVerso(null)}
+          {/* ─── El medallón y lo que se dice ──────────────────────────
+              El medallón es el ancla de la que cuelga el globo: por eso van
+              juntos y en la misma esquina. */}
+          <div className="absolute right-1.5 top-1.5 z-20 flex w-[min(78%,340px)] flex-col items-end gap-1">
+            <Medallon rival={rival} deLaGira={esHistoria} onCambiar={() => setEligiendo(true)} />
+            <Dialogo
+              lineas={verso?.lineas}
+              canto={verso?.canto}
+              eventos={p.eventos}
+              onCerrarVerso={() => setVerso(null)}
             />
-          )}
-
-          {/* En historia va una placa fija con el departamento y el rival; el
-              selector NO se monta. En libre, el botón de siempre. */}
-          {esHistoria ? (
-            <div className="absolute right-3 top-3 rounded-sm border border-dorado/30 bg-black/60 px-2.5 py-1.5 text-right">
-              <span className="block font-[family-name:var(--font-ui)] text-[11px] uppercase tracking-wide text-crema/90">
-                {rival.nombre}
-              </span>
-              <span className="block font-[family-name:var(--font-ui)] text-[9px] uppercase tracking-wide text-dorado/70">
-                {rival.departamento} · gira
-              </span>
-            </div>
-          ) : (
-            <button
-              onClick={() => setEligiendo(true)}
-              className="absolute right-3 top-3 rounded-sm bg-black/60 px-2.5 py-1.5 text-right transition-colors hover:bg-black/80"
-            >
-              <span className="block font-[family-name:var(--font-ui)] text-[11px] uppercase tracking-wide text-crema/90">
-                {rival.nombre}
-              </span>
-              <span className="block font-[family-name:var(--font-ui)] text-[9px] uppercase tracking-wide text-crema/45">
-                {rival.lugar} · cambiar
-              </span>
-            </button>
-          )}
-        </div>
-
-        {/* ─── El canto de la mesa ───────────────────────────────────── */}
-        <div className="canto-mesa relative z-10 h-[14px] shrink-0" />
-
-        {/* ─── La mesa, en perspectiva ───────────────────────────────── */}
-        <div className="escena-3d relative flex min-h-0 flex-1 flex-col overflow-hidden">
-          {/* la tabla, inclinada como si la vieras desde tu silla */}
-          <div className="absolute inset-0 overflow-hidden">
-            <div className="tabla-mesa plano-mesa absolute inset-x-[-30%] top-0 h-[170%]">
-              <TexturaMadera intensidad={0.85} vertical />
-            </div>
           </div>
 
-          {/* La UI va plana encima: si se inclinara, no se leería */}
-          <div className="relative mx-auto flex w-full min-h-0 flex-1 flex-col px-2 pb-[74px] pt-1.5 sm:px-3 sm:pb-[80px] sm:pt-2">
-            <div className="flex shrink-0 items-start justify-between gap-2">
-              <Marcador vos={p.puntos.vos} rival={p.puntos.rival} />
-              <button
-                onClick={() => {
-                  const nuevo = !ayudas;
-                  setAyudas(nuevo);
-                  guardarPreferencia("ayudas", nuevo);
-                }}
-                className="mt-1 shrink-0 rounded border border-crema/25 bg-black/40 px-2 py-1 font-[family-name:var(--font-ui)] text-[9px] uppercase tracking-wide text-crema/70 transition-colors hover:border-crema/50 hover:text-crema sm:px-2.5 sm:py-1.5 sm:text-[10px]"
-              >
-                Ayudas: {ayudas ? "sí" : "no"}
-              </button>
-            </div>
-
+          {/* ─── Tu mano ─────────────────────────────────────────────────
+              Cuando no es tu turno se apaga TODA junta —dedos, cartas y
+              pulgar— y no carta por carta. Cada carta con su `opacity` propia
+              se volvía translúcida y dejaba ver el dorso de tu propia mano a
+              través del papel: las cartas se veían grises y con un bulto
+              adentro. Una mano es un objeto solo y se apaga como uno solo. */}
+          <div
+            className={`absolute inset-x-0 bottom-0 z-10 transition-opacity duration-200 ${
+              miTurno && puede("jugar") ? "" : "opacity-75"
+            }`}
+          >
             {florSalvada && (
-              <p className="shrink-0 text-center font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-wide text-dorado/90">
+              <p className="mb-0.5 text-center font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-wide text-dorado/90 drop-shadow-[0_1px_3px_rgba(0,0,0,1)]">
                 Te cantamos la flor: se perdía
               </p>
             )}
 
-            {/* La chapa del último canto. Con un verso en pantalla se esconde: el
-                globo ya lo dice abajo de la copla y leerlo dos veces distrae.
-                Cuando el globo se va, la chapa vuelve y queda como registro. */}
-            <div className="flex min-h-[1.75rem] shrink-0 items-center justify-center sm:min-h-[2.1rem]">
-              {ultimoEvento && !verso && (
-                <p
-                  key={p.eventos.length}
-                  className={`anim-pop rounded-full px-4 py-1.5 font-[family-name:var(--font-ui)] text-sm uppercase tracking-wide ${
-                    ultimoEvento.quien === "sistema"
-                      ? "text-crema/75 drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)]"
-                      : "bg-crema text-tinta shadow-lg shadow-black/60"
-                  }`}
-                >
-                  {ultimoEvento.texto}
-                </p>
-              )}
-            </div>
-
-            {/* Centro: el mazo a un costado, las bazas en el medio */}
-            <div className="relative flex min-h-0 flex-1 items-center justify-center py-1 sm:py-2">
-              {/* El mazo con la muestra metida abajo, del lado del que reparte.
-                  Antes eran dos objetos separados en las dos puntas de la mesa;
-                  en la mesa de verdad son uno solo. */}
-              <div
-                className={`absolute top-1/2 -translate-y-1/2 ${
-                  ladoMazo === "izquierda"
-                    ? "left-0 origin-left sm:left-4"
-                    : "right-0 origin-right sm:right-4"
-                } sm:scale-[1.14]`}
-              >
-                <Mazo muestra={p.muestra} lado={ladoMazo} revelada={carasArriba} />
-              </div>
-
-              <div className="flex gap-3 sm:gap-4">
-                {p.bazas.map((baza, i) => (
-                  <div key={i} className="flex flex-col items-center gap-1.5">
-                    <RanuraCarta carta={baza.rival} />
-                    <RanuraCarta carta={baza.vos} />
-                    <span className="h-3 font-[family-name:var(--font-ui)] text-[9px] uppercase tracking-wide text-crema/60">
-                      {baza.ganador === "parda"
-                        ? "parda"
-                        : baza.ganador === "vos"
-                          ? "tuya"
-                          : baza.ganador === "rival"
-                            ? "suya"
-                            : ""}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Tu mano */}
-            <div className="mt-auto shrink-0 pb-1">
-              {/* La ayuda espera a que las cartas estén dadas vuelta: cantarte el
-                  tanto de una mano que todavía no viste rompe el reparto. */}
-              {ayudas && carasArriba && (
-                <p className="mb-1 text-center font-[family-name:var(--font-ui)] text-[11px] uppercase leading-tight tracking-wide text-dorado drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] sm:text-xs">
-                  {miFlor.tiene ? (
-                    <>
-                      Tenés flor: {miFlor.valor}
-                      {puede("flor") && (
-                        <span className="ml-2 normal-case tracking-normal text-crema/60">
-                          (cantala antes de tirar)
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      Tu tanto: {miTanto}
-                      <span className="ml-2 normal-case tracking-normal text-crema/60">
-                        ({explicarEnvido(p.manoInicial.vos, p.muestra)})
+            {/* La ayuda espera a que las cartas estén dadas vuelta: cantarte el
+                tanto de una mano que todavía no viste rompe el reparto. */}
+            {ayudas && carasArriba && (
+              <p className="relative z-10 mb-2 text-center font-[family-name:var(--font-ui)] text-[11px] uppercase leading-tight tracking-wide text-dorado drop-shadow-[0_1px_3px_rgba(0,0,0,0.95)] sm:text-xs">
+                {miFlor.tiene ? (
+                  <>
+                    Tenés flor: {miFlor.valor}
+                    {puede("flor") && (
+                      <span className="ml-2 normal-case tracking-normal text-crema/70">
+                        (cantala antes de tirar)
                       </span>
-                    </>
-                  )}
-                </p>
-              )}
+                    )}
+                  </>
+                ) : (
+                  <>
+                    Tu tanto: {miTanto}
+                    <span className="ml-2 normal-case tracking-normal text-crema/70">
+                      ({explicarEnvido(p.manoInicial.vos, p.muestra)})
+                    </span>
+                  </>
+                )}
+              </p>
+            )}
 
-              <div className="mano-abanico flex justify-center">
+            {/* LAS CARTAS VAN ENTRE LOS DEDOS. El dorso de la mano se dibuja
+                antes que el abanico y el pulgar después: por eso son dos
+                piezas y no una. */}
+            <div
+              className="relative flex items-end justify-center"
+              style={{ paddingBottom: `calc(0.26 * ${ANCHO_MANO})` }}
+            >
+              <span
+                className="pointer-events-none absolute left-1/2 z-0 -translate-x-1/2"
+                style={{
+                  bottom: `calc(-0.06 * ${ANCHO_MANO})`,
+                  width: `calc(${anchoAbanico} + 0.8 * ${ANCHO_MANO})`,
+                }}
+              >
+                <DedosAtras ancho="100%" luz={ambiente.luz} />
+              </span>
+
+              <div className="mano-abanico relative z-10 flex justify-center">
                 {p.cartas.vos.map((carta, i) => (
                   <CartaEnMano
                     key={`${carta.numero}-${carta.palo}`}
@@ -549,9 +772,104 @@ function Mesa() {
                   />
                 ))}
               </div>
+
+              <span
+                className="pointer-events-none absolute left-1/2 z-20"
+                style={{
+                  bottom: `calc(-0.24 * ${ANCHO_MANO})`,
+                  width: `calc(1.7 * ${ANCHO_MANO})`,
+                  transform: "translateX(-56%)",
+                }}
+              >
+                <PulgarAdelante ancho="100%" luz={ambiente.luz} />
+              </span>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ─── La barra de cantos ────────────────────────────────────────
+          Está EN EL FLUJO, como última hermana: cuando le aparece una fila, la
+          escena de arriba se achica sola y tu mano nunca queda debajo. */}
+      <div className="relative z-30 shrink-0 border-t-2 filo-dorado bg-[#160f0a]">
+        {/* Cuando "el envido va primero" no se puede, se dice por qué. Antes el
+            botón desaparecía y nada más, y parecía que el juego estaba roto. */}
+        {motivoSinEnvido && (
+          <p className="mx-auto max-w-[760px] px-2 pt-1 text-center font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-wide text-dorado/80">
+            {motivoSinEnvido}
+          </p>
+        )}
+
+        {/* La flor la cantás vos. El botón sólo aparece cuando de verdad se
+            puede: con flor, en la primera baza y sin haber hablado todavía.
+            Si se va la ventana, se pierde (salvo con las ayudas prendidas). */}
+        {(puede("flor") || florCantos.length > 0) && (
+          <div className="mx-auto flex max-w-[760px] gap-1 border-b border-crema/10 p-1">
+            {puede("flor") && (
+              <BotonCanto onClick={() => hacer({ tipo: "flor" })} tono="dorado">
+                {meCantaronFlor ? "Yo también" : "¡Flor!"}
+              </BotonCanto>
+            )}
+            {florCantos.map((a) =>
+              a.tipo === "flor-canto" ? (
+                <BotonCanto key={a.canto} onClick={() => hacer(a)} tono="bordo">
+                  {a.canto === "con-flor-envido" ? "Con flor envido" : "Contraflor al resto"}
+                </BotonCanto>
+              ) : null,
+            )}
+          </div>
+        )}
+
+        {menuEnvido && envidosPosibles.length > 0 && (
+          <div className="mx-auto flex max-w-[760px] gap-1 border-b border-crema/10 p-1">
+            {envidosPosibles.map((a) => (
+              <BotonCanto key={a.tipo === "envido" ? a.canto : ""} onClick={() => hacer(a)} tono="dorado">
+                {a.tipo === "envido" &&
+                  (a.canto === "falta-envido"
+                    ? `Falta (${laFalta(p.puntos)})`
+                    : a.canto === "real-envido"
+                      ? "Real envido"
+                      : "Envido")}
+              </BotonCanto>
+            ))}
+          </div>
+        )}
+
+        {/* HAY DOS BARRAS, Y A PROPÓSITO.
+            Cuando hay algo que contestar, la fila entera pasa a ser dos botones
+            sólidos, verde y rojo. "Quiero" y "no quiero" se contestan bajo
+            presión y con la mesa esperándote: no pueden ser dos palabras más en
+            una fila de palabras. El resto del tiempo la barra es la de las
+            referencias —texto grande con separadores finos—, que no le compite
+            a las cartas. */}
+        {puede("quiero") || puede("no-quiero") ? (
+          <div className="mx-auto flex max-w-[760px] gap-1.5 p-1.5">
+            {puede("quiero") && (
+              <BotonCanto onClick={() => hacer({ tipo: "quiero" })} tono="quiero">
+                Quiero
+              </BotonCanto>
+            )}
+            {puede("no-quiero") && (
+              <BotonCanto onClick={() => hacer({ tipo: "no-quiero" })} tono="no">
+                {meCantaronFlor ? "Me achico" : "No quiero"}
+              </BotonCanto>
+            )}
+          </div>
+        ) : (
+          <div className="mx-auto flex max-w-[760px] items-stretch">
+            {envidosPosibles.length > 0 && (
+              <CantoEnFila onClick={() => setMenuEnvido((v) => !v)}>
+                {subiendoEnvido ? "Subir" : "Envido"}
+              </CantoEnFila>
+            )}
+            <CantoEnFila onClick={() => hacer({ tipo: "truco" })} deshabilitada={!puede("truco")}>
+              {["Truco", "Retruco", "Vale cuatro"][p.truco.nivel] ?? "Truco"}
+            </CantoEnFila>
+            <CantoEnFila onClick={() => hacer({ tipo: "mazo" })} deshabilitada={!puede("mazo")}>
+              Mazo
+            </CantoEnFila>
+          </div>
+        )}
       </div>
 
       {p.fase !== "jugando" && !eligiendo && (
@@ -586,104 +904,25 @@ function Mesa() {
           onCerrar={() => setEligiendo(false)}
         />
       )}
-
-      {/* ─── La barra de cantos ────────────────────────────────────────
-          Va dentro del flujo, no fija: fija tapaba las cartas de la mano en
-          celular, que es justamente lo que hay que poder ver y tocar. */}
-      <div className="absolute inset-x-0 bottom-0 z-20 border-t-2 filo-dorado bg-[#1a120c]">
-        {/* La flor la cantás vos. El botón sólo aparece cuando de verdad se
-            puede: con flor, en la primera baza y sin haber hablado todavía.
-            Si se va la ventana, se pierde (salvo con las ayudas prendidas). */}
-        {(puede("flor") || florCantos.length > 0) && (
-          <div className="mx-auto flex max-w-[760px] gap-1 border-b border-crema/10 p-1.5">
-            {puede("flor") && (
-              <BotonCanto onClick={() => hacer({ tipo: "flor" })} tono="dorado">
-                {meCantaronFlor ? "Yo también" : "¡Flor!"}
-              </BotonCanto>
-            )}
-            {florCantos.map((a) =>
-              a.tipo === "flor-canto" ? (
-                <BotonCanto key={a.canto} onClick={() => hacer(a)} tono="bordo">
-                  {a.canto === "con-flor-envido" ? "Con flor envido" : "Contraflor al resto"}
-                </BotonCanto>
-              ) : null,
-            )}
-          </div>
-        )}
-
-        {menuEnvido && envidosPosibles.length > 0 && (
-          <div className="mx-auto flex max-w-[760px] gap-1 border-b border-crema/10 p-1.5">
-            {envidosPosibles.map((a) => (
-              <BotonCanto
-                key={a.tipo === "envido" ? a.canto : ""}
-                onClick={() => hacer(a)}
-                tono="dorado"
-              >
-                {a.tipo === "envido" &&
-                  (a.canto === "falta-envido"
-                    ? `Falta (${laFalta(p.puntos)})`
-                    : a.canto === "real-envido"
-                      ? "Real envido"
-                      : "Envido")}
-              </BotonCanto>
-            ))}
-          </div>
-        )}
-
-        <div className="mx-auto flex max-w-[760px] gap-1 p-1.5">
-          {/* La flor a secas no se quiere ni se rechaza (reglas 8.5): o tenés
-              flor y se comparan, o te achicás. Por eso van por separado. */}
-          {puede("quiero") && (
-            <BotonCanto onClick={() => hacer({ tipo: "quiero" })} tono="quiero">
-              Quiero
-            </BotonCanto>
-          )}
-          {puede("no-quiero") && (
-            <BotonCanto onClick={() => hacer({ tipo: "no-quiero" })} tono="no">
-              {meCantaronFlor ? "Me achico" : "No quiero"}
-            </BotonCanto>
-          )}
-
-          {envidosPosibles.length > 0 && (
-            <BotonCanto onClick={() => setMenuEnvido((v) => !v)} tono="dorado">
-              {subiendoEnvido ? "Subir" : "Envido"}
-            </BotonCanto>
-          )}
-
-          <BotonCanto
-            onClick={() => hacer({ tipo: "truco" })}
-            deshabilitada={!puede("truco")}
-            tono="bordo"
-          >
-            {["Truco", "Retruco", "Vale cuatro"][p.truco.nivel] ?? "Truco"}
-          </BotonCanto>
-
-          <BotonCanto
-            onClick={() => hacer({ tipo: "mazo" })}
-            deshabilitada={!puede("mazo")}
-          >
-            Mazo
-          </BotonCanto>
-        </div>
-      </div>
     </div>
   );
 }
 
-/** El lugar donde aterriza una carta jugada. Vacío, casi no se nota. */
-function RanuraCarta({ carta }: { carta: CartaType | null }) {
-  const medidas = "w-[44px] h-[66px] sm:w-[52px] sm:h-[78px]";
-
-  if (!carta) {
-    return (
-      <div
-        className={`${medidas} rounded border border-black/20 bg-black/10`}
-        aria-hidden="true"
-      />
-    );
-  }
+/**
+ * Una carta ya jugada, apoyada sobre la mesa.
+ *
+ * Antes esto dibujaba también la RANURA VACÍA donde iba a caer: tres rectángulos
+ * punteados esperando. Se fueron. En las referencias no hay ranuras —hay mesa
+ * vacía y después hay cartas—, y esos rectángulos eran media pantalla de
+ * andamiaje visible en celular.
+ *
+ * El tamaño va atado al alto de la ventana, y encima la perspectiva le pone SU
+ * escala: la carta de él, que está más lejos, sale más chica que la tuya sin que
+ * nadie escriba un número.
+ */
+function CartaApoyada({ carta }: { carta: CartaType }) {
   return (
-    <div className={`carta-apoyada relative ${medidas}`}>
+    <div className="carta-apoyada relative" style={{ width: "clamp(44px, 8.8vh, 72px)", aspectRatio: "2 / 3" }}>
       {/* la sombra proyectada sobre la mesa, que se cierra al aterrizar */}
       <div
         className="anim-sombra absolute inset-x-0 bottom-[-3px] top-3 rounded bg-black/70 blur-[3px]"
@@ -691,7 +930,7 @@ function RanuraCarta({ carta }: { carta: CartaType | null }) {
       />
       <Carta
         carta={carta}
-        className="anim-caer absolute inset-0 w-full"
+        className="anim-caer absolute inset-0 h-full w-full"
         style={{ "--giro": `${giroDe(carta)}deg` } as React.CSSProperties}
       />
     </div>
@@ -750,8 +989,11 @@ function CartaEnMano({
       aria-label={
         tapada ? "Carta boca abajo, repartiendo" : `Tirar el ${carta.numero} de ${carta.palo}`
       }
+      // El apagado de "no es tu turno" NO va acá: va en el grupo entero de la
+      // mano (ver más arriba). Una carta translúcida deja ver el dorso de tu
+      // propia mano a través del papel.
       className={`group relative -mx-2 rounded-lg transition-transform duration-150 ${
-        habilitada ? "cursor-pointer" : "cursor-default opacity-70"
+        habilitada ? "cursor-pointer" : "cursor-default"
       }`}
       style={{
         transform: `rotate(${giro}deg) translateY(${alto}px)`,
@@ -781,13 +1023,13 @@ function CartaEnMano({
         }
       >
         {tapada ? (
-          <Carta oculta className="w-[74px] sm:w-[92px]" />
+          <Carta oculta style={{ width: ANCHO_MANO }} />
         ) : (
           <Carta
             carta={carta}
             pieza={pieza}
-            className="w-[74px] anim-voltea sm:w-[92px]"
-            style={{ animationDelay: `${retrasoVolteo}ms` }}
+            className="anim-voltea"
+            style={{ width: ANCHO_MANO, animationDelay: `${retrasoVolteo}ms` }}
           />
         )}
       </span>
@@ -796,52 +1038,34 @@ function CartaEnMano({
 }
 
 /**
- * Lo que el rival está recitando cuando canta con verso.
+ * Un canto de la fila de siempre: texto grande con un separador fino al lado.
  *
- * Sale de la boca del rival y se mete sobre la mesa: es una persona hablando,
- * no un cartel del sistema. Abajo, separado por una línea, va el canto en
- * limpio —"¡Truco!"— porque el verso es lindo pero lo que hay que contestar es
- * el canto, y el globo tapa por un rato la chapa donde se lee.
- *
- * Se cierra tocándolo, contestando, o solo a los seis segundos y medio.
+ * Es la barra de las referencias, y no es sólo estética: cuatro rectángulos de
+ * color le pelean la atención a las cartas, que es lo único que hay que mirar.
+ * Apagado se ve apagado —no desaparece— para que la fila no baile de lugar
+ * justo cuando estás por tocar.
  */
-function BocadilloVerso({
-  lineas,
-  canto,
-  onCerrar,
+function CantoEnFila({
+  children,
+  onClick,
+  deshabilitada = false,
 }: {
-  lineas: readonly string[];
-  canto: string;
-  onCerrar: () => void;
+  children: React.ReactNode;
+  onClick: () => void;
+  deshabilitada?: boolean;
 }) {
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="absolute left-1/2 top-[44px] z-30 w-[min(90vw,320px)] -translate-x-1/2 sm:top-[76px]"
+    <button
+      onClick={onClick}
+      disabled={deshabilitada}
+      className={`min-h-[46px] flex-1 border-l border-crema/12 px-1 py-2.5 font-[family-name:var(--font-display)] text-[17px] leading-[1.35] tracking-wide transition-colors first:border-l-0 sm:text-[19px] ${
+        deshabilitada
+          ? "cursor-default text-crema/22"
+          : "text-crema/90 hover:bg-crema/10 hover:text-crema"
+      }`}
     >
-      <button
-        onClick={onCerrar}
-        className="papel anim-pop relative w-full rounded-sm px-4 py-3 text-center shadow-2xl shadow-black/80"
-      >
-        {/* la puntita que lo ata a la boca del rival */}
-        <span
-          className="absolute left-1/2 top-[-5px] h-[11px] w-[11px] -translate-x-1/2 rotate-45"
-          style={{ background: "var(--color-papel)" }}
-        />
-        {lineas.map((linea, i) => (
-          <span
-            key={i}
-            className="block font-[family-name:var(--font-mano)] text-[15px] leading-[1.4] text-tinta sm:text-[17px]"
-          >
-            {linea}
-          </span>
-        ))}
-        <span className="mt-2 block border-t border-tinta/15 pt-1.5 font-[family-name:var(--font-ui)] text-[11px] uppercase tracking-wide text-bordo">
-          {canto}
-        </span>
-      </button>
-    </div>
+      {children}
+    </button>
   );
 }
 
@@ -868,7 +1092,7 @@ function BotonCanto({
     <button
       onClick={onClick}
       disabled={deshabilitada}
-      className={`min-h-[52px] flex-1 rounded px-2 font-[family-name:var(--font-ui)] text-[15px] uppercase tracking-wide transition-colors disabled:cursor-default disabled:bg-black/30 disabled:text-crema/25 ${tonos[tono]}`}
+      className={`min-h-[46px] flex-1 rounded px-2 font-[family-name:var(--font-ui)] text-[15px] uppercase tracking-wide transition-colors disabled:cursor-default disabled:bg-black/30 disabled:text-crema/25 ${tonos[tono]}`}
     >
       {children}
     </button>

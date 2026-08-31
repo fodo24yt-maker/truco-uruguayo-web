@@ -157,3 +157,16 @@ npm-debug.log*
 coverage/
 .cache/
 _*.mjs
+
+# Material de referencia y croquis de diseño. (Antes se llamaba "New folder".)
+#
+# Acá adentro hay capturas de pantalla de APPS DE TERCEROS y de imágenes
+# generadas con IA, guardadas como inspiración mientras se diseña. Sirven para
+# trabajar, pero no son nuestras: republicarlas en un repositorio público sería
+# subir arte con derechos de otro. La carpeta se queda en la máquina y no viaja.
+#
+# Ojo: adentro hay también capturas NUESTRAS —`alfa diseño de nivel/`— que sí se
+# podrían subir. Se quedan afuera igual: es una sola regla para toda la carpeta
+# y alcanza con que alguien meta ahí una imagen ajena para que se filtre. Si
+# algún día hay que publicar alguna, se saca a otro lado a propósito.
+/DISENO-NIVEL/
