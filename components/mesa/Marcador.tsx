@@ -84,11 +84,20 @@ function Fila({ etiqueta, puntos }: { etiqueta: string; puntos: number }) {
 
   return (
     <div className="flex items-center" style={{ gap: "0.026em" }}>
-      <span
-        className="shrink-0 font-[family-name:var(--font-mano)] leading-none text-tinta/80"
-        style={{ width: "0.096em", fontSize: "0.094em" }}
-      >
-        {etiqueta}
+      {/* EL ANCHO VA EN EL ENVOLTORIO Y EL TAMAÑO DE LETRA ADENTRO, y no los
+          dos en el mismo elemento. `width` en `em` se mide contra el font-size
+          PROPIO: con `width: 0.096em` y `fontSize: 0.094em` juntos, el ancho
+          real era 0,009 del papel, once veces menos de lo escrito. La etiqueta
+          se desbordaba de su caja y se montaba sobre los palitos.
+          Es la misma trampa que ya está anotada en `Mazo.tsx`, en el cartelito
+          de la muestra: acá se había colado en tres lugares. */}
+      <span className="shrink-0" style={{ width: "0.096em" }}>
+        <span
+          className="block font-[family-name:var(--font-mano)] leading-none text-tinta/80"
+          style={{ fontSize: "0.094em" }}
+        >
+          {etiqueta}
+        </span>
       </span>
       <span className="flex" style={{ gap: "0.012em" }}>
         {grupos(malas).map((n, i) => (
@@ -101,11 +110,13 @@ function Fila({ etiqueta, puntos }: { etiqueta: string; puntos: number }) {
           <Grupo key={`b${i}`} cantidad={n} />
         ))}
       </span>
-      <span
-        className="shrink-0 text-right font-[family-name:var(--font-mano)] leading-none text-bordo"
-        style={{ width: "0.115em", fontSize: "0.11em", marginLeft: "0.014em" }}
-      >
-        {puntos}
+      <span className="shrink-0" style={{ width: "0.115em", marginLeft: "0.014em" }}>
+        <span
+          className="block text-right font-[family-name:var(--font-mano)] leading-none text-bordo"
+          style={{ fontSize: "0.11em" }}
+        >
+          {puntos}
+        </span>
       </span>
     </div>
   );
@@ -132,9 +143,20 @@ function Birome() {
   );
 }
 
-export function Marcador({ vos, rival }: { vos: number; rival: number }) {
+export function Marcador({
+  vos,
+  rival,
+  /* En la compu la libreta entra mucho más grande: la escena es tres veces más
+     ancha y con el ancho del celular quedaba un papelito perdido en el medio de
+     la mesa. El de acá es el del celular, que es el que manda si algo falla. */
+  ancho = ANCHO,
+}: {
+  vos: number;
+  rival: number;
+  ancho?: string;
+}) {
   return (
-    <div className="relative inline-block w-fit shrink-0" style={{ fontSize: ANCHO }}>
+    <div className="relative inline-block w-fit shrink-0" style={{ fontSize: ancho }}>
       <SombraApoyada ancho={0.86} peso={0.7} />
       <div
         className="papel relative -rotate-[3deg]"
@@ -165,18 +187,20 @@ export function Marcador({ vos, rival }: { vos: number; rival: number }) {
         />
 
         <div className="relative">
+          {/* Lo mismo acá: el `paddingLeft` tenía que dejar pasar el margen
+              rojo (que está en 0,09 del papel) y quedaba en 0,007, o sea que
+              "MALAS" arrancaba a la IZQUIERDA de la línea roja. Ahora la
+              separación y el hueco van afuera, contra el papel, y el tamaño de
+              letra adentro. `letterSpacing` sí se mide contra la letra propia,
+              que es como se escribe, y por eso queda donde está. */}
           <div
             className="flex font-[family-name:var(--font-ui)] uppercase text-tinta/45"
-            style={{
-              gap: "0.03em",
-              paddingLeft: "0.115em",
-              marginBottom: "0.012em",
-              fontSize: "0.06em",
-              letterSpacing: "0.12em",
-            }}
+            style={{ gap: "0.03em", paddingLeft: "0.115em", marginBottom: "0.012em" }}
           >
-            <span style={{ width: "4.9em" }}>malas</span>
-            <span>buenas</span>
+            <span style={{ fontSize: "0.06em", letterSpacing: "0.12em", width: "4.9em" }}>
+              malas
+            </span>
+            <span style={{ fontSize: "0.06em", letterSpacing: "0.12em" }}>buenas</span>
           </div>
           <Fila etiqueta="Él" puntos={rival} />
           <div className="bg-tinta/15" style={{ height: "1px", margin: "0.016em 0" }} />

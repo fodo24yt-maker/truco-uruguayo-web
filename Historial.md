@@ -12,6 +12,120 @@
 
 ---
 
+## 2026-08-31 (sexta pasada) — Jugadas que no se podían hacer, y portada nueva
+
+### El bug: había cantos SIN BOTÓN
+
+Reportado jugando: *"canto envido, ella canta real envido y no le puedo subir"*.
+Era cierto, y no era sólo eso.
+
+La barra de cantos estaba escrita como un `if` de dos ramas: si había algo que
+contestar, la fila ENTERA se volvía "Quiero / No quiero"; si no, era la fila
+normal con envido, truco y mazo. Pero **cuando te cantan algo, contestar no es
+lo único que podés hacer**, y todo lo demás vivía en la otra rama:
+
+- te suben el envido y podés subirlo de nuevo;
+- te cantan truco y podés **retrucar**;
+- te cantan truco en la primera baza sin haber hablado y podés cantar envido,
+  que es "el envido va primero" —y que además estaba en la lista de pendientes
+  como si fuera una función a escribir, cuando el motor ya la ofrecía—.
+
+No era un detalle de interfaz: **eran jugadas del truco que no se podían hacer.**
+
+### El arreglo, y por qué hay un archivo nuevo
+
+Los botones ahora salen de `lib/botonera.ts`, una función pura sobre lo que
+devuelve `accionesPosibles`, con test propio. `contestando` sigue decidiendo la
+FORMA de la barra —dos botones grandes, verde y rojo— pero ya no su contenido:
+lo que se puede subir aparece en una fila fina arriba, con un "o subí".
+
+`lib/botonera.test.ts` recorre partidas enteras eligiendo acciones **al azar** y
+no con el bot, a propósito: el bot juega bien, y jugar bien es no meterse en las
+ramas raras. Verifica la invariante **toda acción que el motor ofrece tiene un
+botón**, más los cuatro casos concretos.
+
+El test encontró solo un caso legítimo que la primera aserción no contemplaba:
+**arriba de la falta envido no hay nada**, así que ahí contestar ES la jugada.
+Quedó escrito en el test en vez de en la cabeza de alguien.
+
+### Se levanta la mesa al terminar la mano
+
+Pedido: que las cartas se vayan al mazo, esperando ~2 segundos. Al implementarlo
+apareció que **el cartel de fin de mano se montaba APENAS terminaba la mano**,
+tapando la pantalla con un velo negro: la última baza —la que decidió todo— no
+se llegaba a ver nunca. Sin arreglar eso, barrer la mesa habría sido barrerla
+detrás de un telón.
+
+Así que ahora: se cierra la mano → **2 s con la mesa a la vista** → las seis
+cartas se van al mazo escalonadas y para el lado del que reparte → recién ahí el
+cartel. El viaje va en `translate`/`rotate`/`scale` sueltos y NO en `transform`,
+porque el `transform` lo está usando la perspectiva para ubicar cada carta.
+
+### La portada
+
+Era una lección: dos cartas, "el 4 le puede ganar al 1" y tres párrafos sobre la
+muestra. Enseñaba bien, pero enseñaba ANTES de que el que entra decidiera nada.
+Ahora es una portada: el nombre, una línea y **dos puertas** —Aprender a jugar,
+Jugar contra el bot—, ocupando la pantalla, con la pista de que abajo sigue todo
+lo que ya estaba. Lo que se sacó no se perdió: la muestra es la primera lección
+del camino.
+
+Va en `100svh` y no `100vh` —en un celular descuenta la barra del navegador— y
+con `min-h`, para que en una pantalla muy baja la portada crezca en vez de
+recortarse.
+
+### La herramienta nueva
+
+`herramientas/mirar-web.mjs`. Las otras dos miran la mesa QUIETA; ésta **juega**,
+que es una cosa distinta. Verifica la portada en tres tamaños, que cuando te
+suben un canto haya con qué subir, y la secuencia de fin de mano.
+
+Para eso los botones ganaron `data-canto` y la escena `data-fase` y
+`data-pendiente`. No es decoración: buscar por texto no servía —"Envido" es el
+botón que abre el menú Y el canto que está adentro— y sin `data-fase` la prueba
+confundía "está pensando el rival" con "se terminó la mano". Con `data-pendiente`
+distingue un bug de la regla: si el rival cantó falta envido, que no haya nada
+para subir es correcto.
+
+### Estado al cerrar
+`npm test` **133/133** (5 nuevos) · `tsc --noEmit` limpio · `npm run build` OK ·
+`mirar-mesa.mjs` en 0 en las siete · `mirar-mesa-nueva.mjs` en 0 en las seis ·
+`mirar-web.mjs` en 0, con el caso reportado verificado tres veces en el navegador
+(`envido:real-envido → quedan: falta-envido · quiero · no-quiero`).
+
+### El repaso de seguridad, con lo que se miró
+No se encontró ninguna vulnerabilidad explotable. Lo que se revisó de verdad:
+
+- **La integridad del juego con los botones nuevos.** `aplicar()` revalida cada
+  acción contra `accionesPosibles` y devuelve el estado sin tocar si no es
+  legal, así que agregar botones no puede colar una jugada ilegal. El motor es
+  la puerta; la barra es sólo una vista.
+- **Fuga de las cartas del rival al DOM.** Sigue sin haberla: sus dorsos se
+  dibujan con `p.cartas.rival.map((_, i) => …)`, o sea descartando la carta y
+  usando sólo la cantidad.
+- **Los `data-*` nuevos.** `canto`, `fase`, `pendiente` y `diseno` no llevan nada
+  que no esté ya en la pantalla: la cadena de cantos se cantó en voz alta.
+- **Las entradas por URL.** `?depto=` pasa por regex + `Map`, y `?rival=` por
+  `.find()`. Ninguna indexa un objeto plano, que es el agujero de cadena de
+  prototipos que ya mordió a este proyecto una vez.
+- **`localStorage`.** `sanear()` valida campo por campo y la regex de los ids
+  bloquea `__proto__`.
+- **`lib/pantalla.ts`**, que es lo único con código nuevo de plataforma: una
+  consulta de medios escrita a mano, sin entrada de usuario.
+- Sin `dangerouslySetInnerHTML`, `innerHTML`, `eval` ni `javascript:` en el
+  proyecto. La CSP llega al HTML generado y el enlace externo va con
+  `rel="noopener noreferrer"`.
+
+### Pendiente
+1. **Que Santiago apruebe el horneado** de los 7 ambientes (pasada anterior).
+2. Una **copla nueva** en `versos.ts` para "primero va el envido". El botón ya
+   está; lo que falta es el verso.
+3. Un **objeto propio por departamento**, en el hueco que dejó el descarte.
+4. Si la madera se ve poco definida en PC, la palanca es `FINAL_MESA`.
+5. `deNoche` controla luz y desgaste a la vez en `madera.mjs`.
+
+---
+
 ## 2026-08-31 (quinta pasada) — Higiene del repo público: qué se sube, quién firma
 
 Sesión sin código de la web. Salió de tres preguntas mirando GitHub y las tres
@@ -80,6 +194,131 @@ Hay dos tags locales de respaldo, `respaldo/main-antes-limpiar` y
 `respaldo/alfa-antes-limpiar`, apuntando al estado publicado de antes. **Se
 borran recién cuando el push haya salido bien y GitHub se vea como corresponde**
 (`git tag -d`). Hasta entonces son la única forma de volver atrás.
+
+---
+
+## 2026-08-31 (quinta pasada) — El feedback de PC: dos diseños de verdad
+
+Llegó feedback dibujado sobre una captura de computadora (`DISENO-NIVEL/FEDBACK.png`)
+con cuatro marcas. **Tres eran la misma causa** y la cuarta era un bug viejo.
+
+### La causa común: `object-cover` encuadra distinto según la forma de la ventana
+
+Las texturas horneadas se colocan con `object-cover`, y eso las recorta de
+maneras completamente distintas:
+
+| | celular 390×844 | PC 1180 |
+|---|---|---|
+| mesa (1400×900) | el **45% del ancho**, centrado | **todo el ancho** |
+| fondo (1200×450) | **todo el alto**, a 0,46× | **la mitad de abajo**, a ~1:1 |
+
+Las imágenes se habían compuesto mirando el celular, así que en PC salían mal
+tres cosas a la vez:
+
+1. **"Malas texturas al lado de la mesa".** La mesa horneada tenía **las
+   esquinas de arriba transparentes**, y no por error: el plano medía 3600 y
+   allá al fondo se angosta al 62%, o sea 2232 de un cuadro de 2800, y sobraba
+   un ~10% de cada lado donde la madera ya se terminó. En el celular ese pedazo
+   cae fuera del recorte y no se ve nunca. En PC se veía, con un color plano
+   detrás.
+2. **"Blur raro".** El fondo se hornea para verse a 0,46× y en PC se veía casi
+   1:1: el mismo desenfoque dejaba de leerse "está lejos" y pasaba a leerse
+   "está borroso".
+3. **"El mazo es muy chico".** Todo se medía en `vh`: mide los mismos píxeles en
+   las dos, pero la escena de PC es tres veces más ancha. El mazo pasaba del
+   **22% del ancho de la escena en celular al 7% en PC**.
+
+### Lo que se hizo con eso
+
+- **El plano se hornea a 4700 en vez de 3600.** La cuenta: para que no queden
+  esquinas hace falta `ancho × 0,62 ≥ 2800`, o sea ≥ 4516. Con 4700 el borde
+  lejano mide 2914 y la madera llega al borde en cualquier pantalla. **La cámara
+  NO se tocó**: `PERSPECTIVA` sale del ALTO del plano y de `RATIO_LEJOS`, así
+  que `P` y `DESVIO` siguen igual. Lo único que cambió en
+  `mesa-perspectiva.ts` es `ANCHO_RELATIVO`.
+- **Las tablas pasaron de 5 a 7** (`madera.mjs`). El dibujo plano se estira al
+  ancho del plano, así que con las mismas cinco cada tabla se veía un 30% más
+  gruesa y la mesa pasaba de tablas a tablones.
+- **`FINAL_FONDO` de 1200×450 a 2000×750**, para que en PC el fondo se vea a
+  0,59× y no a 1:1.
+
+### Dos diseños de verdad
+
+Se eligió tener **dos juegos de números** en vez de uno que se adapte. Están en
+`app/jugar/mesa/page.tsx` como `CELULAR` y `PC`, con los MISMOS campos y uno al
+lado del otro: que tengan la misma forma es lo que obliga a que agregar un
+objeto sea decidir dónde va en las dos.
+
+**El corte NO es el ancho: es la proporción.** `lib/pantalla.ts` mira
+`(min-aspect-ratio: 1/1)`, así que 1280×620 —baja y ancha, el caso duro— entra
+por apaisada y no por ancha. La regla del proyecto sigue en pie: nada está atado
+a un punto de corte de ancho.
+
+Va con `useSyncExternalStore` y **la instantánea de servidor devuelve `false`**:
+el sitio es estático y el celular es el caso difícil, así que si algo falla gana
+ese. En una compu el primer cuadro usa el diseño de celular y cambia al hidratar,
+adentro de "REPARTIENDO…".
+
+### El bug de la libreta, que era de todas las pantallas
+
+"Se solapa el y yo con puntos". En `Marcador.tsx`, tres elementos ponían `width`
+**y** `fontSize` en `em` en el MISMO elemento. `width` en `em` se mide contra el
+font-size **propio**, así que `width: 0.096em` con `fontSize: 0.094em` daba
+`0,009` del papel: **once veces menos** de lo escrito. El texto se desbordaba y
+se montaba sobre los palitos, y el encabezado "MALAS" arrancaba a la izquierda
+del margen rojo.
+
+**Es la tercera vez que aparece la misma trampa** en este proyecto (ya estaba
+anotada en `Mazo.tsx`). El arreglo es el que ya usaba el archivo: el ancho en el
+envoltorio y el tamaño de letra adentro.
+
+### Y el pendiente que estaba anotado
+
+`ALTO_FONDO` bajó de 27 a **22**, o sea menos torso del rival y más mesa. Se hizo
+en la misma pasada a propósito: cualquiera de los cambios de arriba obligaba a
+re-medir todos los objetos igual, y hacerlo después era repetir la pasada
+entera. El riesgo que estaba anotado —que `object-cover` desfasara la
+perspectiva horneada— **se apagó solo**: sin esquinas, lo que se ve de la madera
+es madera en cualquier recorte.
+
+### Lo que costó, que fue medir
+
+Con `ANCHO_RELATIVO` un 31% mayor, **cada objeto se va un 31% más lejos del
+centro**, así que todos los `u` había que buscarlos de nuevo. Tres vueltas de
+medición:
+
+1. La libreta cruzaba el canto en las tres de PC (hasta 24px) y las cartas del
+   reparto lo cruzaban en las **seis**.
+2. Bajadas, aparecieron las **tres bazas abiertas montándose a la libreta**: con
+   el plano más ancho las bazas se abren un 31% más y la tercera llegaba al
+   papel. Se bajaron las bazas y se juntó el `paso`.
+3. En PC hubo además que correr la libreta hacia afuera (`u` 0,74 → 0,79).
+
+`mirar-mesa-nueva.mjs` pasó de tres pantallas a **seis** y ahora verifica además
+**qué diseño quedó activo** (`data-diseno`): sin eso, que las seis den 0 no
+prueba nada, porque podrían estar todas usando el mismo.
+
+### Estado al cerrar
+`npm test` **128/128** · `tsc --noEmit` limpio · `npm run build` OK ·
+`mirar-mesa.mjs` en 0 en las siete · `mirar-mesa-nueva.mjs` en **0 en las seis**,
+con el diseño correcto en cada una. Márgenes de la libreta al canto: 10 / 11 /
+22 px en celular y 20 / 10 / 28 px en PC.
+
+Repaso de seguridad: entra `lib/pantalla.ts`, que sólo lee una consulta de medios
+escrita a mano. **No entra ninguna entrada de usuario nueva.** Las rutas de
+`lib/escenas.ts` se siguen escribiendo enteras (0 plantillas). Sin
+`dangerouslySetInnerHTML` ni `innerHTML` ni `eval` en todo el proyecto.
+
+### Pendiente
+1. **Que Santiago apruebe el horneado nuevo.** Se rehornearon los 7 ambientes de
+   una; se le mandó la captura de Montevideo y la tira de cuatro. Si algo no va,
+   se corrige el generador y se vuelve a correr: los `.webp` son regenerables.
+2. Si la madera se ve poco definida en PC, la palanca es `FINAL_MESA`
+   (1400×900): con el plano más ancho hay un 30% menos de resolución por tabla.
+   Se dejó como está para no engordar los archivos sin que haga falta.
+3. **"¡Primero va el envido!"** en el canto y una copla nueva en `versos.ts`.
+4. Un **objeto propio por departamento**, en el hueco que dejó el descarte.
+5. `deNoche` controla luz y desgaste a la vez en `madera.mjs`.
 
 ---
 

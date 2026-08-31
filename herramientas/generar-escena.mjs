@@ -59,7 +59,18 @@ const SALIDA = path.join(RAIZ, "public", "escenas");
 const CUADRO = { ancho: 2800, alto: 1800 };
 const INCLINACION = 58; // grados
 const PLANO = {
-  ancho: 3600, // más ancho que el cuadro: abajo la mesa se sale, como en la referencia
+  /* MÁS ANCHO QUE EL CUADRO, y por una cuenta, no por gusto.
+     Con 3600 la mesa se salía abajo pero ALLÁ AL FONDO NO: el borde lejano mide
+     el 62% del plano, o sea 2232 de un cuadro de 2800, así que quedaba un 10%
+     transparente en cada esquina de arriba, donde la madera ya se terminó. En
+     el celular eso cae fuera del recorte y no se ve nunca; en PC se ve, y
+     detrás hay un color plano. Eran las "malas texturas al lado de la mesa".
+     Para que no queden esquinas hace falta `ancho × 0,62 ≥ 2800`, o sea 4516.
+     Con 4700 el lejano mide 2914 y sobra: la madera llega al borde en las dos.
+     Ojo: esto NO toca la cámara. `PERSPECTIVA` sale del ALTO del plano y de
+     `RATIO_LEJOS`, así que P y DESVIO de `lib/mesa-perspectiva.ts` no cambian.
+     Lo que sí cambia ahí es `ANCHO_RELATIVO`, que es este número sobre 2800. */
+  ancho: 4700,
   alto: Math.round(CUADRO.alto / Math.cos((INCLINACION * Math.PI) / 180)), // 3397
 };
 /** P tal que el borde lejano quede al 62% del ancho del cercano. */
@@ -70,7 +81,13 @@ const PERSPECTIVA = Math.round(
 
 /** Lo que se versiona: la mitad de lo que se rinde. */
 const FINAL_MESA = { ancho: 1400, alto: 900 };
-const FINAL_FONDO = { ancho: 1200, alto: 450 };
+/* EL FONDO SE GUARDA MÁS GRANDE QUE LA MITAD. En un celular la franja mide unos
+   390px y la imagen se ve a 0,46×, que es para lo que está horneado el
+   desenfoque. En PC la franja mide 1180 y a 1200 se veía casi 1:1: el mismo
+   desenfoque dejaba de leerse "está lejos" y pasaba a leerse "está borroso".
+   A 2000 se ve a 0,59× en PC y el borrón se cierra. Son ~7 KB por ambiente y el
+   navegador baja SÓLO los dos del departamento que jugás. */
+const FINAL_FONDO = { ancho: 2000, alto: 750 };
 
 const aDataUri = (svg) => `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
 

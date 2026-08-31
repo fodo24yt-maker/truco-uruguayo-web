@@ -32,11 +32,23 @@ import path from "node:path";
 import { chromium } from "playwright";
 
 const SALIDA = path.join("capturas", "mesa-nueva");
-/** Los tres donde la mesa va más justa. El problema es la pantalla BAJA. */
+/**
+ * Las seis, con el diseño que le TIENE que tocar a cada una.
+ *
+ * Desde que hay dos diseños, medir sólo los celulares no alcanza: el feedback
+ * de la compu —el mazo perdido, las esquinas de la mesa— no se veía en ninguna
+ * de las tres pantallas que se probaban. Y el diseño esperado va escrito acá
+ * porque si las seis dieran 0 usando todas el mismo, el 0 no probaría nada.
+ *
+ * 1280×620 es el caso duro de la compu: baja y ancha. Entra por apaisada.
+ */
 const TAMANOS = [
-  [320, 568],
-  [360, 600],
-  [390, 844],
+  [320, 568, "celular"],
+  [360, 600, "celular"],
+  [390, 844, "celular"],
+  [1100, 800, "pc"],
+  [1280, 620, "pc"],
+  [1440, 900, "pc"],
 ];
 /** Cuánto puede asomar un objeto por encima del canto antes de ser un problema. */
 const TOLERANCIA = 2;
@@ -97,6 +109,7 @@ const medir = (pag) =>
     const tabla = document.querySelector('[data-mesa="tabla"]');
     const mano = document.querySelector(".mano-abanico");
     return {
+      diseno: tabla ? tabla.dataset.diseno : null,
       // el canto lejano: el borde de arriba de la zona de mesa
       canto: tabla ? caja(tabla).arriba : null,
       escena: tabla ? caja(tabla) : null,
@@ -110,7 +123,7 @@ const medir = (pag) =>
 const seCruzan = (a, b) =>
   a.izq < b.der && b.izq < a.der && a.arriba < b.abajo && b.arriba < a.abajo;
 
-for (const [ancho, alto] of TAMANOS) {
+for (const [ancho, alto, esperado] of TAMANOS) {
   const ctx = await nav.newContext({ viewport: { width: ancho, height: alto } });
   const pag = await ctx.newPage();
   // con la mesa usada, que es cuando hay algo que solapar
@@ -123,6 +136,11 @@ for (const [ancho, alto] of TAMANOS) {
 
   const m = await medir(pag);
   const problemas = [];
+
+  // 0. que se haya elegido el diseño que corresponde
+  if (m.diseno !== esperado) {
+    problemas.push(`quedó el diseño "${m.diseno}" y tenía que quedar "${esperado}"`);
+  }
 
   for (const o of m.objetos) {
     // 1. nada se le monta al rival
@@ -172,7 +190,8 @@ for (const [ancho, alto] of TAMANOS) {
     await pag.screenshot({ path: path.join(SALIDA, `falla-${etiqueta}.png`) });
   } else {
     console.log(
-      `  ${etiqueta.padEnd(9)} OK  (${m.objetos.length} objetos, ${puestas} baza(s) puesta(s))`,
+      `  ${etiqueta.padEnd(9)} OK  diseño ${String(m.diseno).padEnd(7)}` +
+        ` (${m.objetos.length} objetos, ${puestas} baza(s) puesta(s))`,
     );
   }
   /* LOS DOS MÁRGENES DE LA LIBRETA, que son los que deciden su altura.

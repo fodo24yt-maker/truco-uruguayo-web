@@ -44,10 +44,21 @@ const DESVIO = 2881;
 /**
  * El ancho del plano comparado con el del cuadro.
  *
- * Es mayor que 1 porque la mesa se SALE del cuadro por abajo, como en las
- * referencias: no se le ven los bordes laterales cerca tuyo, sólo allá al fondo.
+ * Es mayor que 1 porque la mesa se SALE del cuadro por los costados, como en
+ * las referencias: no se le ven los bordes laterales en ningún lado.
+ *
+ * SUBIÓ DE 3600 A 4700 el 31/8/2026. Con 3600 la mesa se salía del cuadro
+ * abajo pero NO allá al fondo: el borde lejano mide el 62% del plano, o sea
+ * 2232 de un cuadro de 2800, y quedaba un 10% transparente en cada esquina de
+ * arriba. En el celular ese pedazo cae fuera del recorte de `object-cover`; en
+ * PC se ve, con un color plano detrás. Con 4700 el lejano mide 2914 y la
+ * madera llega al borde en las dos.
+ *
+ * Este número es el ancho del plano del generador sobre el ancho del cuadro:
+ * si se toca `PLANO.ancho` en `herramientas/generar-escena.mjs`, se toca acá,
+ * o los objetos dejan de caer donde está dibujada la madera.
  */
-const ANCHO_RELATIVO = 3600 / 2800;
+const ANCHO_RELATIVO = 4700 / 2800;
 
 export interface PuntoDeMesa {
   /** Porcentaje desde el borde izquierdo de la zona de mesa. */

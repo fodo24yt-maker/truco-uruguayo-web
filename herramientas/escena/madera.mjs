@@ -126,7 +126,12 @@ function filtros(ambiente, semilla) {
      distinto. Todas del mismo color es lo que delata que es una textura y no
      una mesa, y es lo que le pasaba al croquis. */
 function tablas(azar) {
-  const cuantas = 5;
+  /* SIETE Y NO CINCO, desde que el plano pasó de 3600 a 4700 de ancho. El
+     dibujo plano se estira al ancho del plano, así que con las mismas cinco
+     tablas cada una se veía un 30% más gruesa y la mesa pasaba de tablas a
+     tablones. Siete deja cada tabla en 671 de plano contra las 720 de antes:
+     la madera se ve igual de gruesa que siempre, que es lo que se quiere. */
+  const cuantas = 7;
   const paso = ANCHO / cuantas;
   const cortes = [0];
   for (let i = 1; i < cuantas; i++) cortes.push(i * paso + entre(azar, -30, 30));

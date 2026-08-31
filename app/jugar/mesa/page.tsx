@@ -45,6 +45,8 @@ import { escalaEnMesa, estiloEnMesa } from "@/lib/mesa-perspectiva";
 import { ESCENAS } from "@/lib/escenas";
 import { caraDe } from "@/lib/caras";
 import { porSlugDeDepartamento } from "@/lib/gira";
+import { usaPantallaAncha } from "@/lib/pantalla";
+import { botonera } from "@/lib/botonera";
 import { anotarPartida, guardarPreferencia, leerProgreso } from "@/lib/progreso";
 
 const DEMORA_BOT = 900; // lo que el bot "piensa", para que se pueda seguir
@@ -85,69 +87,125 @@ const ANCHO_MANO = "clamp(72px, 15.6vh, 126px)";
 const DURA_VERSO = 6500;
 
 /**
- * Cuánto de la pantalla se lleva el ambiente, en porcentaje de la escena.
+ * Cuánto se esperan las cartas en la mesa después de que se cierra la mano.
  *
- * El resto es mesa. Es más de lo que tenía el croquis (que le daba una franja
- * fina) porque el fondo dejó de ser un telón: ahora tiene tres capas de
- * profundidad y ahí está sentado el rival. Menos de esto y el rival no entra;
- * más, y se le come el alto a las cartas.
+ * La última carta de una mano es la que la decidió, así que barrer en el mismo
+ * instante te saca de la pantalla justo lo que estás mirando. Dos segundos
+ * alcanzan para ver qué pasó y no llegan a aburrir.
  */
-const ALTO_FONDO = 27;
+const ESPERA_ANTES_DE_BARRER = 2000;
+
+/**
+ * Lo que tarda el barrido, contando el escalonado de las seis cartas.
+ *
+ * Es lo que espera el cartel de fin de mano antes de aparecer. Y esa espera es
+ * la mitad del arreglo: el cartel se montaba APENAS terminaba la mano, tapando
+ * la pantalla entera con un velo negro, así que la última baza —la que decidió
+ * todo— no se llegaba a ver nunca. Sin esto, barrer la mesa sería barrerla
+ * detrás de un telón.
+ */
+const DURA_BARRIDO = 760;
+
+/* ═══ LOS DOS DISEÑOS DE LA MESA ═══════════════════════════════════════════
+   Antes había un solo juego de números, medido todo en `vh`. Andaba en el
+   celular y en la compu se veía perdido: el mazo pasaba del 22% del ancho de la
+   escena al 7%, porque en `vh` mide los mismos píxeles pero la escena es tres
+   veces más ancha. Eso fue el "el mazo es muy chico" del feedback.
+
+   Así que son dos, con los MISMOS campos, uno al lado del otro. Que tengan la
+   misma forma no es prolijidad: es lo que obliga a que agregar un objeto sea
+   decidir dónde va en las dos, en vez de agregarlo en una y olvidarse.
+
+   Cuál se usa lo decide `usaPantallaAncha()`, por PROPORCIÓN de la ventana y no
+   por ancho: ver el porqué en `lib/pantalla.ts`.
+
+   ── Cómo se leen los números ──────────────────────────────────────────────
+   · `u` va SIEMPRE del lado izquierdo; `ladoMazo` lo espeja cuando hace falta.
+   · `v = 0` es el canto de él y `v = 1` el tuyo.
+   · `estiloEnMesa` ancla por la BASE, así que todo crece HACIA ARRIBA: pasado
+     cierto punto un objeto se le monta al rival encima del pecho.
+
+   NO SE MUEVEN A OJO. Los fija `herramientas/mirar-mesa-nueva.mjs`, que saca el
+   rectángulo de verdad en el navegador, en las tres pantallas de celular y en
+   las tres de compu, y falla si algo cruza el canto o se le monta a la libreta.
+   En este proyecto ya se calculó dos veces en papel y las dos salió mal: el
+   `clamp` de cada objeto, el alto de la ventana y la escala en perspectiva se
+   multiplican y no se pueden separar leyendo. */
+interface DisenoDeMesa {
+  /**
+   * Cuánto de la escena se lleva el ambiente, en % del alto. El resto es mesa.
+   *
+   * Es la palanca del encuadre y de la que cuelga TODO: el alto del rival sale
+   * de acá (ver `altoDelRival`), así que bajarlo achica al rival y agranda la
+   * mesa de una sola vez, sin despegarlo del canto.
+   */
+  fondo: number;
+  /** El mazo con la muestra, del lado del que reparte. */
+  mazo: { u: number; v: number; ancho: string };
+  /** El mate, siempre del lado contrario al mazo. */
+  mate: { u: number; v: number; alto: string };
+  /**
+   * La libreta, que es la excepción y va con dos profundidades.
+   *
+   * Es lo más alto de la mesa, así que es la primera que se le monta al rival
+   * si sube de más. Y NO PUEDE ACHICARSE: se agrandó a propósito porque los
+   * puntos no se leían en el celular. Como subir ALEJA y alejar ACHICA, se
+   * dibuja del tamaño que tendría en `tamano`, que es de donde vino. Sí, eso le
+   * miente un poco a la perspectiva, en el único objeto de la mesa que hay que
+   * LEER y no sólo mirar. Vale la pena.
+   */
+  libreta: { u: number; v: number; tamano: number; ancho: string };
+  /**
+   * Las cartas jugadas. `paso` es cuánto se separan las bazas entre sí.
+   *
+   * Se centran como grupo: ancladas a la izquierda, con una sola baza puesta
+   * —que es la mitad del tiempo— quedaba tirada contra el borde.
+   */
+  baza: { suya: number; tuya: number; ganador: number; ancho: string; paso: number };
+  /** Las tres que le reparten a él, que existen sólo mientras dura el reparto. */
+  reparto: { v: number; ancho: string };
+}
+
+/** Alto y angosta: el caso apretado, y el que manda si algo falla. */
+const CELULAR: DisenoDeMesa = {
+  fondo: 22,
+  mazo: { u: 0.24, v: 0.5, ancho: "clamp(74px, 15vh, 122px)" },
+  mate: { u: 0.76, v: 0.66, alto: "clamp(54px, 11vh, 104px)" },
+  libreta: { u: 0.7, v: 0.23, tamano: 0.42, ancho: "clamp(122px, 25vh, 204px)" },
+  baza: {
+    suya: 0.46,
+    tuya: 0.64,
+    ganador: 0.31,
+    ancho: "clamp(44px, 8.8vh, 72px)",
+    paso: 0.125,
+  },
+  reparto: { v: 0.22, ancho: "clamp(28px, 5.6vh, 46px)" },
+};
+
+/** Ancha y baja. Lo único que cambia de fondo es el TAMAÑO de las cosas. */
+const PC: DisenoDeMesa = {
+  fondo: 22,
+  mazo: { u: 0.2, v: 0.5, ancho: "clamp(120px, 26vh, 230px)" },
+  mate: { u: 0.8, v: 0.66, alto: "clamp(80px, 19vh, 170px)" },
+  libreta: { u: 0.79, v: 0.32, tamano: 0.45, ancho: "clamp(180px, 38vh, 330px)" },
+  baza: {
+    suya: 0.46,
+    tuya: 0.64,
+    ganador: 0.31,
+    ancho: "clamp(60px, 13vh, 112px)",
+    paso: 0.135,
+  },
+  reparto: { v: 0.22, ancho: "clamp(38px, 8vh, 72px)" },
+};
 
 /**
  * El alto del rival, en % del alto de la escena.
  *
  * No es un número elegido: sale de pedir que el canto de la mesa del DIBUJO
- * caiga exactamente sobre el canto de la mesa de la ESCENA. Si un día cambia
- * `ALTO_FONDO` o el `viewBox` del rival, esto se acomoda solo.
+ * caiga exactamente sobre el canto de la mesa de la ESCENA. Si cambia `fondo` o
+ * el `viewBox` del rival, esto se acomoda solo.
  */
-const ALTO_RIVAL = (ALTO_FONDO * RIVAL_VB.alto) / RIVAL_VB.borde;
-
-/* ─── DÓNDE SE APOYA CADA COSA, en profundidad de mesa ──────────────────────
-   `v = 0` es el canto de él y `v = 1` el tuyo.
-
-   Al sacarle los brazos y las cartas al rival, la franja de allá quedó VACÍA y
-   todo esto subió. No es por prolijidad: lo que se gana arriba es lugar abajo
-   para las cartas jugadas y para tu mano, que es donde apretaba en el celular.
-
-   Ojo con subir de más: `estiloEnMesa` ancla por la BASE y los objetos crecen
-   HACIA ARRIBA, así que pasado cierto punto se le montan al rival encima del
-   pecho. El que decide cuánto entra es `herramientas/mirar-mesa-nueva.mjs`, que
-   mide el rectángulo de verdad en el navegador. No mover estos números a ojo. */
-/* El mate va DEBAJO de la libreta, no arriba. Subido a 0,18 quedaba apoyado
-   sobre la esquina del papel: una cosa más chica tapando la única que hay que
-   LEER. Acá queda a media mesa, del lado libre. */
-const V_MATE = 0.48;
-const V_MAZO = 0.3;
-const V_BAZA_SUYA = 0.44;
-const V_BAZA_TUYA = 0.6;
-const V_GANADOR = 0.3;
-/** Las que le reparten a él: caen contra el canto y de ahí se las lleva abajo. */
-const V_REPARTO_RIVAL = 0.13;
-/**
- * LA LIBRETA, que es la excepción y va con dos números en vez de uno.
- *
- * Es lo más alto de la mesa —`clamp(122px, 25vh, 204px)`— así que es la primera
- * que se le monta al rival encima si sube de más. Estaba en 0,44 justamente por
- * eso.
- *
- * ── Y no puede achicarse, que es lo que complica ──────────────────────────
- *
- * Subir un objeto lo ALEJA, y alejarlo lo achica: la perspectiva lo hace sola.
- * Pero la libreta se agrandó a propósito la sesión pasada porque los puntos no
- * se leían en el celular, así que achicarla sería deshacer eso. Por eso van dos
- * números: sube a `V_LIBRETA`, pero se dibuja del TAMAÑO que tendría en
- * `V_LIBRETA_TAMANO`, que es donde estaba.
- *
- * Sí, eso le miente un poco a la perspectiva. Cinco por ciento, en el único
- * objeto de la mesa que hay que LEER y no sólo mirar. Vale la pena.
- *
- * Los dos los fijó la medición de `mirar-mesa-nueva.mjs`, que saca el
- * rectángulo de verdad en el navegador y falla si cruza el canto o si se
- * solapa con una baza. No moverlos a ojo: cambiarlos y correr la herramienta.
- */
-const V_LIBRETA = 0.23;
-const V_LIBRETA_TAMANO = 0.44;
+const altoDelRival = (fondo: number) => (fondo * RIVAL_VB.alto) / RIVAL_VB.borde;
 
 /**
  * Cuánto espera cada carta antes de salir del mazo.
@@ -200,6 +258,10 @@ function Cargando() {
 }
 
 function Mesa() {
+  /* CUÁL DE LOS DOS DISEÑOS. Por proporción de la ventana, no por ancho: el
+     porqué está en `lib/pantalla.ts`. En el primer cuadro de una compu esto
+     todavía dice "celular" y cambia al hidratar, adentro de "REPARTIENDO…". */
+  const d = usaPantallaAncha() ? PC : CELULAR;
   const parametros = useSearchParams();
   // Partida Rápida: la dirección puede traer a quién enfrentás.
   const rivalPedido = parametros.get("rival");
@@ -242,6 +304,19 @@ function Mesa() {
   const manoObservada = useRef<Partida | null>(null);
   /** Se prende cuando las ayudas te salvan una flor que ibas a perder. */
   const [florSalvada, setFlorSalvada] = useState(false);
+  /**
+   * SE TERMINÓ LA MANO Y LAS CARTAS SE VAN AL MAZO.
+   *
+   * No apenas termina: se esperan dos segundos. Al cerrarse una mano lo último
+   * que pasó fue una carta que decidió todo, y barrer la mesa en el mismo
+   * instante te saca de la pantalla justo lo que estás mirando. Dos segundos es
+   * el tiempo de darse cuenta de qué pasó; recién ahí se levantan.
+   *
+   * Es sólo visual: el motor ya cerró la mano, esto no cambia ni un punto.
+   */
+  const [barrida, setBarrida] = useState(false);
+  /** El cartel de fin de mano, que ahora espera a que la mesa se levante. */
+  const [carteleada, setCarteleada] = useState(false);
 
   /**
    * En qué anda el reparto. "repartiendo": las cartas salen del mazo y están
@@ -278,11 +353,37 @@ function Mesa() {
   /** El último que dijo, para no repetirle la misma copla dos veces seguidas. */
   const ultimoVerso = useRef<string | undefined>(undefined);
 
+  /**
+   * DOS SEGUNDOS Y SE LEVANTA LA MESA.
+   *
+   * Vive acá arriba y no adentro del dibujo porque tiene que arrancar cuando
+   * cambia la fase, no cuando se dibuja: si la mano termina y no tocás nada, la
+   * mesa se limpia igual.
+   *
+   * `manoNro` está entre las dependencias para que el reloj se reinicie con
+   * cada mano nueva: sin eso, una mano que termina rápido podía heredar el
+   * temporizador de la anterior.
+   */
+  useEffect(() => {
+    if (!p || p.fase === "jugando") return;
+    const barre = setTimeout(() => setBarrida(true), ESPERA_ANTES_DE_BARRER);
+    const cartel = setTimeout(
+      () => setCarteleada(true),
+      ESPERA_ANTES_DE_BARRER + DURA_BARRIDO,
+    );
+    return () => {
+      clearTimeout(barre);
+      clearTimeout(cartel);
+    };
+  }, [p, manoNro]);
+
   /** Empieza una mano nueva y larga el reparto. Todas las manos pasan por acá. */
   const repartirNueva = (nueva: Partida) => {
     setVerso(null);
     setFlorSalvada(false);
     setMenuEnvido(false);
+    setBarrida(false);
+    setCarteleada(false);
     // La fase se pone ACÁ y no en el efecto de abajo a propósito: si esperara al
     // efecto, habría un cuadro con la mano nueva ya dada vuelta antes de que
     // arranque la animación, y se vería el parpadeo.
@@ -405,9 +506,22 @@ function Mesa() {
   // Mientras se reparte no hay nada que hacer: la lista vacía apaga TODOS los
   // botones de una, sin tener que acordarse de deshabilitar cada uno.
   const posibles = repartiendo ? [] : accionesPosibles(p, "vos");
+  /**
+   * QUÉ BOTONES VAN. Sale de `lib/botonera.ts`, que es una función pura con
+   * test propio, y no de mirar la lista a mano acá abajo.
+   *
+   * El motivo es un bug de verdad: la barra tenía dos ramas —"algo que
+   * contestar" y "todo lo demás"— y cuando te cantaban algo se mostraba SÓLO
+   * quiero y no quiero. Pero contestar no es lo único que podés hacer: podés
+   * subir el envido que te subieron, retrucar, o cantar envido arriba de un
+   * truco. Todo eso vivía en la otra rama y no había forma de llegarle.
+   *
+   * Ahora lo que decide `contestando` es la FORMA de la barra, no su
+   * contenido, y el test verifica que ninguna acción del motor se quede sin
+   * botón.
+   */
+  const b = botonera(posibles);
   const puede = (tipo: Accion["tipo"]) => posibles.some((a) => a.tipo === tipo);
-  const envidosPosibles = posibles.filter((a) => a.tipo === "envido");
-  const florCantos = posibles.filter((a) => a.tipo === "flor-canto");
   const miTurno = p.turno === "vos" && p.fase === "jugando" && !repartiendo;
   /**
    * De qué lado de la mesa está el mazo.
@@ -443,7 +557,7 @@ function Mesa() {
     if (p.pendiente?.tipo !== "truco" || p.pendiente.de === "vos") return null;
     if (p.bazas.length !== 1 || p.yaHablo.vos) return null;
     // Si hay algo para cantar, no falta nada que explicar.
-    if (envidosPosibles.length > 0 || puede("flor") || florCantos.length > 0) return null;
+    if (b.envidos.length > 0 || b.flor || b.florCantos.length > 0) return null;
     if (p.florCantada.rival) return "Cantó flor: la flor anula el envido";
     if (p.florCantada.vos) return "Cantaste flor: el envido queda anulado";
     if (p.historial.some((h) => h.tipo === "envido")) return "El envido ya se jugó en esta mano";
@@ -492,7 +606,7 @@ function Mesa() {
    * corrido media posición a la izquierda y la mesa se vería torcida.
    */
   const bazasJugadas = p.bazas.filter((b) => b.vos || b.rival).length;
-  const lugarDeBaza = (i: number) => (i - (Math.max(bazasJugadas, 1) - 1) / 2) * 0.19;
+  const lugarDeBaza = (i: number) => (i - (Math.max(bazasJugadas, 1) - 1) / 2) * d.baza.paso;
   const anchoAbanico = `calc(${nCartas} * ${ANCHO_MANO} - ${Math.max(0, nCartas - 1) * 16}px)`;
   /**
    * EL ANCHO DE LA MANO. Ojo: NO es el del abanico.
@@ -517,13 +631,34 @@ function Mesa() {
    */
   const anchoMano = `calc(1.5 * ${ANCHO_MANO} + 0.745 * (${anchoAbanico}))`;
 
-  /** Del lado del mazo va el mazo; del otro, el mate. */
-  const uMazo = ladoMazo === "izquierda" ? 0.17 : 0.83;
-  const uOtro = ladoMazo === "izquierda" ? 0.85 : 0.15;
+  /* Del lado del mazo va el mazo; del otro, el mate y la libreta. Los diseños
+     guardan el `u` de la IZQUIERDA y acá se espeja, así que hay un solo número
+     por objeto y no dos que se puedan desincronizar. */
+  const espejo = (u: number) => (ladoMazo === "izquierda" ? u : 1 - u);
+  const uMazo = espejo(d.mazo.u);
+  const uOtro = espejo(d.mate.u);
   // La libreta es lo más ancho de la mesa: va más adentro que el mate para que
-  // no se salga por el costado en el celular. Se corrió de 0,78 a 0,75 al
-  // agrandarla: con el tamaño nuevo la birome se iba del cuadro en 390px.
-  const uLibreta = ladoMazo === "izquierda" ? 0.75 : 0.25;
+  // no se salga por el costado en el celular.
+  const uLibreta = espejo(d.libreta.u);
+  const altoRival = altoDelRival(d.fondo);
+  /**
+   * Dónde va una carta jugada, y hacia dónde se va cuando se levanta la mesa.
+   *
+   * `orden` es el turno en la fila del barrido: se van de a una, no las seis de
+   * golpe, que es como se levanta una mesa de verdad. No apunta al mazo con
+   * precisión —para eso habría que medir píxeles en vivo— pero sale para SU
+   * lado, que es lo que hace que se lea "se las llevó el que reparte".
+   */
+  const alMazo = (u: number, v: number, orden: number): React.CSSProperties => ({
+    ...estiloEnMesa(u, v),
+    ...(barrida
+      ? ({
+          "--hacia-x": ladoMazo === "izquierda" ? "-130px" : "130px",
+          "--giro-mazo": ladoMazo === "izquierda" ? "-16deg" : "16deg",
+          animationDelay: `${orden * 70}ms`,
+        } as React.CSSProperties)
+      : {}),
+  });
   /**
    * EL RIVAL, cruzando el borde de la mesa.
    *
@@ -537,15 +672,15 @@ function Mesa() {
    * peor que la cabeza.
    *
    * La cuenta: en el dibujo el canto de la mesa está en `borde` de `alto`, y en
-   * la escena está en ALTO_FONDO. Igualando las dos, el alto de la figura sale
+   * la escena está en `d.fondo`. Igualando las dos, el alto de la figura sale
    * solo y el encuadre queda igual en las siete pantallas, de 320×568 a
    * 1440×900. Por eso se mide en % del ALTO y el ancho lo pone `aspect-ratio`:
    * al revés habría que saber el alto para calcular el `bottom`, y no se puede
    * en CSS.
    */
   const cajonRival = {
-    height: `${ALTO_RIVAL}%`,
-    bottom: `${100 - ALTO_FONDO - (1 - RIVAL_VB.borde / RIVAL_VB.alto) * ALTO_RIVAL}%`,
+    height: `${altoRival}%`,
+    bottom: `${100 - d.fondo - (1 - RIVAL_VB.borde / RIVAL_VB.alto) * altoRival}%`,
     aspectRatio: `${RIVAL_VB.ancho} / ${RIVAL_VB.alto}`,
   };
   const capaRival = (
@@ -620,7 +755,7 @@ function Mesa() {
           />
 
           {/* el ambiente, al fondo */}
-          <div className="absolute inset-x-0 top-0" style={{ height: `${ALTO_FONDO}%` }}>
+          <div className="absolute inset-x-0 top-0" style={{ height: `${d.fondo}%` }}>
             <FondoAmbiente ambiente={ambiente} acento={acento} />
           </div>
 
@@ -632,7 +767,7 @@ function Mesa() {
               lo que pasa de verdad— y por eso se lee alguien sentado del otro
               lado. Su sombra va después: una sombra cae SOBRE la madera. */}
           {capaRival}
-          <div className="absolute inset-x-0 bottom-0" style={{ top: `${ALTO_FONDO}%` }}>
+          <div className="absolute inset-x-0 bottom-0" style={{ top: `${d.fondo}%` }}>
             <TablaMesa ambiente={ambiente} acento={acento} />
           </div>
           <div className="pointer-events-none absolute left-1/2 -translate-x-1/2" style={cajonRival}>
@@ -652,15 +787,38 @@ function Mesa() {
               `.mano-abanico` para `mirar-mesa.mjs`. */}
           <div
             data-mesa="tabla"
+            /* Cuál de los dos diseños quedó activo. Es el agarre con el que
+               `mirar-mesa-nueva.mjs` verifica que en una compu se haya elegido
+               el de compu: sin esto, medir seis pantallas y que den 0 no prueba
+               nada, porque podrían estar todas usando el mismo. */
+            data-diseno={d === PC ? "pc" : "celular"}
+            /* En qué anda la mano. Sin esto, una herramienta que mire "no puedo
+               jugar y hay cartas en la mesa" confunde el turno del rival con el
+               fin de la mano. */
+            data-fase={p.fase}
+            /* Qué canto está esperando respuesta, y el último eslabón de la
+               cadena. Lo usa `mirar-web.mjs` para distinguir "no hay con qué
+               subir" —que sería un bug— de "arriba de la falta envido no hay
+               nada", que es la regla del juego. */
+            data-pendiente={
+              p.pendiente ? `${p.pendiente.tipo}:${p.pendiente.cadena.at(-1) ?? ""}` : "nada"
+            }
             className="absolute inset-x-0 bottom-0"
-            style={{ top: `${ALTO_FONDO}%` }}
+            style={{ top: `${d.fondo}%` }}
           >
             {/* LA LIBRETA, al costado y cerca. Estaba en el centro del borde
                 lejano, o sea justo encima del pecho del rival, y encima salía
                 chica: allá la perspectiva achica todo. Ahora va al costado, a
                 la altura del mazo pero del lado libre, y bastante más grande. */}
-            <div data-mesa="libreta" style={estiloEnMesa(uLibreta, V_LIBRETA, escalaEnMesa(V_LIBRETA_TAMANO) / escalaEnMesa(V_LIBRETA))}>
-              <Marcador vos={p.puntos.vos} rival={p.puntos.rival} />
+            <div
+              data-mesa="libreta"
+              style={estiloEnMesa(
+                uLibreta,
+                d.libreta.v,
+                escalaEnMesa(d.libreta.tamano) / escalaEnMesa(d.libreta.v),
+              )}
+            >
+              <Marcador vos={p.puntos.vos} rival={p.puntos.rival} ancho={d.libreta.ancho} />
             </div>
 
             {/* ── LAS TRES QUE LE REPARTEN A ÉL ───────────────────────────
@@ -684,7 +842,7 @@ function Mesa() {
                    por tres dorsos durante todo el reparto. La libreta está
                    siempre del lado contrario al mazo, así que alcanza con
                    mirar de qué lado quedó. */
-                style={estiloEnMesa(uLibreta > 0.5 ? 0.37 : 0.63, V_REPARTO_RIVAL)}
+                style={estiloEnMesa(uLibreta > 0.5 ? 0.37 : 0.63, d.reparto.v)}
                 className="pointer-events-none"
               >
                 {/* SEPARADAS Y CADA UNA TORCIDA DISTINTO. Pegadas y a escuadra
@@ -705,7 +863,7 @@ function Mesa() {
                         } as React.CSSProperties
                       }
                     >
-                      <Carta oculta style={{ width: "clamp(28px, 5.6vh, 46px)" }} />
+                      <Carta oculta style={{ width: d.reparto.ancho }} />
                     </span>
                   ))}
                 </div>
@@ -713,18 +871,18 @@ function Mesa() {
             )}
 
             {/* el mazo con la muestra metida abajo, del lado del que reparte */}
-            <div data-mesa="mazo" style={estiloEnMesa(uMazo, V_MAZO)}>
+            <div data-mesa="mazo" style={estiloEnMesa(uMazo, d.mazo.v)}>
               <Mazo
                 muestra={p.muestra}
                 lado={ladoMazo}
                 revelada={carasArriba}
-                ancho="clamp(74px, 15vh, 122px)"
+                ancho={d.mazo.ancho}
               />
             </div>
 
             {/* el mate, siempre del lado contrario al mazo */}
-            <div data-mesa="mate" style={estiloEnMesa(uOtro, V_MATE)}>
-              <div className="relative" style={{ height: "clamp(54px, 11vh, 104px)", aspectRatio: "60 / 84" }}>
+            <div data-mesa="mate" style={estiloEnMesa(uOtro, d.mate.v)}>
+              <div className="relative" style={{ height: d.mate.alto, aspectRatio: "60 / 84" }}>
                 <SombraApoyada ancho={0.55} desvio={ladoMazo === "izquierda" ? 0.3 : -0.3} />
                 <Mate />
               </div>
@@ -754,20 +912,36 @@ function Mesa() {
                 Centradas y no ancladas a la izquierda: con una sola baza en la
                 mesa —que es la mitad del tiempo— quedaba tirada contra el borde
                 y la mesa se veía torcida. */}
+            {/* AL TERMINAR LA MANO SE VAN TODAS AL MAZO, escalonadas y hacia el
+                lado donde está el mazo. `alMazo` mezcla el lugar en la mesa con
+                el viaje, y el viaje va en `translate`/`rotate` sueltos y NO en
+                `transform`, porque el `transform` ya lo está usando la
+                perspectiva para ubicarlas: animarlo se lo comería. */}
             {p.bazas.map((baza, i) => (
               <div key={i}>
                 {baza.rival && (
-                  <div data-mesa="baza" style={estiloEnMesa(0.5 + lugarDeBaza(i), V_BAZA_SUYA)}>
-                    <CartaApoyada carta={baza.rival} de="rival" />
+                  <div
+                    data-mesa="baza"
+                    className={barrida ? "anim-al-mazo" : undefined}
+                    style={alMazo(0.5 + lugarDeBaza(i), d.baza.suya, i * 2)}
+                  >
+                    <CartaApoyada carta={baza.rival} de="rival" ancho={d.baza.ancho} />
                   </div>
                 )}
                 {baza.vos && (
-                  <div data-mesa="baza" style={estiloEnMesa(0.53 + lugarDeBaza(i), V_BAZA_TUYA)}>
-                    <CartaApoyada carta={baza.vos} de="vos" />
+                  <div
+                    data-mesa="baza"
+                    className={barrida ? "anim-al-mazo" : undefined}
+                    style={alMazo(0.53 + lugarDeBaza(i), d.baza.tuya, i * 2 + 1)}
+                  >
+                    <CartaApoyada carta={baza.vos} de="vos" ancho={d.baza.ancho} />
                   </div>
                 )}
                 {baza.ganador && (
-                  <div style={estiloEnMesa(0.5 + lugarDeBaza(i), V_GANADOR)}>
+                  <div
+                    className={barrida ? "anim-al-mazo" : undefined}
+                    style={alMazo(0.5 + lugarDeBaza(i), d.baza.ganador, i * 2)}
+                  >
                     <span className="block whitespace-nowrap font-[family-name:var(--font-ui)] text-[9px] uppercase tracking-wide text-crema/70 drop-shadow-[0_1px_3px_rgba(0,0,0,1)]">
                       {baza.ganador === "parda" ? "parda" : baza.ganador === "vos" ? "tuya" : "suya"}
                     </span>
@@ -798,7 +972,7 @@ function Mesa() {
               adentro. Una mano es un objeto solo y se apaga como uno solo. */}
           <div
             className={`absolute inset-x-0 bottom-0 z-10 transition-opacity duration-200 ${
-              miTurno && puede("jugar") ? "" : "opacity-75"
+              miTurno && b.jugar ? "" : "opacity-75"
             }`}
           >
             {florSalvada && (
@@ -859,7 +1033,7 @@ function Mesa() {
                     posicion={i}
                     total={p.cartas.vos.length}
                     pieza={ayudas && esPieza(carta, p.muestra)}
-                    habilitada={miTurno && puede("jugar")}
+                    habilitada={miTurno && b.jugar}
                     tapada={!carasArriba}
                     viajando={faseReparto === "repartiendo"}
                     retrasoViaje={retrasoDeReparto("vos", i, soyMano)}
@@ -909,35 +1083,51 @@ function Mesa() {
         {/* La flor la cantás vos. El botón sólo aparece cuando de verdad se
             puede: con flor, en la primera baza y sin haber hablado todavía.
             Si se va la ventana, se pierde (salvo con las ayudas prendidas). */}
-        {(puede("flor") || florCantos.length > 0) && (
-          <div className="mx-auto flex max-w-[760px] gap-1 border-b border-crema/10 p-1">
-            {puede("flor") && (
-              <BotonCanto onClick={() => hacer({ tipo: "flor" })} tono="dorado">
+        {(b.flor || b.florCantos.length > 0) && (
+          <div className="mx-auto flex max-w-[760px] flex-wrap gap-1 border-b border-crema/10 p-1">
+            {b.flor && (
+              <BotonCanto canto="flor" onClick={() => hacer({ tipo: "flor" })} tono="dorado">
                 {meCantaronFlor ? "Yo también" : "¡Flor!"}
               </BotonCanto>
             )}
-            {florCantos.map((a) =>
-              a.tipo === "flor-canto" ? (
-                <BotonCanto key={a.canto} onClick={() => hacer(a)} tono="bordo">
-                  {a.canto === "con-flor-envido" ? "Con flor envido" : "Contraflor al resto"}
-                </BotonCanto>
-              ) : null,
-            )}
+            {b.florCantos.map((canto) => (
+              <BotonCanto key={canto} canto={canto} onClick={() => hacer({ tipo: "flor-canto", canto })} tono="bordo">
+                {canto === "con-flor-envido" ? "Con flor envido" : "Contraflor al resto"}
+              </BotonCanto>
+            ))}
           </div>
         )}
 
-        {menuEnvido && envidosPosibles.length > 0 && (
-          <div className="mx-auto flex max-w-[760px] gap-1 border-b border-crema/10 p-1">
-            {envidosPosibles.map((a) => (
-              <BotonCanto key={a.tipo === "envido" ? a.canto : ""} onClick={() => hacer(a)} tono="dorado">
-                {a.tipo === "envido" &&
-                  (a.canto === "falta-envido"
-                    ? `Falta (${laFalta(p.puntos)})`
-                    : a.canto === "real-envido"
-                      ? "Real envido"
-                      : "Envido")}
+        {/* ── LO QUE PODÉS SUBIR ──────────────────────────────────────────
+            Cuando NO hay nada que contestar, esta fila la abre y la cierra el
+            botón "Envido" de abajo, como siempre.
+
+            Cuando SÍ hay algo que contestar, se muestra sola y sin botón que la
+            esconda, porque ahí es donde estaba el bug: te cantaban real envido y
+            la única salida era querer o no querer. Subir es una jugada del
+            truco, no una opción avanzada: si está disponible, se ve. */}
+        {((menuEnvido && b.envidos.length > 0) ||
+          (b.contestando && (b.envidos.length > 0 || b.truco))) && (
+          <div className="mx-auto flex max-w-[760px] flex-wrap items-center gap-1 border-b border-crema/10 p-1">
+            {b.contestando && (
+              <span className="px-1 font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-[0.14em] text-crema/50">
+                o subí
+              </span>
+            )}
+            {b.envidos.map((canto) => (
+              <BotonCanto key={canto} canto={canto} onClick={() => hacer({ tipo: "envido", canto })} tono="dorado">
+                {canto === "falta-envido"
+                  ? `Falta (${laFalta(p.puntos)})`
+                  : canto === "real-envido"
+                    ? "Real envido"
+                    : "Envido"}
               </BotonCanto>
             ))}
+            {b.contestando && b.truco && (
+              <BotonCanto canto="truco" onClick={() => hacer({ tipo: "truco" })} tono="bordo">
+                {["Truco", "Retruco", "Vale cuatro"][p.truco.nivel] ?? "Truco"}
+              </BotonCanto>
+            )}
           </div>
         )}
 
@@ -948,37 +1138,37 @@ function Mesa() {
             una fila de palabras. El resto del tiempo la barra es la de las
             referencias —texto grande con separadores finos—, que no le compite
             a las cartas. */}
-        {puede("quiero") || puede("no-quiero") ? (
+        {b.contestando ? (
           <div className="mx-auto flex max-w-[760px] gap-1.5 p-1.5">
-            {puede("quiero") && (
-              <BotonCanto onClick={() => hacer({ tipo: "quiero" })} tono="quiero">
+            {b.quiero && (
+              <BotonCanto canto="quiero" onClick={() => hacer({ tipo: "quiero" })} tono="quiero">
                 Quiero
               </BotonCanto>
             )}
-            {puede("no-quiero") && (
-              <BotonCanto onClick={() => hacer({ tipo: "no-quiero" })} tono="no">
+            {b.noQuiero && (
+              <BotonCanto canto="no-quiero" onClick={() => hacer({ tipo: "no-quiero" })} tono="no">
                 {meCantaronFlor ? "Me achico" : "No quiero"}
               </BotonCanto>
             )}
           </div>
         ) : (
           <div className="mx-auto flex max-w-[760px] items-stretch">
-            {envidosPosibles.length > 0 && (
-              <CantoEnFila onClick={() => setMenuEnvido((v) => !v)}>
+            {b.envidos.length > 0 && (
+              <CantoEnFila canto="abrir-envido" onClick={() => setMenuEnvido((v) => !v)}>
                 {subiendoEnvido ? "Subir" : "Envido"}
               </CantoEnFila>
             )}
-            <CantoEnFila onClick={() => hacer({ tipo: "truco" })} deshabilitada={!puede("truco")}>
+            <CantoEnFila canto="truco" onClick={() => hacer({ tipo: "truco" })} deshabilitada={!b.truco}>
               {["Truco", "Retruco", "Vale cuatro"][p.truco.nivel] ?? "Truco"}
             </CantoEnFila>
-            <CantoEnFila onClick={() => hacer({ tipo: "mazo" })} deshabilitada={!puede("mazo")}>
+            <CantoEnFila canto="irse-al-mazo" onClick={() => hacer({ tipo: "mazo" })} deshabilitada={!b.mazo}>
               Mazo
             </CantoEnFila>
           </div>
         )}
       </div>
 
-      {p.fase !== "jugando" && !eligiendo && (
+      {p.fase !== "jugando" && carteleada && !eligiendo && (
         <Cartel
           partida={p}
           rival={rival}
@@ -1040,13 +1230,13 @@ function Mesa() {
  * canto lejano, que es de donde vendría si la tuviera abajo de la mesa —que es
  * exactamente donde la tiene—.
  */
-function CartaApoyada({ carta, de }: { carta: CartaType; de: Jugador }) {
+function CartaApoyada({ carta, de, ancho }: { carta: CartaType; de: Jugador; ancho: string }) {
   return (
     <div
       className="carta-apoyada relative"
       style={
         {
-          width: "clamp(44px, 8.8vh, 72px)",
+          width: ancho,
           aspectRatio: "2 / 3",
           "--desde-y": de === "rival" ? "-72px" : "104px",
         } as React.CSSProperties
@@ -1178,13 +1368,17 @@ function CantoEnFila({
   children,
   onClick,
   deshabilitada = false,
+  canto,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   deshabilitada?: boolean;
+  /** Agarre para las herramientas. Mismo papel que `data-mesa`. */
+  canto: string;
 }) {
   return (
     <button
+      data-canto={canto}
       onClick={onClick}
       disabled={deshabilitada}
       className={`min-h-[46px] flex-1 border-l border-crema/12 px-1 py-2.5 font-[family-name:var(--font-display)] text-[17px] leading-[1.35] tracking-wide transition-colors first:border-l-0 sm:text-[19px] ${
@@ -1203,11 +1397,21 @@ function BotonCanto({
   onClick,
   deshabilitada = false,
   tono = "neutro",
+  canto,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   deshabilitada?: boolean;
   tono?: "neutro" | "bordo" | "dorado" | "quiero" | "no";
+  /**
+   * Agarre para las herramientas.
+   *
+   * `herramientas/mirar-web.mjs` verifica que cuando te suben un canto haya con
+   * qué subir, y buscar por el TEXTO no sirve: "Envido" es el nombre del botón
+   * que abre el menú y también el del canto que está adentro. Con esto cada
+   * botón dice qué es, y la prueba deja de adivinar.
+   */
+  canto: string;
 }) {
   const tonos = {
     neutro: "bg-black/40 text-crema/80 hover:bg-black/60",
@@ -1219,6 +1423,7 @@ function BotonCanto({
 
   return (
     <button
+      data-canto={canto}
       onClick={onClick}
       disabled={deshabilitada}
       className={`min-h-[46px] flex-1 rounded px-2 font-[family-name:var(--font-ui)] text-[15px] uppercase tracking-wide transition-colors disabled:cursor-default disabled:bg-black/30 disabled:text-crema/25 ${tonos[tono]}`}

@@ -517,3 +517,34 @@ body:has(.mesa-pantalla-completa) {
 .mesa-pantalla-completa {
   height: 100%;
 }
+
+/* ── SE LEVANTA LA MESA AL TERMINAR LA MANO ────────────────────────────────
+   Las cartas jugadas se van para el lado del mazo, de a una y no las seis de
+   golpe, que es como se levanta una mesa de verdad.
+
+   Va en `translate`, `rotate` y `scale` sueltos y NO en `transform`: el
+   `transform` ya lo está usando `estiloEnMesa` para ubicar la carta en la
+   perspectiva, y animarlo se lo comería. Son propiedades aparte que se componen
+   con él en vez de pisarlo.
+
+   `forwards` porque el último cuadro —la carta invisible— tiene que quedar
+   pegado hasta que se reparta la mano siguiente. */
+@keyframes se-va-al-mazo {
+  0% {
+    opacity: 1;
+    translate: 0 0;
+    rotate: 0deg;
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    translate: var(--hacia-x, -130px) -22px;
+    rotate: var(--giro-mazo, -16deg);
+    scale: 0.72;
+  }
+}
+.anim-al-mazo {
+  animation: se-va-al-mazo 520ms cubic-bezier(0.45, 0, 0.75, 1) forwards;
+}
