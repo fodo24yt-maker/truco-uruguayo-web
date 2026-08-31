@@ -87,7 +87,7 @@ test("EL CASO REPORTADO: le tiran el 2 de la muestra y el bot no canta truco", (
     bazasPrevias: ["vos"],
   });
 
-  // El Melo cierra la gira y es de los impecables: no se le escapa nunca.
+  // El Turco cierra la gira y es de los impecables: no se le escapa nunca.
   const melo = vecesQueCanta(mesa, "el-melo");
   assert.equal(melo, 0, `el Melo cantó ${melo} veces con la mano perdida`);
 
@@ -124,14 +124,14 @@ test("cuanto más duro el rival, menos veces canta con la mano perdida", () => {
   // Se compara contra uno de nivel 5, que es el que nunca se equivoca: contra
   // un nivel 4 la diferencia se mezcla con lo mentiroso que sea cada uno.
   //
-  // Se usa a La Coca y no a Luki, aunque los dos sean ★1: para cantar con la
+  // Se usa a La Porota y no a Luquita, aunque los dos sean ★1: para cantar con la
   // mano perdida hacen falta DOS cosas, poco sentido común y algo de ganas de
-  // mentir. Luki tiene lo primero pero no lo segundo —es el rival transparente
+  // mentir. Luquita tiene lo primero pero no lo segundo —es el rival transparente
   // de la gira, si canta es porque tiene—, así que directamente no canta.
   const coca = vecesQueCanta(mesa, "la-coca", 200);
   const melo = vecesQueCanta(mesa, "el-melo", 200);
   assert.equal(melo, 0, "el Melo no tiene que cantar nunca con la mano perdida");
-  assert.ok(coca > 0, `La Coca debería entusiasmarse alguna vez: cantó ${coca}/200`);
+  assert.ok(coca > 0, `La Porota debería entusiasmarse alguna vez: cantó ${coca}/200`);
 });
 
 test("pero SÍ canta cuando la carta de la mesa se le puede ganar", () => {
@@ -154,9 +154,9 @@ test("los principiantes todavía se entusiasman: es parte de su carácter", () =
     bazasPrevias: ["vos"],
   });
 
-  // Luki tiene sentidoComun 0.15: se equivoca seguido, y está bien que así sea
+  // Luquita tiene sentidoComun 0.15: se equivoca seguido, y está bien que así sea
   const luki = buscarPersonalidad("luki");
-  assert.ok(luki.sentidoComun < 0.3, "Luki debería ser despistado");
+  assert.ok(luki.sentidoComun < 0.3, "Luquita debería ser despistado");
   assert.equal(buscarPersonalidad("el-melo").sentidoComun, 1, "el Melo, impecable");
 });
 

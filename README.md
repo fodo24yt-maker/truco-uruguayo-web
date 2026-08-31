@@ -36,8 +36,15 @@ la que ninguna guía argentina te da.
 piezas, envido encadenado, flor con sus apuestas (con flor envido, contraflor
 al resto), truco/retruco/vale cuatro y pardas. La flor la cantás vos, con su
 botón, y el envido va primero: si te cantan truco antes de que hayas hablado,
-podés contestarle envido y se resuelve eso primero. Ambientada en un bar de noche:
-mesa de madera en perspectiva, la lámpara colgando y el rival sentado enfrente.
+podés contestarle envido y se resuelve eso primero. Y cuando NO podés —porque
+alguien cantó flor, que la anula, o porque el envido ya se jugó— te lo dice, en
+vez de que el botón desaparezca sin explicación. La escena cambia con el
+departamento: el boliche de noche de Montevideo, la feria de Las Piedras, la
+rambla de Rocha, el galpón del centro, el río del litoral y las cuchillas del
+norte. Del rival se ve el cuerpo en penumbra y nada más —la cara está en el
+medallón de la derecha, de donde salen también las coplas—. **Esta parte está a
+medio hacer**: lo que hay anda, pero todavía no se parece a lo que queremos.
+El plan para terminarla está en [`ideas/rediseno-nivel.md`](ideas/rediseno-nivel.md).
 Cada mano arranca repartiendo de a una carta —mano, pie, mano, pie— y recién
 cuando terminó se dan vuelta. El mazo tiene la muestra metida abajo, atravesada
 y asomando lo justo para verle el número y el palo, y cambia de lado según de
@@ -45,6 +52,17 @@ quién sea el reparto: si sos mano te queda a la izquierda, si sos pie a la
 derecha.
 Con las ayudas prendidas te muestra tu tanto ya calculado y te marca cuáles de
 tus cartas son piezas; se apagan cuando querés.
+
+**La baraja** — cuarenta cartas españolas dibujadas por código, con lo que hace
+que una carta se lea como carta y no como un icono: las espadas y los bastos van
+**cruzados** —el dos son dos en aspa, el cuatro son dos pares, el cinco dos pares
+y uno derecho en el medio—, mientras los oros y las copas van en grilla. Cada
+palo lleva tres tonos en vez de uno plano, la sota, el caballo y el rey son gente
+dibujada, y el marco se corta según el palo: ninguna vez los oros, una las copas,
+dos las espadas y tres los bastos. Eso último es **la pinta**, que es como se
+reconoce el palo asomando la carta en el abanico sin abrirla del todo. Hay un
+solo componente de carta en todo el sitio, así que las mismas cuarenta están en
+las lecciones, en la mesa y en la portada.
 
 **El motor** — las reglas en TypeScript, con 128 tests que las verifican contra
 `reglas.txt`: una pasada por fuerza bruta sobre las 40 cartas y todas las
@@ -94,9 +112,9 @@ mismo aire, así que sólo van cuando en la mesa está pasando eso.
 **La dificultad, medida.** Los 19 rivales corren el mismo código con distintos
 números, así que la única forma de saber si la gira sube de verdad es hacerlos
 jugar entre ellos. `herramientas/medir-bots.mjs` los enfrenta y saca la tabla.
-La primera vez que se corrió apareció que la escala estaba **dada vuelta**: Luki,
-el primero de la gira, le ganaba a El Melo, el último, el 61% de las veces. La
-tabla se había armado suponiendo que "más difícil = canta más, quiere más,
+La primera vez que se corrió apareció que la escala estaba **dada vuelta**:
+Luquita, el primero de la gira, le ganaba a El Turco, el último, el 61% de las
+veces. La tabla se había armado suponiendo que "más difícil = canta más, quiere más,
 miente más", y resulta que querer con el umbral bajo es pagar apuestas perdidas.
 Recalibrada, cada nivel le gana al anterior y el ★5 le gana al ★1 por 63%. Hay
 un test que no la deja volver a darse vuelta sin que nadie se entere.
@@ -144,6 +162,9 @@ lib/
   gira-camino.ts        La geometría del camino punteado, con sus pruebas
 herramientas/
   generar-mapa.mjs      Rehace mapa-uruguay.ts desde datos cartográficos
+  generar-escena.mjs    Hornea la madera y el fondo de cada ambiente a WebP
+  escena/               El dibujo de esas texturas, en código
+  mirar-mesa.mjs        Verifica que la mesa no scrollee en siete tamaños
   medir-bots.mjs        Enfrenta a los 19 rivales y mide si la gira sube
 ideas/
   concepto.md           Qué juego queremos hacer
@@ -155,11 +176,17 @@ ideas/
 
 - **Sitio estático.** Se publica en cualquier lado sin servidor, y el juego
   corre entero en el navegador.
-- **No hace una sola petición de red.** Sin cuentas, sin analítica, sin
-  rastreadores, sin cookies. Las tipografías se sirven desde el propio sitio.
-- **La baraja está dibujada por código,** en SVG propio. No usamos imágenes de
-  barajas comerciales. Tampoco hay una sola imagen en todo el sitio: la madera,
-  la luz del bar y el rival son SVG y CSS.
+- **No le pide nada a nadie.** Sin cuentas, sin analítica, sin rastreadores, sin
+  cookies. Las tipografías y las texturas se sirven desde el propio sitio: el
+  navegador no habla con ningún tercero.
+- **Todo el dibujo es propio y sale de código.** La baraja, el mapa, el rival y
+  cada objeto de la mesa son SVG que se dibujan en el navegador; no hay una sola
+  imagen de nadie más. **La madera de la mesa y el fondo del ambiente sí son
+  imágenes**, pero las dibuja igual nuestro código: las hornea
+  [`herramientas/generar-escena.mjs`](herramientas/generar-escena.mjs) con las
+  mismas formas y filtros, una sola vez y a 2800px, en vez de rehacerlas en cada
+  cuadro. Son dos WebP de ~45 KB por departamento y es lo que permite que la
+  mesa tenga nudos, rayones y perspectiva de verdad sin arrastrar un celular.
 - **Sin librerías de interfaz.** Next, React y Tailwind, y nada más.
 - **La partida corre entera en tu navegador.** Eso significa que las cartas del
   bot están en la memoria del cliente: no salen en el HTML, pero alguien

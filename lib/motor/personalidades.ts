@@ -91,8 +91,8 @@ function segunNivel(nivel: 1 | 2 | 3 | 4 | 5) {
   //
   // Se había armado suponiendo que "más difícil = canta más, quiere más,
   // miente más". Midiéndolo resultó al revés: querer con el umbral bajo es
-  // pagar apuestas perdidas, y mentir sólo rinde si el otro te cree. Luki, el
-  // primero de la gira, le ganaba a El Melo el 61% de las veces.
+  // pagar apuestas perdidas, y mentir sólo rinde si el otro te cree. Luquita, el
+  // primero de la gira, le ganaba a El Turco el 61% de las veces.
   //
   // Ahora los umbrales de QUERER bajan hacia el punto que conviene a medida que
   // sube el nivel, en vez de pasarse de largo. Los de abajo se van demasiado
@@ -185,17 +185,17 @@ interface Semilla {
 const SEMILLAS: Semilla[] = [
   // ── ★1 · El área metropolitana: acá se aprende ──────────────────────────
   {
-    id: "luki", nombre: "Luki", departamento: "Montevideo", lugar: "La Blanqueada",
+    id: "luki", nombre: "Luquita", departamento: "Montevideo", lugar: "La Blanqueada",
     nivel: 1, mentira: 0.02, silencio: 0.05,
     descripcion: "Juega en el liceo y no salió nunca de ahí. Si canta, tiene: no sabe mentir.",
   },
   {
-    id: "la-coca", nombre: "La Coca", departamento: "Canelones", lugar: "Las Piedras",
+    id: "la-coca", nombre: "La Porota", departamento: "Canelones", lugar: "Las Piedras",
     nivel: 1, mentira: 0.12, silencio: 0,
     descripcion: "Feriante. Canta envido en todas las manos, tenga o no tenga.",
   },
   {
-    id: "el-rulo", nombre: "El Rulo", departamento: "San José", lugar: "Ciudad del Plata",
+    id: "el-rulo", nombre: "El Gallego", departamento: "San José", lugar: "Ciudad del Plata",
     nivel: 1, mentira: 0.08, silencio: 0.2,
     descripcion: "Tranquilo y previsible. Si no canta, no tiene.",
   },
@@ -207,7 +207,7 @@ const SEMILLAS: Semilla[] = [
     descripcion: "Juega siempre igual. Agarrale el ritmo y lo tenés.",
   },
   {
-    id: "la-nelly", nombre: "La Nelly", departamento: "Lavalleja", lugar: "Minas",
+    id: "la-nelly", nombre: "La Pocha", departamento: "Lavalleja", lugar: "Minas",
     nivel: 2, mentira: 0.1, silencio: 0.35,
     descripcion: "Callada. Te deja hablar a vos y after te cobra.",
   },
@@ -234,12 +234,12 @@ const SEMILLAS: Semilla[] = [
     descripcion: "Mira el marcador antes que las cartas. Te canta la falta justo.",
   },
   {
-    id: "el-trinitario", nombre: "El Trinitario", departamento: "Flores", lugar: "Trinidad",
+    id: "el-trinitario", nombre: "El Rengo", departamento: "Flores", lugar: "Trinidad",
     nivel: 3, mentira: 0.22, silencio: 0.3,
     descripcion: "De pueblo chico y mesa grande. Juega el envido como nadie.",
   },
   {
-    id: "la-rosa", nombre: "La Rosa", departamento: "Soriano", lugar: "Mercedes",
+    id: "la-rosa", nombre: "La China", departamento: "Soriano", lugar: "Mercedes",
     nivel: 3, mentira: 0.3, silencio: 0.35,
     descripcion: "No pierde una mano por apurada. Te deja creer que vas ganando.",
   },
@@ -251,7 +251,7 @@ const SEMILLAS: Semilla[] = [
     descripcion: "Carmelero de mesa larga. Miente cuando conviene, y nunca cuando no.",
   },
   {
-    id: "el-fray", nombre: "El Fray", departamento: "Río Negro", lugar: "Fray Bentos",
+    id: "el-fray", nombre: "Cacho", departamento: "Río Negro", lugar: "Fray Bentos",
     nivel: 4, mentira: 0.26, silencio: 0.3,
     descripcion: "Sabe esperar. Si te quiere el truco, andá con cuidado.",
   },
@@ -266,12 +266,12 @@ const SEMILLAS: Semilla[] = [
     descripcion: "Citricultor. Cuenta las piezas antes de que las des vuelta.",
   },
   {
-    id: "el-piedra", nombre: "El Piedra", departamento: "Artigas", lugar: "Bella Unión",
+    id: "el-piedra", nombre: "Pájaro", departamento: "Artigas", lugar: "Bella Unión",
     nivel: 4, mentira: 0.28, silencio: 0.3,
-    descripcion: "Duro como las amatistas de allá. No regala una sola mano.",
+    descripcion: "De Bella Unión, tierra de amatistas. Se te escapa justo cuando creías tenerlo.",
   },
   {
-    id: "joao", nombre: "Joao", departamento: "Rivera", lugar: "Rivera",
+    id: "joao", nombre: "El Chicharra", departamento: "Rivera", lugar: "Rivera",
     nivel: 4, mentira: 0.4, silencio: 0.2,
     descripcion: "Mitad y mitad, como la frontera. Nunca sabés si te está cargando.",
   },
@@ -283,7 +283,7 @@ const SEMILLAS: Semilla[] = [
     descripcion: "De la Patria Gaucha. Aguanta, aguanta, y te liquida en la tercera.",
   },
   {
-    id: "el-melo", nombre: "El Melo", departamento: "Cerro Largo", lugar: "Melo",
+    id: "el-melo", nombre: "El Turco", departamento: "Cerro Largo", lugar: "Melo",
     nivel: 5, mentira: 0.35, silencio: 0.15,
     descripcion: "El último de la gira. Te canta truco mirándote a los ojos con un cuatro.",
   },

@@ -33,10 +33,33 @@
   --color-sangre: #8c2b20;
   --color-tinta-mapa: #3b2412;
 
-  --color-espada: #2b4a6f;
-  --color-basto: #4e6b2f;
+  /* Los cuatro palos, cada uno en tres tonos: el hondo es el contorno con el
+     que se entinta la figura, el base es el relleno y la luz es el brillo.
+     Un palo de un solo color se lee como un icono; con tres se lee como una
+     carta impresa, que es de lo que se trata todo esto. */
+  --color-espada: #2f5480;
+  --color-espada-hondo: #16283c;
+  --color-espada-luz: #6d9ac6;
+  --color-basto: #55742f;
+  --color-basto-hondo: #293a17;
+  --color-basto-luz: #8fb35c;
   --color-oro: #c9922e;
-  --color-copa: #a8323f;
+  --color-oro-hondo: #7d5411;
+  --color-oro-luz: #f3cf76;
+  --color-copa: #ac3341;
+  --color-copa-hondo: #64161f;
+  --color-copa-luz: #da767f;
+
+  /* La sota, el caballo y el rey. Son gente dibujada, no siluetas: llevan piel,
+     pelo y algo de oro encima, y eso no puede depender del palo. */
+  --color-carta: #f7f1e1;
+  --color-piel: #e8c49d;
+  --color-piel-sombra: #c9996b;
+  --color-pelo: #46301f;
+  --color-realce: #d8a63a;
+  --color-realce-hondo: #8a6414;
+  --color-tela: #e4d9bd;
+  --color-caballo: #8d6242;
 
   --font-display: var(--fuente-display), Georgia, serif;
   --font-ui: var(--fuente-ui), system-ui, sans-serif;
@@ -95,15 +118,12 @@ body {
   );
 }
 
-/* La escena en perspectiva: la mesa se inclina como si la vieras desde tu silla */
-.escena-3d {
-  perspective: 900px;
-  perspective-origin: 50% 12%;
-}
-.plano-mesa {
-  transform: rotateX(34deg);
-  transform-origin: 50% 0%;
-}
+/* La perspectiva de la mesa YA NO SE HACE ACÁ.
+   Era un `rotateX(34deg)` sobre un div, con las cartas planas encima: por eso
+   todo se veía del mismo tamaño y el mazo del fondo medía lo mismo que tu mano.
+   Ahora viene horneada en la propia textura (`herramientas/generar-escena.mjs`)
+   y a los objetos los ubica `lib/mesa-perspectiva.ts`, que les da su escala
+   según qué tan lejos están. */
 
 /* Cada carta apoyada se inclina apenas: sugiere el plano sin volverse ilegible */
 .carta-apoyada {
@@ -126,16 +146,13 @@ body {
   );
 }
 
-/* El canto de la mesa: el grosor de la tabla, que la separa del fondo */
-.canto-mesa {
-  background: linear-gradient(
-    180deg,
-    #2b1a0e 0%,
-    var(--color-mesa-canto) 34%,
-    #6b4326 78%,
-    #4a2e17 100%
-  );
-  box-shadow: 0 -12px 26px -6px rgba(0, 0, 0, 0.75);
+/* La barra de juego: la franja finita de arriba mientras jugás.
+   Reemplaza a la navegación del sitio, que adentro de una partida no pinta nada
+   y se llevaba 76px de alto. En un celular de 640 eso son las cartas. */
+.barra-juego {
+  height: 30px;
+  background: linear-gradient(180deg, #1a120c 0%, #0e0906 100%);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-dorado) 30%, transparent);
 }
 
 /* Papel viejo: el fondo de todo lo que se lee */
@@ -413,6 +430,14 @@ body {
    alto que hace falta para las cartas y obliga a scrollear. Se esconde sólo
    ahí; en el resto del sitio sigue estando. */
 body:has(.mesa-pantalla-completa) footer {
+  display: none;
+}
+
+/* En la mesa el encabezado del sitio se esconde entero, igual que el pie.
+   Antes sólo se apretaba, porque tenía que quedar cómo salir de la partida; eso
+   ahora lo resuelve la barra de juego, que tiene su propio "Salir" y ocupa 30px
+   en vez de 76. Los 46 de diferencia son cartas. */
+body:has(.mesa-pantalla-completa) header {
   display: none;
 }
 
