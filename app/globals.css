@@ -333,6 +333,72 @@ body {
   animation: reparte-carta 320ms cubic-bezier(0.2, 0.86, 0.32, 1) backwards;
 }
 
+/* Las TRES DEL RIVAL hacen el mismo viaje y después se van para abajo.
+   Él no tiene las cartas sobre la mesa: las mira abajo del canto. Pero el
+   reparto tiene que seguir mostrando SEIS cartas saliendo del mazo, porque si
+   sólo salen las tuyas parece que le repartieran a nadie.
+
+   Así que llegan, se quedan un instante y bajan desvaneciéndose, como si las
+   levantara y se las llevara. Cada una se va apenas llega —no las tres juntas
+   al final— y eso es lo que hace que se lea "la recibe y la baja" y no "las
+   cartas desaparecieron".
+
+   Va con `forwards` y no con `backwards`: acá SÍ hay que dejar pegado el último
+   fotograma, que es la carta invisible. Con `backwards` volvería a aparecer al
+   terminar. El elemento igual se desmonta cuando termina el reparto. */
+@keyframes reparte-y-baja {
+  0% {
+    opacity: 0;
+    transform: translate(var(--desde-x, 0px), var(--desde-y, 70px))
+      rotate(var(--desde-giro, -100deg)) scale(0.7);
+  }
+  16% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(var(--giro, 0deg)) scale(1);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(0, 2px) rotate(var(--giro, 0deg)) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(0, 30px) rotate(var(--giro, 0deg)) scale(0.86);
+  }
+}
+.anim-reparte-baja {
+  animation: reparte-y-baja 640ms cubic-bezier(0.2, 0.86, 0.32, 1) forwards;
+}
+
+/* LA MANO ENTRA CON LA PRIMERA CARTA.
+   Estaba desde el cuadro cero, a tamaño completo y sin nada adelante: durante
+   casi un segundo se veía el dorso pelado mientras las cartas todavía venían
+   volando desde el mazo, y eso es lo que se leía "mano mal dibujada". Con el
+   mismo retraso que la primera carta, las dos llegan juntas y no hay ni un
+   cuadro de mano sola.
+
+   Va en `translate` y NO en `transform`: las dos piezas ya usan `transform`
+   para centrarse (`-translate-x-1/2` y `translateX(-56%)`), y animar
+   `transform` se los comería. `translate` es una propiedad aparte que se
+   compone con él en vez de pisarlo.
+
+   `backwards` para que antes de arrancar ya esté invisible y no parpadee. */
+@keyframes entra-la-mano {
+  from {
+    opacity: 0;
+    translate: 0 26%;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+.anim-entra-mano {
+  animation: entra-la-mano 380ms cubic-bezier(0.2, 0.86, 0.32, 1) backwards;
+}
+
 /* Darla vuelta: gira sobre su eje vertical y se pasa apenas de largo al frenar,
    que es lo que hace que se sienta una carta y no un cartel que aparece. */
 @keyframes da-vuelta-carta {

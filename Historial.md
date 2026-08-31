@@ -12,6 +12,345 @@
 
 ---
 
+## 2026-08-31 (cuarta pasada) — Se va el segundo mazo y la mano deja de encogerse
+
+Los dos defectos salieron de MIRAR las capturas de la pasada anterior, no de
+leer el código. Vale anotarlo porque se repite: las dos herramientas daban 0
+fallos con las dos cosas rotas en pantalla.
+
+### Había dos mazos, y el de más era el descarte
+
+Dos pilas de dorsos rojos en la MISMA columna de la izquierda, una arriba de la
+otra. La de abajo era el "descarte", apoyado en `uMazo` aunque el comentario de
+dos líneas antes dijera que iba del lado contrario.
+
+**Y encima no decía nada.** `descartadas` contaba las cartas de `p.bazas`, o sea
+las mismas que están dibujadas más abajo BOCA ARRIBA: mostraba tapado lo que al
+lado ya se ve destapado. Se borró entero.
+
+**La decisión que hay detrás, para no deshacerla sin querer:** en una mesa de
+verdad las cartas de la baza se levantan. Acá **se quedan a la vista toda la
+mano**, a propósito, porque poder ver qué se jugó vale más que la costumbre. Se
+levantan recién cuando apretás "Siguiente mano", que es cuando vos decidís que
+ya miraste. Está escrito en el lugar donde estaba la pila.
+
+El lado del mazo **ya estaba bien** y no se tocó: va a la izquierda del que es
+mano, o sea a tu derecha si el mano es él.
+
+De paso, las tres que le reparten a él salían pegadas y a escuadra, y mientras
+duraba el reparto formaban un segundo montoncito allá arriba. Ahora van
+separadas y cada una con su giro (`--giro`, que el keyframe respeta hasta el
+final en vez de enderezarlas).
+
+Queda un hueco de madera del lado del mazo. Es el lugar natural para el objeto
+propio de cada departamento, que ya estaba en la lista.
+
+### La mano: tres cosas distintas que se notaban juntas
+
+La queja fue "cuando se reparte, y cuando te queda una o pocas, se ve mal la
+parte de abajo de la mano". Eran tres:
+
+1. **Se encogía a la mitad.** Medía `anchoAbanico + 0,8·W` y el SVG va en
+   `h-auto`, así que el ALTO seguía al ancho: de tres cartas a una pasaba de
+   3,8 anchos de carta a 1,8. Una mano no se achica cuando tirás una carta:
+   los dedos se CIERRAN. Ahora `anchoMano = 1,5·W + 0,745·anchoAbanico`, que
+   con tres da exactamente lo de antes y con una se cierra un 37% en vez de un
+   49%.
+2. **El pulgar se medía contra una carta**, clavado en `1,7·W`, mientras la
+   mano se achicaba: con una sola carta quedaba casi tan ancho como la mano
+   entera. Pasó a ser `0,48 · anchoMano`, que es la proporción que YA tenía con
+   tres.
+3. **Estaba a tamaño completo desde el cuadro cero del reparto**, con las
+   cartas todavía volando: casi un segundo de bulto pelado. Ahora entra con la
+   primera carta (`anim-entra-mano`). Va en `translate` y no en `transform`,
+   porque las dos piezas ya usan `transform` para centrarse y animarlo se lo
+   comía.
+
+### Lo que costó tres intentos: que se lea como MANO estando desnuda
+
+Redibujar `DedosAtras` con nudillos y valles **no alcanzó**, y la razón es
+geométrica: con una sola carta lo único expuesto son los DOS COSTADOS, y los
+tres valles están todos detrás de la carta. Los nudillos del medio no se ven
+nunca.
+
+Lo que sí funcionó, en este orden:
+
+- **Romper la simetría.** Dos montículos iguales a los costados de una carta se
+  leen como un pan partido. Una mano BAJA del índice al meñique: la cresta
+  ahora desciende de y=16 a y=42 y el costado derecho se hunde. Eso solo cambió
+  más que todo el detalle interior.
+- **Devolverla a la penumbra.** `CLARO` estaba en el 30% del degradé y la mano
+  salía color crema, más brillante que la madera. Tu mano está DELANTE de la
+  mesa, o sea afuera del charco de luz. Ahora el degradé va `MEDIO → HONDO →
+  NOCHE` y `CLARO` es sólo el filo de los nudillos, al 26%. **Esto fue lo que
+  más rindió de todo, y no era una cuestión de dibujo sino de valor** —igual
+  que con los brazos del rival dos pasadas atrás—.
+
+### La herramienta
+
+`mirar-mesa-nueva.mjs` gana la tira de **la mano con 3, 2 y 1 carta**, recortada
+alrededor de `.mano-abanico` y no en un `y` fijo (la mano se mide en `vh` y en
+320×568 no cae donde cae en 390×844). Se reintenta entera si la mano se termina
+al jugar la segunda carta, porque si no la tira sale con dos cuadros.
+
+**Es lo que faltaba mirar y por eso el defecto duró tanto**: todas las capturas
+se sacaban con la mano llena, que es justo el caso en el que se ve bien.
+
+### Estado al cerrar
+`npm test` **128/128** · `tsc --noEmit` limpio · `npm run build` OK ·
+`mirar-mesa.mjs` en 0 en los siete tamaños · `mirar-mesa-nueva.mjs` en 0 en
+320×568, 360×600 y 390×844. La libreta no se movió: sigue con 7px al canto y
+5px abajo en 320×568.
+
+Repaso de seguridad: se borra código y no se agrega ninguna entrada. Sin
+`dangerouslySetInnerHTML` ni `innerHTML` ni `eval` en el proyecto, y el dorso de
+las cartas del rival se sigue dibujando SIN la carta.
+
+### Pendiente
+1. **MÁS MESA Y MENOS RIVAL** ← pedido explícito, y no se hizo a propósito: se
+   anotó para la próxima. Que se le vea menos torso y más mesa, que las cosas se
+   separen y quede más lugar para tirar.
+   **La palanca es una sola: `ALTO_FONDO`, hoy 27.** `ALTO_RIVAL` cuelga de ahí
+   —está escrito para que el canto de la mesa del DIBUJO caiga sobre el de la
+   ESCENA—, así que bajándolo el rival se achica y la mesa crece sin despegarlo
+   del borde. A ~22 le devuelve unos 5 puntos de alto a la mesa y achica al
+   rival casi un 20%.
+   **Ojo con dos cosas, y por eso no es una línea:** (a) `TablaMesa` pinta la
+   madera horneada con `object-cover object-top`, así que cambiar la proporción
+   de la zona de mesa la recorta distinto y la perspectiva horneada se puede
+   desfasar de `posicionEnMesa` —si se corre, hay que volver a correr
+   `generar-escena.mjs`—; (b) **todos los `v` se vuelven a medir**, la libreta
+   primero, que hoy está en su techo real. Recién ahí tiene sentido achicar un
+   poco la libreta, que es la otra palanca que se nombró.
+2. **"¡Primero va el envido!"** en el canto y una copla nueva en `versos.ts`.
+3. Un **objeto propio por departamento** sobre la mesa. Ahora tiene lugar: el
+   hueco que dejó el descarte, del lado del mazo.
+4. `deNoche` controla luz y desgaste a la vez en `madera.mjs`, y las constantes
+   de la cámara están copiadas a mano en `mesa-perspectiva.ts`.
+
+---
+
+## 2026-08-31 (tercera pasada) — Gana el rival sin brazos, y la mesa se reacomoda
+
+### La decisión
+
+De las tres variantes ganó la **B: sin brazos y sin cartas sobre la mesa**. Tiene
+las cartas abajo del canto y las mira ahí. **No volver a ponerle antebrazos ni
+manos encima de la madera.** Las otras dos, el `?brazos=` y
+`mirar-variantes.mjs` se borraron: quedó un dibujo solo, no una opción.
+
+De lo que se aprendió con las descartadas sobrevive lo que sigue siendo cierto:
+`mezclar()` devuelve **hex** —si no, no se la puede anidar— y el comentario de
+que un poncho no tiene mangas, para que no se rehaga mal el día que se vuelva.
+
+### "Muy cuadrado": tres cosas y ninguna es un brazo
+
+La devolución fue que el objeto se leía como un bloque. El torso iba del cuello
+al canto abriéndose parejo, o sea un trapecio.
+
+1. **El quiebre del hombro.** Un hombro no es una diagonal: el deltoides
+   redondea (y≈62), el brazo cae y la silueta **se angosta** (y≈112), y recién
+   ahí vuelve a abrirse hacia el codo. Ese ir y venir de dos por ciento es toda
+   la diferencia entre una persona y una plancha. **El ancho máximo no cambió**:
+   sigue siendo `1,08·H` en el canto, que es la cuenta que hace que el rival
+   entre en un celular. Se movió el camino, no el destino.
+2. **La costura del brazo al costado**, que es literal lo que se pidió. Va en
+   **0,78·H y no en 0,9·H**: pegada al contorno se leía un vivo, una cinta
+   cosida al borde. Un brazo mide como un cuarto de la espalda, así que la línea
+   tiene que caer ahí para que entre ella y el borde haya un BRAZO.
+3. **Sombra en el costado**, recortada al torso, para que ese brazo sea un
+   volumen redondo delante del pecho y no una raya sobre una plancha.
+
+### Lo que hay que saber para no romperlo
+
+- **El rival se dibuja ANTES de la tabla y su sombra DESPUÉS.** Sin brazos no
+  hay nada suyo delante de la mesa, así que el torso baja hasta y=252 y lo tapa
+  la madera: es la MESA la que lo corta, que es lo que pasa de verdad. Pero
+  entonces la sombra queda tapada también, y sin sombra vuelve a ser una plancha
+  pegada al fondo. Por eso `SombraRival` es un componente aparte: existe sólo
+  para poder dibujarse del otro lado de la tabla.
+- **La libreta está encajada entre dos cosas que empujan en sentidos
+  contrarios.** Si sube se le monta al rival; si baja se le meten las bazas. Y
+  **no se puede achicar**: se agrandó a propósito porque los puntos no se leían.
+  Subió de `v=0,44` a **`v=0,23`**, y como subir ALEJA y alejar ACHICA, se dibuja
+  del tamaño que tendría en `v=0,44` (`V_LIBRETA_TAMANO`). Sí, eso le miente un
+  5% a la perspectiva, en el único objeto de la mesa que hay que LEER. Vale.
+- **El que aprieta a la libreta era el mate**, no las bazas. Subido a 0,18
+  quedaba apoyado sobre la esquina del papel. Bajado a 0,48, el margen de abajo
+  pasó de 2px a 25px.
+- **Las cartas del reparto van corridas al lado contrario de la libreta.**
+  Repartidas al medio le caían encima durante todo el reparto.
+- **Los `data-mesa` no son decoración**: son el agarre con el que se mide. Mismo
+  papel que ya cumplía `.mano-abanico` para `mirar-mesa.mjs`.
+
+### Las dos animaciones
+
+- **El reparto sigue mostrando las SEIS cartas.** Si sólo salieran las tuyas
+  parecería que le reparten a nadie. Las de él llegan contra el canto lejano y
+  de ahí **bajan desvaneciéndose**, como si se las llevara. Cada una se va
+  apenas llega —no las tres juntas al final—, y eso es lo que hace que se lea
+  "la recibe y la baja" en vez de "las cartas desaparecieron".
+  `@keyframes reparte-y-baja` va con `forwards` y no con `backwards`: acá SÍ hay
+  que dejar pegado el último fotograma, que es la carta invisible.
+- **La carta tirada YA se animaba.** Lo que faltaba era decirle DE DÓNDE VIENE:
+  `--desde-x` y `--desde-y` se quedaban en el valor por defecto y la tuya y la de
+  él caían igual, desde arriba y desde ningún lado. Ahora `CartaApoyada` recibe
+  de quién es: la tuya sube desde tu mano y la de él baja desde el canto lejano,
+  que es donde tiene las cartas.
+
+### `herramientas/mirar-mesa-nueva.mjs`, que es lo que hizo el trabajo
+
+**Los números de arriba NO se eligieron: los fijó la medición.** Cuánto entra no
+se puede saber leyendo el código, porque el `clamp` de cada objeto, el alto de la
+ventana y la escala en perspectiva se multiplican y no se ven por separado. Dos
+veces calculé a mano cuánto podía subir la libreta y las dos me dio mal.
+
+La herramienta saca el **rectángulo de verdad** de cada objeto en el navegador y
+falla si algo cruza el canto, si algo se le monta a la libreta —que es lo único
+que hay que LEER— o si algo se sale por el costado. Tres cosas que costaron y
+que conviene no volver a aprender:
+
+1. **Medía con el cartel de fin de mano encima.** Jugaba dos cartas y a veces la
+   mano se terminaba en la segunda. Ahora, si se termina, reparte de nuevo.
+2. **Medía con una sola baza puesta**, y las bazas se abren hacia los costados a
+   medida que hay más: con una sola en el medio no se toca nada y la medición
+   miente. Ahora insiste hasta juntar dos.
+3. **El margen de abajo se calculaba contra objetos que no estaban debajo.** Daba
+   2px falsos y hacía parecer que no había lugar.
+
+Y filma las dos animaciones en tiras de diez cuadros, que es lo único que muestra
+si las cartas de él se van para abajo de verdad.
+
+### Estado al cerrar
+`npm test` **128/128** · `tsc --noEmit` limpio · `npm run build` OK ·
+`mirar-mesa.mjs` en 0 en los siete tamaños · `mirar-mesa-nueva.mjs` en 0 en
+320×568, 360×600 y 390×844, con dos bazas puestas y midiendo el reparto en
+vuelo. La libreta queda con **7px al canto y 5px a lo de abajo** en 320×568: es
+apretado y es el límite real, no un número cómodo.
+
+Repaso de seguridad: **la superficie bajó**, porque se borró el `?brazos=`. Sin
+`dangerouslySetInnerHTML` ni `innerHTML` ni `eval` en todo el proyecto, y el
+dorso de las cartas del rival se dibuja SIN la carta, así que no hay dato suyo
+en el DOM.
+
+### Pendiente
+1. **"¡Primero va el envido!"** en el canto y una copla nueva en `versos.ts`.
+2. Un **objeto propio por departamento** sobre la mesa.
+3. `deNoche` controla luz y desgaste a la vez en `madera.mjs`, y las constantes
+   de la cámara están copiadas a mano en `mesa-perspectiva.ts`.
+4. ~~La libreta se solapa con la tercera baza~~ **RESUELTO**, y ahora hay una
+   herramienta que falla si vuelve a pasar.
+
+---
+
+## 2026-08-31 (segunda pasada) — Los brazos del rival: tres variantes sin elegir
+
+### Estado: CERRADA. Ganó la B — ver la pasada siguiente
+
+Se miraron las tres detrás de un `?brazos=a|b|c` temporal. Eligió la **sin
+brazos**; el parámetro, las otras dos y `mirar-variantes.mjs` se borraron en la
+pasada de arriba. Lo que sigue queda como registro del diagnóstico, que es lo
+que sirve.
+
+### El diagnóstico, que era lo que faltaba
+
+La queja fue que los brazos "salen de la nada, no parecen conectados al cuerpo".
+Leyendo el código el antebrazo parecía estar bien. **Estaba bien dibujado y mal
+pintado**: se rellenaba con `url(#rival-manga)`, que era la ropa oscurecida
+entre un 24% y un 54%, y sobre madera oscura eso desaparece.
+
+La prueba está en `alfa diseño de nivel/contraste-torsos.png`: **a La Coca, de
+delantal rosa, se le ven los brazos; a Luquita, de buzo azul, no.** No es que a
+uno le falte el dibujo, es que tiene el mismo valor que la mesa. Cuatro cosas
+más, en orden de lo que rindieron:
+
+1. **La manga va MÁS CLARA que el pecho**, no más oscura. Es lo que
+   corresponde además: el pecho está parado y de canto a la lámpara, y el
+   antebrazo está acostado sobre la mesa mirándola de frente.
+2. **Faltaba el puño.** En la referencia lo que hace leer el brazo es la banda
+   clara de la camisa entre la manga y la piel. Sin ese corte, manga oscura y
+   mano clara se tocan sin transición y la mano parece pegada.
+3. **Las manos eran dos óvalos espejo** con tres rayas rectas: sin pulgar y sin
+   nudillos se leían dos panes. Ahora son asimétricas, con el pulgar del lado de
+   adentro.
+4. **El codo aparecía en `y=190`**, o sea adentro del torso y ya casi en el
+   canto: nunca salía de un hombro. Se le agregaron dos arcos de tinta del
+   hombro al codo —la costura de la manga— que **no ensanchan la silueta**, que
+   es la cuenta que no se puede tocar.
+
+### Lo que se aprendió, que es lo que no hay que volver a descubrir
+
+- **LA MUÑECA NO ESCALA CON LA CONTEXTURA. El codo sí.** Las manos estaban en
+  `0,52·H`, así que se separaban cuando el rival era más grande. Pero lo que
+  sostienen mide siempre lo mismo —tres cartas atadas al alto de la ventana, no
+  a la espalda de nadie—, así que al `recio` le quedaban a treinta unidades del
+  abanico y los dorsos flotaban solos. Ahora la muñeca es una constante y el
+  codo es el que va con la espalda. Es lo que hace que un tipo grande y uno
+  chico junten las manos en el mismo lugar, que es lo que pasa de verdad.
+- **UN PONCHO NO TIENE MANGAS.** Pintado del color de la prenda, el antebrazo de
+  Peralta parecía un poncho con mangas. Cae de los hombros y tapa el brazo hasta
+  el codo: lo que sale de abajo y se apoya en la mesa es la manga de la CAMISA.
+  En la referencia se ve clarísimo. Vale para `poncho` y para `chal`.
+- **`mezclar()` devolvía `rgb(…)` y sólo sabe LEER hex.** Al querer sacar el
+  color de la camisa a partir de uno ya mezclado, `parseInt("gb(214 190 170)")`
+  dio `NaN` y los brazos salieron negros. **Ahora devuelve hex**: el resultado
+  tiene que poder volver a entrar.
+- **Sin brazos, el rival tiene que ir DEBAJO de la tabla, y su sombra ENCIMA.**
+  Borrar los brazos no alcanza: cortado justo en el canto se lee un recorte de
+  cartón apoyado atrás. Metido abajo del canto es la mesa la que lo tapa, que es
+  lo que pasa de verdad. Pero entonces la sombra queda tapada también, y sin
+  sombra el torso es una plancha de color: por eso existe `SombraRival`, que es
+  un componente aparte sólo para poder dibujarla del otro lado de la tabla.
+- **Se autoatacó el parámetro nuevo y apareció algo.** `?brazos=` estaba
+  resuelto con `{a,b,c}[clave] ?? porDefecto`, que responde por la CADENA DE
+  PROTOTIPOS: `?brazos=constructor` devolvía la función `Object` en vez del
+  valor por defecto, y lo mismo `__proto__` y `toString`. El
+  `Record<string, Brazos>` de TypeScript afirmaba que salía un `Brazos` y era
+  mentira; se comprobó corriéndolo. Va en un `Map`, que sólo contesta por lo que
+  se le puso. No era explotable —el valor nunca llega al marcado—, pero era un
+  valor sin tipo real entrando a código tipado.
+
+### Lo que cuestan B y C, para tenerlo a la vista al elegir
+
+1. **Se pierde cuántas cartas le quedan.** Era el único lugar donde se veía;
+   queda deducirlo de las bazas puestas. **Decidido: se acepta.**
+2. **Se tapa la parte de abajo de la prenda**: el bolsillo canguro del buzo, el
+   fleco del poncho, el chaleco. La prenda es lo que distingue a los 19 desde
+   que se le sacó la cabeza. Si gana B o C hay que subir el recorte.
+3. **El reparto pierde la mitad**: se ven volar tres cartas en vez de seis.
+
+### La pregunta del celular, contestada con capturas
+
+`herramientas/mirar-variantes.mjs` hace lo que ninguna de las otras dos hacía:
+**juega dos cartas antes de disparar**. `mirar-mesa.mjs` y `mirar-rivales.mjs`
+sacan la captura al empezar la mano, con la mesa vacía, y la pregunta de si en
+el celular se puede jugar sólo se contesta con la mesa usada.
+
+**Sí se puede, y a 320×568.** Tus cartas están atadas al ALTO de la ventana
+(`clamp(72px, 15,6vh, 126px)`), no al ancho, así que en la pantalla más chica
+siguen midiendo unos 88px y se leen; las jugadas caen en la franja del medio por
+`estiloEnMesa` y se achican solas con la profundidad; y la barra de cantos está
+en el flujo, así que cuando le crece una fila la escena se achica sola y la mano
+nunca queda tapada. Lo único apretado que se vio es que **la carta jugada se
+superpone con la línea de ayuda del tanto** en la pantalla más chica. Es de
+antes y no se tocó.
+
+### Estado al cerrar
+`npm test` **128/128** · `tsc --noEmit` limpio · `npm run build` OK ·
+`mirar-mesa.mjs` en 0 en los siete tamaños · 24 capturas en
+`capturas/variantes/`.
+
+### Pendiente
+0. **Elegir una variante** y borrar las otras dos, el `?brazos=` y
+   `mirar-variantes.mjs`.
+1. **"¡Primero va el envido!"** en el canto y una copla nueva en `versos.ts`.
+2. Un **objeto propio por departamento** sobre la mesa.
+3. `deNoche` controla luz y desgaste a la vez en `madera.mjs`, y las constantes
+   de la cámara están copiadas a mano en `mesa-perspectiva.ts`.
+4. La libreta puede solaparse con la tercera baza cuando el mazo cae de ese lado.
+
+---
+
 ## 2026-08-31 — El rival deja de ser uno solo y el lugar se nota
 
 ### Lo primero: se descartó la pasada anterior
