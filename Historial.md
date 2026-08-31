@@ -12,6 +12,77 @@
 
 ---
 
+## 2026-08-31 (quinta pasada) — Higiene del repo público: qué se sube, quién firma
+
+Sesión sin código de la web. Salió de tres preguntas mirando GitHub y las tres
+dieron algo distinto de lo que parecía.
+
+### `next-env.d.ts` NO es un archivo de secretos
+
+Se leyó como "hay algo env subido". Son cuatro líneas de referencias de tipos de
+TypeScript que genera Next.js, y la doc oficial dice que **se sube**: sin él
+`tsc` no conoce los tipos de Next. No existe ningún `.env` en el proyecto, y el
+`.gitignore` ya los frena. Queda anotado para no volver a sospechar de él.
+
+### Al `.gitignore` no le faltaba nada
+
+Se cruzó `git ls-files` (lo que git rastrea de verdad) contra
+`git status --ignored`. Los 86 archivos versionados son código, textos y los
+`.webp` del generador. `DISENO-NIVEL/`, `capturas/`, `borradores/`, `.next/`,
+`out/`, `tsconfig.tsbuildinfo` y `herramientas/.cache/` están afuera y
+**verificados como ignorados**, no sólo escritos en la regla.
+
+### Claude figuraba como contribuidor: era UN commit
+
+`92a3efd` terminaba con `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
+GitHub lee ese trailer, lo resuelve a la cuenta dueña del mail y la suma a
+Contributors. Con un solo commit alcanza.
+
+Se reescribió con `git filter-branch --msg-filter` acotado a `a6a3d50..`, para
+no cambiarle el hash a los 14 commits anteriores sin necesidad. El filtro corre
+con `LC_ALL=C` a propósito: el mensaje tiene acentos y flechas UTF-8 y así `sed`
+pasa los bytes sin interpretarlos. Verificado: el árbol quedó idéntico
+(`c9bc5df…` antes y después) y el diff de mensajes borra exactamente una línea.
+
+Como el commit estaba en las dos ramas y mergeado por el PR #1, se reescriben
+tres: `92a3efd`, `4015596` y el merge `9dad7da`.
+
+**Para el futuro no se tocó el repo**: va en `~/.claude/settings.json`, fuera del
+proyecto, con `attribution: { commit: "", pr: "" }`. Ojo que
+`includeCoAuthoredBy` **está deprecado**; `attribution` es lo vigente y además
+cubre las descripciones de PR.
+
+### El email: el arreglo anterior era un parche por repo
+
+`git config user.email` acá estaba bien (el noreply de GitHub), pero
+`--global` seguía siendo el Gmail. O sea que cualquier repo nuevo volvía a
+filtrarlo. Se cambió el global al noreply.
+
+Los 7 commits viejos (`1bf4e96` … `a8ac8dd`) mantienen el Gmail: se decidió
+**no** reescribirlos, porque cambiaría todos los hashes y rompería las URLs de
+los commits viejos. Eso no lo puede tapar el `.gitignore` —está en los metadatos
+del commit, no en un archivo—.
+
+### PENDIENTE: falta el force-push
+
+El trabajo está hecho y verificado **en local**. La sesión no tenía credenciales
+de GitHub (el `fetch` anda porque el repo es público, pero escribir no), así que
+falta correr a mano:
+
+```
+git push --force-with-lease origin diseno-nivel-alfa && git push --force-with-lease origin main
+```
+
+`--force-with-lease` y no `--force`: aborta si alguien empujó algo desde el
+último `fetch`, en vez de pisarlo.
+
+Hay dos tags locales de respaldo, `respaldo/main-antes-limpiar` y
+`respaldo/alfa-antes-limpiar`, apuntando al estado publicado de antes. **Se
+borran recién cuando el push haya salido bien y GitHub se vea como corresponde**
+(`git tag -d`). Hasta entonces son la única forma de volver atrás.
+
+---
+
 ## 2026-08-31 (cuarta pasada) — Se va el segundo mazo y la mano deja de encogerse
 
 Los dos defectos salieron de MIRAR las capturas de la pasada anterior, no de
