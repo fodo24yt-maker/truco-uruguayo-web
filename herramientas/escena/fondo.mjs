@@ -99,8 +99,19 @@ function recorte(clave, tinta) {
  * es lo que te mete adentro del lugar en vez de dejarte mirándolo de afuera.
  */
 function marco(ambiente, azar) {
-  const oscuro = ambiente.deNoche ? "#120b06" : "#1c1409";
-  const op = ambiente.deNoche ? 0.82 : 0.72;
+  /* EL COLOR Y LA OPACIDAD YA NO CUELGAN DE `deNoche`, Y ESE ERA EL BUG.
+     `deNoche` decidía dos cosas a la vez: la LUZ del lugar —que sí depende de
+     si es un boliche o una plaza— y CUÁNTO CIERRA EL MARCO, que no depende de
+     nada de eso. Como `bar-ciudad` es el único de los siete con `deNoche`, a
+     los otros seis les quedaba el cielo pálido llegando hasta el borde mismo,
+     y contra el negro de la pantalla eso se leía como un panel gris pegado al
+     costado: "parece que no se terminó el diseño de la mesa".
+     Medido a 1266x841: el borde del fondo de `sierra` daba luma 14 y 23 y el
+     marco de la pantalla, 10. El de `bar-ciudad`, 8: por eso ése se fundía.
+     La FORMA sigue dependiendo del lugar —un boliche tiene sillas y una plaza
+     bancos, eso está bien—; lo que se igualó es cuánto tapan. */
+  const oscuro = "#120b06";
+  const op = 0.82;
   if (ambiente.deNoche) {
     // El boliche: el respaldo de una silla de cada lado, entrando en diagonal.
     // Van con un filo de luz arriba: sin eso son dos bloques negros y se leen
@@ -232,6 +243,69 @@ function lampara(ambiente) {
   </g>`;
 }
 
+/**
+ * HASTA DÓNDE ENTRA EL CIERRE DE LOS COSTADOS, y por qué no es un número fijo.
+ *
+ * Lo que tiene que quedar igual en los siete ambientes no es cuánta pintura
+ * negra se les pone: es el VALOR al que terminan. El borde del encuadre tiene
+ * que quedar tan oscuro como el marco de la pantalla, o el corte se ve. Y para
+ * llegar al mismo valor, un cielo claro necesita más cierre que uno oscuro.
+ *
+ * Se probó con un alcance fijo y quedó a medias, que es la prueba de que hacía
+ * falta esto: con el mismo 15% los seis pasaron de golpe salvo `feria`, que es
+ * el más claro de todos —cielo celeste sobre crema— y se quedó en luma 14
+ * contra un marco de 10. Los otros habían caído a 7-10.
+ *
+ * La claridad sale del propio `cielo` del ambiente, así que un ambiente nuevo
+ * trae su alcance puesto y nadie tiene que acordarse de calibrarlo:
+ *
+ *   bar-ciudad (casi negro) 0,06 → 16%      sierra 0,35 → 23%
+ *   feria (celeste/crema)   0,72 → 31%
+ */
+function alcanceDelCierre(ambiente) {
+  const luma = (hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    return (0.2 * ((n >> 16) & 255) + 0.7 * ((n >> 8) & 255) + 0.1 * (n & 255)) / 255;
+  };
+  const claridad = (luma(ambiente.cielo[0]) + luma(ambiente.cielo[1])) / 2;
+  /* EL TECHO NO ES DECORACIÓN: SIN ÉL LAS DOS RAMPAS SE CRUZAN.
+     El cierre se dibuja espejado en un solo gradiente, así que la cola de la
+     izquierda no puede pasar del medio o queda por delante del primer `stop`
+     de la derecha. Y los `stop` de un gradiente SVG tienen que ir en orden
+     creciente: cuando no van, el navegador no avisa, aplasta el que sobra
+     contra el anterior y la franja transparente del medio DESAPARECE. Con
+     `feria` pasó exactamente eso —cola en 0,558 contra un espejo que arrancaba
+     en 0,442— y el fondo se oscureció entero en vez de sólo por los costados.
+     Con la cola en `COLA` veces el alcance, el tope es medio ancho entre COLA,
+     menos un pelo para que nunca se toquen. */
+  return Math.min(0.15 + 0.22 * claridad, 0.48 / COLA);
+}
+
+/** Dónde termina la rampa, en múltiplos del alcance. Ver `alcanceDelCierre`. */
+const COLA = 1.45;
+
+/**
+ * Los ocho `stop` del cierre, espejados, a partir de un alcance.
+ *
+ * `alcance` es dónde el cierre baja al 36%; los otros dos van proporcionales,
+ * a 0,4 y `COLA` de eso. Se arma por código y no a mano para que la mitad
+ * derecha no se pueda desincronizar de la izquierda al tocar un número.
+ */
+function cierreLateral(alcance) {
+  const pasos = [
+    [0, 1],
+    [0.4 * alcance, 0.86],
+    [alcance, 0.36],
+    [COLA * alcance, 0],
+  ];
+  const stop = (x, o) =>
+    `<stop offset="${(x * 100).toFixed(2)}%" stop-color="#0d0906" stop-opacity="${o}"/>`;
+  return [
+    ...pasos.map(([x, o]) => stop(x, o)),
+    ...[...pasos].reverse().map(([x, o]) => stop(1 - x, o)),
+  ].join("\n        ");
+}
+
 export function fondoPlano(ambiente) {
   const azar = azarCon(semillaDe(ambiente.clave + "-fondo"));
   const escalaRecorte = ANCHO / 400;
@@ -283,12 +357,29 @@ export function fondoPlano(ambiente) {
     <rect width="${ANCHO}" height="${ALTO}" fill="none"/>
     <rect width="${ANCHO}" height="${ALTO}" style="mix-blend-mode:multiply"
           fill="url(#viñeta)"/>
+
+    <!-- ── EL CIERRE DE LOS COSTADOS ────────────────────────────────────────
+         Va en un gradiente HORIZONTAL y aparte de la viñeta, y no es lo mismo.
+         De esta imagen sólo se ve la franja de abajo: son 2000x750 metidos con
+         object-cover / object-bottom en una franja de ~1180x181, o sea el 41%
+         inferior, y cuánto se ve depende de la forma de la ventana. Una viñeta
+         radial se recorta distinto en cada pantalla y su parte más oscura
+         —arriba y abajo del todo— es justo la que se cae del recorte. Un
+         cierre vertical cae siempre en el mismo lugar, mire quien mire.
+
+         El color es el mismo #0d0906 con el que la mesa pinta lo que hay
+         fuera de la escena, así que el borde de la imagen y el marco de la
+         pantalla son literalmente el mismo negro y no hay dónde ver el corte. -->
+    <rect width="${ANCHO}" height="${ALTO}" fill="url(#cierre-costados)"/>
     <defs>
       <radialGradient id="viñeta" cx="50%" cy="55%" r="72%">
         <stop offset="0%" stop-color="#fff"/>
         <stop offset="62%" stop-color="#cfcfcf"/>
-        <stop offset="100%" stop-color="#4a4a4a"/>
+        <stop offset="100%" stop-color="#1e1e1e"/>
       </radialGradient>
+      <linearGradient id="cierre-costados" x1="0" y1="0" x2="1" y2="0">
+        ${cierreLateral(alcanceDelCierre(ambiente))}
+      </linearGradient>
     </defs>
   </svg>`;
 }

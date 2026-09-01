@@ -47,12 +47,24 @@ export default function Gira() {
     <div className="mesa-pantalla-completa flex min-h-0 flex-1 flex-col bg-noche">
       {/* Barra de arriba, como la del mapa de la referencia */}
       <header className="madera flex shrink-0 items-center justify-between border-b-2 filo-dorado px-3 py-2.5">
+        {/* CON EL DESTINO ESCRITO, no una flecha suelta. Era un `←` en un
+            círculo y no se encontraba; ahora se lee igual que el de la mesa,
+            que es el que funciona: chevron y adónde va. */}
         <Link
           href="/jugar"
-          className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-dorado/60 text-dorado transition-colors hover:bg-black/30"
-          aria-label="Volver"
+          className="flex items-center gap-1.5 rounded px-2 py-1.5 font-[family-name:var(--font-ui)] text-sm uppercase tracking-wide text-dorado transition-colors hover:bg-black/30"
         >
-          ←
+          <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+            <path
+              d="M15 5 L8 12 L15 19"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          Jugar
         </Link>
         <h1 className="font-[family-name:var(--font-display)] text-xl text-dorado sm:text-2xl">
           Gira Nacional

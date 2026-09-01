@@ -6,6 +6,16 @@ import { desdeTexto } from "@/lib/motor/baraja";
 export default function ElegirModo() {
   return (
     <div className="tabla-mesa relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-4 py-10">
+      {/* Volver, con el mismo aspecto que en las lecciones y en los legales.
+          Acá el encabezado del sitio se ve, pero el logo no es un "atrás": es
+          un logo. La flecha va arriba a la izquierda, que es donde se busca. */}
+      <Link
+        href="/"
+        className="absolute left-4 top-4 font-[family-name:var(--font-ui)] text-sm text-crema/60 transition-colors hover:text-crema"
+      >
+        ← Inicio
+      </Link>
+
       <h1 className="text-center font-[family-name:var(--font-display)] text-3xl text-crema sm:text-4xl">
         ¿Cómo querés jugar?
       </h1>

@@ -53,34 +53,86 @@ const TRAZOS = [
   "M3 4 L19 22", // el quinto, cruzado
 ];
 
-function Grupo({ cantidad }: { cantidad: number }) {
+/**
+ * Un grupo de cinco: cuatro palitos que arman el cuadrado y el quinto cruzado.
+ *
+ * Está suelto y con color y tamaño por parámetro porque lo usan DOS cosas: la
+ * libreta apoyada en la mesa —tinta sobre papel, medida en `em`— y el marcador
+ * de la barra de arriba —claro sobre la franja oscura, medido en píxeles—.
+ * Duplicar los cinco trazos sería tener dos formas de contar hasta cinco.
+ */
+export function Palitos({
+  cantidad,
+  color,
+  alto,
+  ancho,
+  opacidad = 0.88,
+  fantasma = false,
+}: {
+  cantidad: number;
+  color: string;
+  alto: string;
+  ancho: string;
+  opacidad?: number;
+  /**
+   * El cuadrado vacío dibujado detrás, apenas visible.
+   *
+   * ES LO QUE HACE QUE EL MARCADOR SE ENTIENDA CUANDO VA 0 A 0. Sin esto, una
+   * partida recién empezada mostraba arriba "VOS │ · ÉL │": dos etiquetas y
+   * las rayitas de las malas, y nada más. No se leía "cero de treinta", se
+   * leía que algo no cargó.
+   *
+   * Van los CUATRO LADOS y no los cinco: el quinto es el cruzado, y un aspa de
+   * fondo en cada casillero ensucia la fila entera. Es el ▢ de las
+   * referencias.
+   *
+   * En la libreta va apagado, y es a propósito: un papel de verdad no viene
+   * con los casilleros impresos.
+   */
+  fantasma?: boolean;
+}) {
   return (
-    <svg
-      viewBox="0 0 22 26"
-      className="shrink-0"
-      style={{ height: "0.118em", width: "0.1em" }}
-      aria-hidden="true"
-    >
+    <svg viewBox="0 0 22 26" className="shrink-0" style={{ height: alto, width: ancho }} aria-hidden="true">
+      {fantasma &&
+        TRAZOS.slice(0, 4).map((d) => (
+          <path
+            key={`f${d}`}
+            d={d}
+            stroke={color}
+            strokeWidth="2"
+            strokeLinecap="round"
+            fill="none"
+            opacity={0.2}
+          />
+        ))}
       {TRAZOS.slice(0, cantidad).map((d) => (
         <path
           key={d}
           d={d}
-          stroke="var(--color-tinta)"
+          stroke={color}
           strokeWidth="2.4"
           strokeLinecap="round"
           fill="none"
-          opacity="0.88"
+          opacity={opacidad}
         />
       ))}
     </svg>
   );
 }
 
+/** Cuántos palitos lleva cada uno de los tres grupos de una mitad. */
+const enGrupos = (n: number) =>
+  Array.from({ length: 3 }, (_, i) => Math.max(0, Math.min(5, n - i * 5)));
+
+function Grupo({ cantidad }: { cantidad: number }) {
+  return (
+    <Palitos cantidad={cantidad} color="var(--color-tinta)" alto="0.118em" ancho="0.1em" />
+  );
+}
+
 function Fila({ etiqueta, puntos }: { etiqueta: string; puntos: number }) {
   const malas = Math.min(puntos, 15);
   const buenas = Math.max(puntos - 15, 0);
-  const grupos = (n: number) =>
-    Array.from({ length: 3 }, (_, i) => Math.max(0, Math.min(5, n - i * 5)));
 
   return (
     <div className="flex items-center" style={{ gap: "0.026em" }}>
@@ -100,13 +152,13 @@ function Fila({ etiqueta, puntos }: { etiqueta: string; puntos: number }) {
         </span>
       </span>
       <span className="flex" style={{ gap: "0.012em" }}>
-        {grupos(malas).map((n, i) => (
+        {enGrupos(malas).map((n, i) => (
           <Grupo key={`m${i}`} cantidad={n} />
         ))}
       </span>
       <span className="bg-tinta/30" style={{ width: "1px", height: "0.1em", margin: "0 0.016em" }} />
       <span className="flex" style={{ gap: "0.012em" }}>
-        {grupos(buenas).map((n, i) => (
+        {enGrupos(buenas).map((n, i) => (
           <Grupo key={`b${i}`} cantidad={n} />
         ))}
       </span>
@@ -208,6 +260,130 @@ export function Marcador({
         </div>
       </div>
       <Birome />
+    </div>
+  );
+}
+
+/* ═══ EL MARCADOR DE LA BARRA DE ARRIBA ═════════════════════════════════════
+
+   Es lo que hacen las referencias (`DISENO-NIVEL/Inspiracion del diseño de
+   nivel/Nivel.png` y `nivel2.png`): arriba de todo, `Tú: ▢▢▢▢▢▢` de un lado y
+   el nombre del rival con los suyos del otro. Cuadraditos y no números, que
+   además es lo que ya estaba decidido acá ("los palitos se quedan").
+
+   ── Por qué existe, además de la libreta ──────────────────────────────────
+
+   En el celular la libreta se comía el cuarto de arriba de la mesa: 169 de los
+   390 px de ancho, con la birome llegando al borde. Ahí se va y este marcador
+   queda como el único. En la compu se quedan los dos, igual que en la
+   referencia, que tiene los cuadraditos arriba Y el papelito sobre la mesa.
+
+   ── Por qué va en la barra y no flotando sobre la escena ──────────────────
+
+   La barra ya existe y mide 30px fijos. Metido ahí, el marcador no le saca ni
+   un píxel a la mesa; puesto encima de la escena taparía el fondo o al rival,
+   que es donde ya está el medallón. Ocupa el lugar del texto del ambiente, que
+   era decorativo y sigue estando —pegado al marcador— donde hay ancho.
+
+   Los seis grupos son los 30 puntos de la partida, con el corte de las malas
+   después del tercero: la misma cuenta que la libreta. */
+
+/* ── EL TAMAÑO DE LOS CASILLEROS, QUE NO ES FIJO ───────────────────────────
+   Con 9x12 clavados entraba en un celular de 320 y en la compu quedaba una
+   hilera de puntitos: la barra mide 1440 de ancho y le sobraban 434px de
+   hueco. O sea el mismo problema que ya tuvo el mazo —medir en píxeles fijos
+   una escena que cambia de tamaño— pero al revés.
+
+   Va en `clamp` con `vw` y no en un punto de corte: acá lo que aprieta ES el
+   ancho, porque la barra reparte tres cosas en una línea. Del piso al techo
+   crece parejo, sin que en ningún ancho salte de golpe.
+
+     320px → 9px (el piso, que es lo que entra al lado de "Mapa" y "Ayudas")
+     1266  → 14px
+     1440+ → 16px (el techo: más alto que esto no entra en una barra de 30px)
+
+   El alto sigue la proporción del dibujo (22x26), así que va con el mismo
+   clamp multiplicado por 1,18. Si se toca uno se toca el otro o los palitos
+   salen aplastados. */
+const CASILLERO = { ancho: "clamp(9px, 1.1vw, 16px)", alto: "clamp(11px, 1.3vw, 19px)" };
+
+/** Una vez cada jugador: la etiqueta y los seis grupos. */
+function TiraDeBarra({
+  etiqueta,
+  puntos,
+  color,
+  claseEtiqueta,
+}: {
+  etiqueta: string;
+  puntos: number;
+  color: string;
+  claseEtiqueta: string;
+}) {
+  const malas = Math.min(puntos, 15);
+  const buenas = Math.max(puntos - 15, 0);
+  return (
+    <span
+      className="flex min-w-0 items-center gap-[2px]"
+      aria-label={`${etiqueta}: ${puntos} ${puntos === 1 ? "punto" : "puntos"}`}
+    >
+      <span className={`mr-[2px] shrink-0 ${claseEtiqueta}`}>{etiqueta}</span>
+      <span className="flex gap-px">
+        {enGrupos(malas).map((n, i) => (
+          <Palitos
+            key={`m${i}`}
+            cantidad={n}
+            color={color}
+            alto={CASILLERO.alto}
+            ancho={CASILLERO.ancho}
+            opacidad={0.95}
+            fantasma
+          />
+        ))}
+      </span>
+      {/* la raya de las malas a las buenas, la misma que tiene la libreta */}
+      <span className="w-px shrink-0 bg-crema/25" style={{ height: CASILLERO.ancho }} />
+      <span className="flex gap-px">
+        {enGrupos(buenas).map((n, i) => (
+          <Palitos
+            key={`b${i}`}
+            cantidad={n}
+            color={color}
+            alto={CASILLERO.alto}
+            ancho={CASILLERO.ancho}
+            opacidad={0.95}
+            fantasma
+          />
+        ))}
+      </span>
+    </span>
+  );
+}
+
+export function MarcadorBarra({ vos, rival }: { vos: number; rival: number }) {
+  /* Los tuyos en dorado y los de él en crema: es el mismo par que ya usa el
+     resto de la mesa —"TU TANTO" va en dorado— así que de un vistazo se sabe
+     cuál fila es cuál sin leer la etiqueta. */
+  /* "Yo" y "Él" son las MISMAS etiquetas de la libreta, y eso no es prolijidad:
+     en la compu las dos cosas están en pantalla a la vez, y con "Vos" arriba y
+     "Yo" en el papel parecen tres jugadores. Además "Yo" entra donde "Vos" no:
+     a 320px la fila necesitaba 185px y había 170. */
+  return (
+    <div className="flex min-w-0 items-center gap-[clamp(6px,0.8vw,14px)] font-[family-name:var(--font-ui)] text-[clamp(10px,0.85vw,13px)] uppercase tracking-wide">
+      <TiraDeBarra
+        etiqueta="Yo"
+        puntos={vos}
+        color="var(--color-dorado)"
+        claseEtiqueta="text-dorado/90"
+      />
+      <span aria-hidden="true" className="text-crema/20">
+        ·
+      </span>
+      <TiraDeBarra
+        etiqueta="Él"
+        puntos={rival}
+        color="var(--color-crema)"
+        claseEtiqueta="text-crema/60"
+      />
     </div>
   );
 }

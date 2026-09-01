@@ -12,6 +12,232 @@
 
 ---
 
+## 2026-08-31 (octava pasada) — El marco gris, el celular sin papelito y los botones que faltaban
+
+Tres cosas reportadas jugando. Las tres se diagnosticaron **mirando la web con
+Playwright**, y las tres eran distintas de lo que parecían.
+
+### 1. "A los costados de la mesa hay algo gris, como que no se terminó"
+
+**El primer diagnóstico fue equivocado y conviene dejarlo escrito.** Se miró la
+captura, se vio la barra negra a los costados —el tope de ancho de la escena, que
+en una ventana de 1440 deja 130px de cada lado— y se dio por hecho que era eso.
+No era: *"No me refiero a lo negro, fijate bien en las diferencias"*. **La barra
+negra está bien y no se tocó.**
+
+Lo gris era otra cosa. Reproduciendo las DOS capturas al MISMO tamaño
+(1266×841), para que la única diferencia fuera el departamento:
+
+| franja del borde del fondo | izq | der |
+|---|---|---|
+| La Pocha · Lavalleja (`sierra`) | luma **14** | **23** |
+| Luquita · Montevideo (`bar-ciudad`) | luma **8** | 17 |
+| el marco negro de la pantalla | 10 | 10 |
+
+El de Montevideo queda MÁS OSCURO que el marco, así que se funde. El de
+Lavalleja queda por encima y encima neutro (R≈G≈B): contra el marco se ve el
+escalón, y eso es lo que se lee como "no está terminado".
+
+**No era un problema de niveles.** Las 7 texturas estaban horneadas en la misma
+corrida y las dos capturas usaban el mismo diseño (`data-diseno="pc"`). Se
+verificó además que los `.webp` de la mesa **no tienen canal alfa**: la hipótesis
+de las esquinas transparentes —que fue el bug de la quinta pasada— estaba
+descartada.
+
+**La causa: `ambiente.deNoche` decidía dos cosas a la vez.** La LUZ del lugar,
+que sí depende de si es un boliche o una plaza, y CUÁNTO CIERRA EL MARCO, que no
+depende de nada de eso. Como `bar-ciudad` es el **único de los siete** con
+`deNoche: true`, a los otros seis `marco()` les dibujaba respaldos al 0,72 y les
+dejaba el cielo pálido llegando hasta el borde mismo.
+
+Es **exactamente la misma trampa** que ya estaba anotada para `madera.mjs`
+("`deNoche` controla luz y desgaste a la vez"). Ahí controla luz y **encuadre**.
+
+#### Lo que se hizo
+
+- `marco()` deja de derivar color y opacidad de `deNoche`. La FORMA sigue
+  dependiendo del lugar —un boliche tiene sillas y una plaza bancos—; lo que se
+  igualó es cuánto tapan.
+- **Un cierre lateral nuevo**, en gradiente HORIZONTAL y aparte de la viñeta. La
+  razón de que sea horizontal y no radial: de esa imagen **sólo se ve la franja
+  de abajo** (2000×750 metidos con `object-cover object-bottom` en ~1180×181, o
+  sea el 41% inferior) y cuánto se ve depende de la forma de la ventana. La
+  parte más oscura de una viñeta radial —arriba y abajo del todo— es justo la
+  que se cae del recorte. Un cierre vertical cae siempre en el mismo lugar.
+- El color es `#0d0906`, que es literalmente el `bg-[#0d0906]` con el que la
+  mesa pinta lo de afuera: el borde de la imagen y el marco son el mismo negro.
+
+#### El alcance NO es un número fijo, y eso costó dos horneadas
+
+Con un alcance fijo del 15% seis pasaron y **`feria` (Canelones) no**: bajó de
+luma 50 a 14, todavía arriba del marco. Su cielo es el más claro de los siete
+—celeste sobre crema— y para llegar al mismo VALOR un cielo claro necesita más
+cierre que uno oscuro. Lo que tiene que quedar igual no es cuánta pintura negra
+se pone: es el valor al que se termina.
+
+Ahora el alcance sale de la claridad del propio `cielo` del ambiente, así que un
+ambiente nuevo trae el suyo puesto:
+
+    bar-ciudad 0,06 → 16%     sierra 0,35 → 23%     feria 0,72 → 31%
+
+#### Y un error propio que vale la pena tener anotado
+
+Con el alcance derivado, `feria` se fue a 0,31 y **las dos rampas del gradiente
+se cruzaban en el medio**: la cola de la izquierda caía en 0,558 y el espejo de
+la derecha arrancaba en 0,442. Los `stop` de un gradiente SVG tienen que ir en
+orden creciente y, **cuando no van, el navegador no avisa**: aplasta el que sobra
+contra el anterior y la franja transparente del medio desaparece. Medido, el
+daño era chico (el centro del fondo perdió 2 puntos de luma), pero el gradiente
+dependía de un comportamiento de recorte que nadie prometió. Ahora la cola va en
+`COLA` veces el alcance y el alcance tiene techo `0,48 / COLA`, así que por
+construcción no se pueden cruzar.
+
+#### Cómo quedó, medido
+
+`mirar-rivales.mjs` gana una comprobación nueva: para un departamento de cada
+ambiente, abre la mesa **a 1266×841 y no en el celular** —el defecto sólo existe
+donde hay marco negro; en el celular la escena ocupa el ancho entero— y falla si
+la franja del borde queda más clara que el marco.
+
+| | antes | ahora |
+|---|---|---|
+| bar-ciudad | 7 | 7 |
+| **feria** | **50** | **10** |
+| campo | 13 | 7 |
+| sierra | 14 | 7 |
+| costa | 24 | 8 |
+| litoral | 18 | 8 |
+| norte | 18 | 8 |
+
+Contra un marco de 10, los siete. De paso los `.webp` del fondo bajaron un 27%
+(de 96 KB a 70 KB los siete juntos): hay menos detalle que codificar en los
+bordes. **Los `-mesa.webp` no cambiaron.**
+
+### 2. En el celular la libreta se comía la mesa
+
+Medida a 390×844: **169 de los 390px de ancho**, con la birome llegando al
+borde. Decidido con Santiago: **se va sólo del celular**; en la compu se queda,
+que es lo que hacen las referencias —`Nivel.png` tiene los cuadraditos arriba Y
+el papelito sobre la madera—.
+
+- `DisenoDeMesa.libreta` pasa a admitir `null`, y es `null` y no un campo
+  ausente a propósito: los dos diseños tienen que seguir teniendo la misma
+  forma, así que sacarla es DECIR que no va.
+- **El mate se mudó al hueco.** Los dos números los fijó la medición: calculados
+  a mano daban `u 0,74 · v 0,42` y `mirar-mesa-nueva.mjs` los rechazó, porque a
+  390×844 la TERCERA baza llegaba a x=284 y el mate empezaba en 282. Dos
+  píxeles. Quedó en `0,78 · 0,34`. **Es la tercera vez en este proyecto que un
+  número de la mesa se calcula en papel y sale mal.**
+- **Un enganche escondido:** `uLibreta` no se usaba sólo para la libreta.
+  Decidía además de qué lado caen las tres cartas del reparto. Pasa a mirar
+  `uOtro` —el mate—, que es el mismo costado por construcción y existe en los
+  dos diseños.
+
+#### El marcador de arriba
+
+`components/mesa/Marcador.tsx` exporta ahora `Palitos` —los cinco trazos, con
+color y tamaño por parámetro— y lo usan las dos cosas: la libreta en tinta sobre
+papel y medida en `em`, y el marcador de la barra en claro sobre la franja
+oscura y medido en píxeles. Duplicarlos sería tener dos formas de contar hasta
+cinco.
+
+Va **en la barra de juego**, en el lugar del nombre del ambiente. La barra ya
+existía y mide 30px fijos: metido ahí el marcador no le saca ni un píxel a la
+mesa, mientras que flotando sobre la escena taparía el fondo o al rival. El
+nombre del lugar vuelve sólo de `md:` para arriba.
+
+Tres cosas que se aprendieron acomodándolo, y las tres se midieron:
+
+1. **A 0 a 0 no se entendía nada.** `Palitos` con cantidad 0 no dibuja nada, así
+   que una partida recién empezada mostraba `YO │ · ÉL │`: dos etiquetas y las
+   rayitas de las malas. Ahora hay un `fantasma`: el cuadrado vacío detrás, con
+   los CUATRO lados y no los cinco —el quinto es el cruzado y un aspa de fondo
+   en cada casillero ensucia la fila—. Es el ▢ de las referencias. En la libreta
+   va apagado: un papel de verdad no viene con los casilleros impresos.
+2. **A 320px no entraba.** La fila necesitaba 185px y había 170. Se ajustó
+   midiendo `scrollWidth - clientWidth` y no a ojo: casilleros más justos,
+   huecos de 1px y **"Yo" en vez de "Vos"**, que además son las etiquetas que ya
+   usa la libreta —con "Vos" arriba y "Yo" en el papel parecían tres jugadores—.
+3. **En la compu quedaba chico**, y lo dijo Santiago mirando la captura: con
+   9×12 clavados, en una barra de 1440 sobraban 434px de hueco. Mismo problema
+   que ya tuvo el mazo, pero al revés. Va en `clamp(9px, 1.1vw, 16px)` y no en un
+   punto de corte: acá lo que aprieta ES el ancho, porque la barra reparte tres
+   cosas en una línea.
+
+### 3. El mapa de la gira no tenía botón de volver — y era un `>` de CSS
+
+El `<header>` de la gira —la flecha, el título y el `n/19`— **existía en el
+código y en el DOM**, midiendo 0×0. Lo escondía esta regla de `globals.css`:
+
+    body:has(.mesa-pantalla-completa) header { display: none; }
+
+Sin combinador de hijo, eso esconde **todos** los `<header>` de la página, no
+sólo el del sitio. El del sitio es hijo directo de `<body>` y el de la gira está
+adentro de `<main>`: con `> header` se separan. Un carácter.
+
+Se aprovechó para que la flecha se ENCUENTRE: era un `←` suelto en un círculo y
+ahora se lee como la de la mesa, chevron y el destino escrito ("Jugar"). Y se
+agregó `← Inicio` en `/jugar` y `/aprender`, que eran las dos que quedaban sin
+volver (`/aprender/[leccion]` y `/legales/*` ya tenían).
+
+### Una herramienta que estaba mintiendo
+
+`mirar-mesa-nueva.mjs` comprobaba tres cosas contra "la libreta". Sacándola del
+celular, **las tres pantallas de celular habrían pasado a no comprobar nada de
+ese costado y habrían seguido dando 0**, que es la peor forma de romper una
+herramienta: la que no se nota. Ahora el objeto que manda es el más alto de ese
+costado —libreta en la compu, mate en el celular— y las tres comprobaciones van
+contra ése.
+
+De paso se arregló un bug viejo de la tira de la mano: armaba el lienzo con el
+alto del PRIMER cuadro y los tres salen de altos distintos, así que `composite`
+se plantaba con *"Image to composite must have same dimensions or smaller"*.
+
+### Estado al cerrar
+`npm test` **133/133** · `tsc --noEmit` limpio · `npm run build` OK ·
+`mirar-mesa.mjs` sin scroll en los siete tamaños · `mirar-mesa-nueva.mjs` en
+**0 en las seis**, con el mate midiéndose en celular y la libreta en PC ·
+`mirar-web.mjs` en 0 · `mirar-rivales.mjs` con los 7 ambientes cerrando el
+marco.
+
+### El repaso de seguridad
+No se encontró ninguna vulnerabilidad. Lo que se miró:
+
+- **No entra ni una entrada de usuario nueva.** El `?depto=` sigue pasando por
+  `porSlugDeDepartamento` y `ESCENAS[clave]`, con las 7 rutas escritas enteras
+  (0 plantillas). Los únicos `document.querySelector` que se agregaron viven
+  adentro de un `page.evaluate` de una herramienta, o sea nunca viajan al sitio.
+- **El marcador nuevo no sopla nada.** Recibe `p.puntos`, que son los puntos
+  cantados en voz alta. Los dorsos del rival se siguen dibujando con
+  `p.cartas.rival.map((_, i) => …)`, descartando la carta.
+- **El `>` destapa un `<header>` que estaba escondido**, así que se revisó qué
+  muestra: el enlace de volver, el título y `ganadas/total`, que ya está dibujado
+  en el propio mapa ("0 de 19"). No hay dato nuevo en pantalla.
+- La CSP no se tocó, los enlaces externos siguen con `noopener noreferrer`, y no
+  hay `dangerouslySetInnerHTML`, `innerHTML`, `eval` ni `javascript:` en todo el
+  proyecto.
+
+### Pendiente
+
+1. **La carga es lenta.** Reportado y anotado a pedido, sin tocar. Lo medido,
+   para no arrancar de cero: **532 KB de tipografías**
+   (`out/_next/static/media`, cuatro familias de Google auto-hospedadas) es el
+   bulto más grande y el más fácil de bajar —`Caveat` se usa sólo en la libreta
+   y en el marcador—; **804 KB de JS** sin comprimir, 156 KB gzip los tres
+   trozos grandes; y **2 WebP por departamento**, que ya se bajan de a uno.
+2. **La barra negra a los costados en PC.** No es un bug: es
+   `maxWidth: min(1180px, 158vh)` y está puesto a propósito, porque los objetos
+   se miden en `vh` y llenar la ventana los deja del mismo tamaño en una escena
+   más ancha. Se probó a 1440 y a 1920: a 1920 el mate y la libreta quedan
+   pegados a los bordes y el medio es un desierto de madera. Queda como está
+   hasta que alguien lo pida.
+3. Una **copla nueva** en `versos.ts` para "primero va el envido". El botón ya
+   está; falta el verso.
+4. Un **objeto propio por departamento**, en el hueco que dejó el descarte.
+5. Si la madera se ve poco definida en PC, la palanca es `FINAL_MESA`.
+
+---
+
 ## 2026-08-31 (séptima pasada) — Se vuelve a una sola rama
 
 **Se terminó la rama `diseno-nivel-alfa`. De acá en adelante se trabaja directo

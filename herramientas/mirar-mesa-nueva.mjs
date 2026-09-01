@@ -50,6 +50,9 @@ const TAMANOS = [
   [1280, 620, "pc"],
   [1440, 900, "pc"],
 ];
+/** "la libreta" / "el mate": el objeto del costado libre cambia con el diseño. */
+const conArticulo = (que) => (que === "libreta" ? "la libreta" : `el ${que}`);
+
 /** Cuánto puede asomar un objeto por encima del canto antes de ser un problema. */
 const TOLERANCIA = 2;
 
@@ -159,16 +162,21 @@ for (const [ancho, alto, esperado] of TAMANOS) {
       problemas.push(`${o.que} se solapa con tu mano`);
     }
   }
-  /* 4. NADA SE LE PUEDE MONTAR A LA LIBRETA.
+  /* 4. NADA SE LE PUEDE MONTAR AL OBJETO DEL COSTADO LIBRE.
      No es "que no se solape nada con nada": el mate delante del mazo o una baza
-     encima de otra son profundidad y están bien. La libreta es distinta porque
-     es lo único de la mesa que hay que LEER —los puntos— y con media carta
-     encima no se lee. Que la libreta se coma una baza era además un pendiente
-     viejo del proyecto: acá queda medido en vez de anotado. */
-  const libreta = m.objetos.find((o) => o.que === "libreta");
-  if (libreta) {
+     encima de otra son profundidad y están bien. Este es distinto porque es el
+     que está apretado entre el canto y las bazas, y en el caso de la libreta
+     además es lo único de la mesa que hay que LEER.
+
+     CUÁL ES DEPENDE DEL DISEÑO, y por eso no está clavado en "libreta": en la
+     compu ese lugar lo ocupa la libreta y en el celular el mate, porque la
+     libreta se sacó de ahí. Si esto dijera sólo "libreta", las tres pantallas
+     de celular pasarían a no comprobar NADA de ese costado y seguirían dando
+     0, que es la peor forma de romper una herramienta: la que no se nota. */
+  const mando = m.objetos.find((o) => o.que === "libreta") ?? m.objetos.find((o) => o.que === "mate");
+  if (mando) {
     for (const o of m.objetos) {
-      if (o !== libreta && seCruzan(libreta, o)) problemas.push(`${o.que} se le monta a la libreta`);
+      if (o !== mando && seCruzan(mando, o)) problemas.push(`${o.que} se le monta a ${conArticulo(mando.que)}`);
     }
   }
 
@@ -194,22 +202,22 @@ for (const [ancho, alto, esperado] of TAMANOS) {
         ` (${m.objetos.length} objetos, ${puestas} baza(s) puesta(s))`,
     );
   }
-  /* LOS DOS MÁRGENES DE LA LIBRETA, que son los que deciden su altura.
-     Está apretada entre dos cosas que se mueven en sentidos opuestos: si sube,
+  /* LOS DOS MÁRGENES DEL QUE MANDA, que son los que deciden su altura.
+     Está apretado entre dos cosas que se mueven en sentidos opuestos: si sube,
      se acerca al canto y se le monta al rival; si baja, se le meten las bazas.
      Imprimir los dos es lo que permite elegir el número en vez de tantearlo. */
-  if (libreta) {
+  if (mando) {
     /* Sólo cuentan los que están DEBAJO Y ADEMÁS PISADOS EN HORIZONTAL: un
        objeto que pasa dos píxeles más abajo pero tres columnas a la izquierda
-       no le hace nada a la libreta, y contarlo daba un margen falso de 2px que
-       hacía parecer que no había lugar. */
+       no le hace nada, y contarlo daba un margen falso de 2px que hacía
+       parecer que no había lugar. */
     const cerca = m.objetos
-      .filter((o) => o !== libreta && o.arriba >= libreta.abajo - 1)
-      .filter((o) => o.izq < libreta.der && libreta.izq < o.der)
-      .map((o) => o.arriba - libreta.abajo);
+      .filter((o) => o !== mando && o.arriba >= mando.abajo - 1)
+      .filter((o) => o.izq < mando.der && mando.izq < o.der)
+      .map((o) => o.arriba - mando.abajo);
     const abajo = cerca.length ? Math.min(...cerca) : Infinity;
     console.log(
-      `${" ".repeat(13)}libreta: ${(libreta.arriba - m.canto).toFixed(0)}px al canto` +
+      `${" ".repeat(13)}${mando.que}: ${(mando.arriba - m.canto).toFixed(0)}px al canto` +
         `, ${abajo === Infinity ? "—" : `${abajo.toFixed(0)}px`} a lo de abajo`,
     );
   }
@@ -233,23 +241,24 @@ for (const [ancho, alto] of TAMANOS) {
   await pag.addStyleTag({ content: "nextjs-portal{display:none!important}" });
   await pag.waitForTimeout(900);
   const m = await medir(pag);
-  const libreta = m.objetos.find((o) => o.que === "libreta");
+  // El mismo "el que manda" de arriba: libreta en la compu, mate en el celular.
+  const mando = m.objetos.find((o) => o.que === "libreta") ?? m.objetos.find((o) => o.que === "mate");
   const reparto = m.objetos.find((o) => o.que === "reparto");
   const etiqueta = `${ancho}x${alto}`;
   if (!reparto) {
     console.log(`  ${etiqueta.padEnd(9)} no se llegó a ver el reparto`);
-  } else if (libreta && seCruzan(libreta, reparto)) {
+  } else if (mando && seCruzan(mando, reparto)) {
     fallos++;
-    console.log(`FALLA ${etiqueta}  las cartas del reparto se le montan a la libreta`);
+    console.log(`FALLA ${etiqueta}  las cartas del reparto se le montan a ${conArticulo(mando.que)}`);
     console.log(`   reparto x ${reparto.izq.toFixed(0)}..${reparto.der.toFixed(0)}` +
-      `   libreta x ${libreta.izq.toFixed(0)}..${libreta.der.toFixed(0)}`);
+      `   ${mando.que} x ${mando.izq.toFixed(0)}..${mando.der.toFixed(0)}`);
     await pag.screenshot({ path: path.join(SALIDA, `falla-reparto-${etiqueta}.png`) });
   } else if (reparto.arriba < m.canto - TOLERANCIA) {
     fallos++;
     console.log(`FALLA ${etiqueta}  las cartas del reparto cruzan el canto`);
   } else {
     console.log(
-      `  ${etiqueta.padEnd(9)} OK  (${libreta ? (libreta.izq - reparto.der).toFixed(0) : "?"}px entre el reparto y la libreta)`,
+      `  ${etiqueta.padEnd(9)} OK  (${mando ? `${(mando.izq - reparto.der).toFixed(0)}px entre el reparto y ${conArticulo(mando.que)}` : "?"})`,
     );
   }
   await ctx.close();
@@ -357,7 +366,14 @@ for (const [ancho, alto] of [[390, 844], [320, 568]]) {
   if (!tiras) {
     console.log(`  ${ancho}x${alto}: no se pudo llegar a una sola carta sin que terminara la mano`);
   } else {
-    const { width, height } = await sharp(tiras[0].foto).metadata();
+    /* EL LIENZO VA CON EL ALTO MÁS GRANDE DE LOS TRES, no con el del primero.
+       Cada cuadro se recorta desde donde está la mano, y la mano se mueve al
+       jugar cartas: los tres salen de altos distintos. Tomando el del primero,
+       `composite` se plantaba con "Image to composite must have same
+       dimensions or smaller" y la tira no salía nunca. */
+    const medidas = await Promise.all(tiras.map(({ foto }) => sharp(foto).metadata()));
+    const width = Math.max(...medidas.map((m) => m.width));
+    const height = Math.max(...medidas.map((m) => m.height));
     const archivo = path.join(SALIDA, `TIRA-mano-${ancho}x${alto}.png`);
     await sharp({
       create: { width: width * 3, height, channels: 3, background: "#15100a" },

@@ -502,8 +502,16 @@ body:has(.mesa-pantalla-completa) footer {
 /* En la mesa el encabezado del sitio se esconde entero, igual que el pie.
    Antes sólo se apretaba, porque tenía que quedar cómo salir de la partida; eso
    ahora lo resuelve la barra de juego, que tiene su propio "Salir" y ocupa 30px
-   en vez de 76. Los 46 de diferencia son cartas. */
-body:has(.mesa-pantalla-completa) header {
+   en vez de 76. Los 46 de diferencia son cartas.
+
+   EL `>` NO ES PROLIJIDAD: SIN ÉL LA GIRA SE QUEDABA SIN BOTÓN DE VOLVER.
+   Escrito como `body:has(…) header`, esto esconde TODOS los `<header>` de la
+   página, y el mapa de la gira tiene el suyo propio —la flecha, el título y el
+   contador de victorias—. O sea que había un botón de volver en el código, en
+   el DOM, midiendo 0×0, y no se veía nunca. El encabezado del sitio es hijo
+   directo de `<body>` y el de la gira está adentro de `<main>`: el combinador
+   de hijo es lo que los separa. */
+body:has(.mesa-pantalla-completa) > header {
   display: none;
 }
 

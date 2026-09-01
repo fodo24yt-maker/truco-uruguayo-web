@@ -13,6 +13,13 @@ export const metadata: Metadata = {
 export default function Aprender() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-12">
+      {/* El mismo "volver" que ya usan las lecciones y los legales. */}
+      <div className="mb-5 font-[family-name:var(--font-ui)] text-sm">
+        <Link href="/" className="text-crema/60 hover:text-crema">
+          ← Inicio
+        </Link>
+      </div>
+
       <h1 className="font-[family-name:var(--font-display)] text-3xl text-dorado sm:text-4xl">
         Aprender truco uruguayo
       </h1>

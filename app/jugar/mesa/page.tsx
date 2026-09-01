@@ -17,7 +17,7 @@ import {
 import { DedosAtras, PulgarAdelante } from "@/components/mesa/Manos";
 import { SombraApoyada } from "@/components/mesa/Sombra";
 import { Medallon } from "@/components/mesa/Medallon";
-import { Marcador } from "@/components/mesa/Marcador";
+import { Marcador, MarcadorBarra } from "@/components/mesa/Marcador";
 import { Mazo } from "@/components/mesa/Mazo";
 import { type Carta as CartaType, esPieza } from "@/lib/motor/baraja";
 import { decidirJugada } from "@/lib/motor/bot";
@@ -153,8 +153,19 @@ interface DisenoDeMesa {
    * dibuja del tamaño que tendría en `tamano`, que es de donde vino. Sí, eso le
    * miente un poco a la perspectiva, en el único objeto de la mesa que hay que
    * LEER y no sólo mirar. Vale la pena.
+   *
+   * ── `null` EN EL CELULAR, y por eso el campo es opcional ────────────────
+   * Ahí se comía el cuarto de arriba de la mesa: 169 de 390 px de ancho, con
+   * la birome llegando al borde. Los puntos ahora los dice `MarcadorBarra`,
+   * arriba, que no le saca ni un píxel a la mesa. En la compu se queda: hay
+   * lugar de sobra y es lo que hacen las referencias, que tienen los
+   * cuadraditos arriba Y el papelito sobre la madera.
+   *
+   * Es `null` y no un campo ausente a propósito: los dos diseños tienen que
+   * seguir teniendo la misma forma, así que sacar la libreta es DECIR que no
+   * va, no olvidarse de ponerla.
    */
-  libreta: { u: number; v: number; tamano: number; ancho: string };
+  libreta: { u: number; v: number; tamano: number; ancho: string } | null;
   /**
    * Las cartas jugadas. `paso` es cuánto se separan las bazas entre sí.
    *
@@ -170,8 +181,22 @@ interface DisenoDeMesa {
 const CELULAR: DisenoDeMesa = {
   fondo: 22,
   mazo: { u: 0.24, v: 0.5, ancho: "clamp(74px, 15vh, 122px)" },
-  mate: { u: 0.76, v: 0.66, alto: "clamp(54px, 11vh, 104px)" },
-  libreta: { u: 0.7, v: 0.23, tamano: 0.42, ancho: "clamp(122px, 25vh, 204px)" },
+  /* EL MATE SE MUDÓ AL HUECO DE LA LIBRETA. Estaba abajo (v = 0,66) porque
+     arriba estaba ocupado; ahora ese costado quedó libre entero. Y crece,
+     porque es lo único que queda de ese lado.
+
+     No va tan al fondo como estaba la libreta (v = 0,23): `estiloEnMesa` ancla
+     por la BASE y todo crece HACIA ARRIBA, así que un mate apoyado allá se le
+     sube al rival por el pecho.
+
+     LOS DOS NÚMEROS LOS FIJÓ LA MEDICIÓN. Calculados a mano daban 0,74 y 0,42,
+     y `mirar-mesa-nueva.mjs` los rechazó: a 390x844 la TERCERA baza llegaba a
+     x=284 y el mate empezaba en 282. Dos píxeles. Es la tercera vez que en
+     este proyecto un número de la mesa se calcula en papel y sale mal, y las
+     tres veces por lo mismo: el `clamp` del objeto, el alto de la ventana y la
+     escala en perspectiva se multiplican y no se pueden separar leyendo. */
+  mate: { u: 0.78, v: 0.34, alto: "clamp(62px, 13vh, 118px)" },
+  libreta: null,
   baza: {
     suya: 0.46,
     tuya: 0.64,
@@ -638,8 +663,8 @@ function Mesa() {
   const uMazo = espejo(d.mazo.u);
   const uOtro = espejo(d.mate.u);
   // La libreta es lo más ancho de la mesa: va más adentro que el mate para que
-  // no se salga por el costado en el celular.
-  const uLibreta = espejo(d.libreta.u);
+  // no se salga por el costado. En el celular no está y esto queda en null.
+  const uLibreta = d.libreta ? espejo(d.libreta.u) : null;
   const altoRival = altoDelRival(d.fondo);
   /**
    * Dónde va una carta jugada, y hacia dónde se va cuando se levanta la mesa.
@@ -711,10 +736,17 @@ function Mesa() {
           {esHistoria ? "Mapa" : "Salir"}
         </Link>
 
-        <span className="truncate font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-[0.14em] text-dorado/70">
-          {rival.lugar}
-          <span className="hidden sm:inline"> · {ambiente.nombre}</span>
-        </span>
+        {/* EL MARCADOR VA ACÁ, en el lugar que tenía el nombre del lugar.
+            Es lo que hacen las referencias y, sobre todo, es lo que permite
+            sacar la libreta del celular sin que dejes de ver cómo va. El
+            nombre del lugar era decorativo —el departamento ya está en el
+            medallón— así que vuelve sólo donde sobra ancho. */}
+        <div className="flex min-w-0 items-center gap-2.5">
+          <MarcadorBarra vos={p.puntos.vos} rival={p.puntos.rival} />
+          <span className="hidden truncate font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-[0.14em] text-dorado/60 md:inline">
+            {rival.lugar} · {ambiente.nombre}
+          </span>
+        </div>
 
         <button
           onClick={() => {
@@ -809,17 +841,23 @@ function Mesa() {
             {/* LA LIBRETA, al costado y cerca. Estaba en el centro del borde
                 lejano, o sea justo encima del pecho del rival, y encima salía
                 chica: allá la perspectiva achica todo. Ahora va al costado, a
-                la altura del mazo pero del lado libre, y bastante más grande. */}
-            <div
-              data-mesa="libreta"
-              style={estiloEnMesa(
-                uLibreta,
-                d.libreta.v,
-                escalaEnMesa(d.libreta.tamano) / escalaEnMesa(d.libreta.v),
-              )}
-            >
-              <Marcador vos={p.puntos.vos} rival={p.puntos.rival} ancho={d.libreta.ancho} />
-            </div>
+                la altura del mazo pero del lado libre, y bastante más grande.
+
+                SÓLO EN LA COMPU. En el celular se comía el cuarto de arriba de
+                la mesa y los puntos los dice `MarcadorBarra`, en la franja de
+                arriba, que no le saca alto a la mesa. */}
+            {d.libreta && uLibreta !== null && (
+              <div
+                data-mesa="libreta"
+                style={estiloEnMesa(
+                  uLibreta,
+                  d.libreta.v,
+                  escalaEnMesa(d.libreta.tamano) / escalaEnMesa(d.libreta.v),
+                )}
+              >
+                <Marcador vos={p.puntos.vos} rival={p.puntos.rival} ancho={d.libreta.ancho} />
+              </div>
+            )}
 
             {/* ── LAS TRES QUE LE REPARTEN A ÉL ───────────────────────────
                 Existen SÓLO mientras dura el reparto. Él no tiene las cartas
@@ -837,12 +875,15 @@ function Mesa() {
             {repartiendo && (
               <div
                 data-mesa="reparto"
-                /* CORRIDAS AL LADO CONTRARIO DE LA LIBRETA. Repartidas al medio
-                   le caían justo encima del papel: se veía media hoja tapada
-                   por tres dorsos durante todo el reparto. La libreta está
-                   siempre del lado contrario al mazo, así que alcanza con
-                   mirar de qué lado quedó. */
-                style={estiloEnMesa(uLibreta > 0.5 ? 0.37 : 0.63, d.reparto.v)}
+                /* CORRIDAS AL LADO CONTRARIO AL MAZO. Repartidas al medio le
+                   caían justo encima de la libreta: se veía media hoja tapada
+                   por tres dorsos durante todo el reparto.
+
+                   Se mira `uOtro` —el mate— y no la libreta, que en el celular
+                   no existe. Da lo mismo: los dos van siempre del lado
+                   contrario al mazo, así que es el mismo costado y encima es
+                   uno que está en los dos diseños. */
+                style={estiloEnMesa(uOtro > 0.5 ? 0.37 : 0.63, d.reparto.v)}
                 className="pointer-events-none"
               >
                 {/* SEPARADAS Y CADA UNA TORCIDA DISTINTO. Pegadas y a escuadra
