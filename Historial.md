@@ -12,6 +12,224 @@
 
 ---
 
+## 2026-09-01 — El gris de las esquinas era el mismo bug, y los tantos al cerrar la mano
+
+Sesión de pendientes. Santiago eligió tres de la lista (6, 4 y 1) y en el medio
+apareció un reporte nuevo en `DISENO-NIVEL/`, que terminó siendo lo más
+importante de la pasada.
+
+### 1. "Bug gris en las esquinas" — y el archivo se llamaba SEGUNDAVEZQUEPASA
+
+Y tenía razón: **era el mismo bug de la octava pasada, una capa más abajo.**
+
+Allá se cerró el marco del **fondo** y los siete quedaron en luma 7-10. Pero
+abajo del fondo empieza la **madera**, que tiene su propio borde, y ése nunca se
+tocó. Medido en el navegador a 1266×841, en la costura donde la madera arranca:
+
+| | antes izq/der | ahora | marco |
+|---|---|---|---|
+| bar-ciudad | 8 / 7 | 7 / 6 | 10 |
+| **sierra** | **20 / 18** | 6 / 6 | 10 |
+| **feria** | **21 / 24** | 6 / 7 | 10 |
+
+La causa, en `herramientas/escena/madera.mjs`:
+
+    <stop offset="100%" stop-color="#000" stop-opacity="${deNoche ? 0.88 : 0.62}"/>
+
+`deNoche` otra vez decidiendo DOS cosas: la luz del lugar —que sí depende de si
+es un boliche o una feria— y **cuánto cierra el encuadre**, que no depende de
+eso. Como `bar-ciudad` es el único `deNoche: true`, a los otros seis la viñeta
+les cerraba 0,62 y la madera llegaba clara hasta el borde de la pantalla.
+
+Ahora sale de `cierraElBorde(ambiente)`, derivado de lo clara que es la madera,
+con la misma lección que ya estaba escrita para el fondo: **lo que tiene que
+quedar igual no es cuánta pintura negra se pone, es el VALOR al que se termina**,
+y una mesa clara necesita cerrar más. Con un número plano pasaron seis y `feria`
+—la más clara— se quedó en 11; con la pendiente, los siete.
+
+#### Dos horas perdidas por un comentario viejo, y por eso se corrigió
+
+`TablaMesa` decía *"la imagen tiene transparencia arriba a los costados"*. **Es
+mentira desde el 31/8**: la quinta pasada horneó el plano a 4700 justamente para
+que el borde lejano (×0,62 = 2914) tapara el cuadro de 2800 entero y no quedaran
+esquinas. Se buscó el gris en un canal alfa que no existe. El comentario ahora
+dice lo que pasa y por qué.
+
+#### La herramienta medía cualquier cosa, y dos veces
+
+`mirar-rivales.mjs` gana la franja de la madera, y costó tres intentos:
+
+1. **Medía el medallón.** Cuelga sobre la esquina de arriba a la derecha: los
+   siete daban 62-75, todos "fallando", tapando el defecto de verdad.
+2. **Medía la libreta y el mazo.** Están apoyados justo ahí. Ahora se esconden
+   `[data-encima]` y `[data-mesa]` antes de medir: lo que se comprueba es la
+   textura HORNEADA, no la interfaz que va encima.
+3. **La franja era de 60px y promediaba de más.** La del fondo puede ser gruesa
+   porque el fondo es parejo; la madera VIENE HACIA ADELANTE y se aclara sola.
+   Esos 60px iban de luma 5 en la costura a 16 abajo, el promedio daba 11 y
+   hacía fallar una mesa perfecta. Va de 12px: lo que se ve es **la costura**.
+
+**Se verificó que el chequeo sirve**: con el valor viejo puesto a mano, sierra
+da 16/15 y FALLA; con el arreglo, 6/6. Un chequeo que no falla cuando tiene que
+fallar no es un chequeo.
+
+### 2. Los tantos al cerrar la mano (pendiente 6)
+
+La regla, como la dijo Santiago: si la mano se jugó entera **no se muestra
+nada** —las seis cartas están sobre la mesa y el tanto lo cuenta cualquiera—.
+Sólo cuando se cortó antes (dos primeras bazas, truco no querido, mazo) y hubo
+envido jugado o flor cantada.
+
+- `partida.ts` gana `envidoJugado`. El cálculo **ya estaba** en `responderQuiero`
+  y se tiraba a `eventos` como texto; ahora se guarda estructurado.
+- `lib/tantos-al-cierre.ts` decide qué se enseña. Es función pura con test, por
+  lo mismo que `botonera.ts`: la pantalla no decide reglas del truco.
+- **Lo que NO se puede enseñar**, y está escrito ahí: la flor que nadie cantó, y
+  el envido que no se quiso. Los dos porque nadie los dijo en voz alta. Con el
+  envido querido los dos cantan su número, así que son públicos.
+- Va **abajo del medallón**, como se pidió, y **adentro del hueco que el
+  `Dialogo` ya tenía reservado**, como tercera forma suya. Colgado como un
+  cuarto hijo empujaba la columna contra la libreta. Dura los 2 s que la mesa ya
+  quedaba a la vista y se va con el barrido: no hay reloj nuevo.
+
+El test tiene una prueba que parece de más y no lo es: **"y sin embargo se
+enseña de verdad"**. Sin ella, las otras tres pasarían igual si la función
+devolviera siempre la lista vacía, que es la forma más fácil de "no mostrar de
+más".
+
+### 3. La carga (pendiente 1) — el número anotado estaba mal
+
+El `Historial` decía *"532 KB de tipografías es el bulto más grande"*. Eso es lo
+que hay **en el disco**: 21 `.woff2`. El navegador **baja 4**, los del
+subconjunto latino; los demás van con `unicode-range` y nunca se piden.
+
+Lo que se transfiere de verdad: **139 KB de fuente** y 208 KB de JS gzip, y de
+ese JS ~85% es React y el runtime de Next —nuestro código son 23 KB—. Ahí no hay
+nada que ganar sin cambiar de framework.
+
+La palanca real era **Caveat: 74,5 KB, más que las otras tres juntas**, usada en
+cuatro lugares y todos abajo de `/jugar`. Estaba declarada en `app/layout.tsx`,
+colgada del `<html>`, así que se precargaba en TODAS las páginas. Se mudó a
+`app/jugar/layout.tsx`:
+
+| | antes | ahora |
+|---|---|---|
+| portada, Aprender, legales | 139,4 KB | **66,6 KB** |
+| mesa y gira | 139,4 KB | 139,4 KB |
+
+**El riesgo era el envoltorio**: ese layout ahora envuelve a `children` en un
+`<div>`, y la mesa depende de la cadena de flex para no scrollear. Lleva
+`flex min-h-0 flex-1 flex-col` y `mirar-mesa.mjs` lo verifica en los siete
+tamaños.
+
+### 4. Un objeto propio por departamento (pendiente 4) — LOS 19
+
+Se hizo primero **uno solo** (el vaso de Montevideo), se mandó la captura y
+recién con el permiso se dibujaron los otros dieciocho, como pide `CLAUDE.md`.
+
+- `objetoDe(departamento)` en `lib/ambientes.ts`, al lado de `acentoDe`. La
+  regla, y es la única: **dos departamentos del mismo ambiente no pueden llevar
+  el mismo objeto**. Entre ambientes distintos sí —nunca se ven juntos— pero
+  adentro de "el galpón" (SEIS) y "el litoral" (CINCO) la pantalla ya es
+  idéntica, y ahí el objeto es lo único que los separa. Hay test.
+- Salen de lo que el departamento ES, no de un adorno: Fray Bentos la lata de
+  carne, Salto la naranja, Artigas la amatista, Durazno y Flores se llaman como
+  la fruta y la flor, Tacuarembó el sombrero —y ahí hay un chiste con la escena,
+  porque el rival no tiene cabeza—.
+
+#### Los datos se mudaron a `lib/objetos.ts`
+
+Estaban en `components/mesa/Objetos.tsx` con los dibujos, y el test no los podía
+leer: `node --test` sabe sacarle los tipos a un `.ts` pero **no transformar el
+JSX de un `.tsx`**. Quedó mejor de lo que estaba: los datos en `lib/`, la
+pintura en `components/`, y `lib/ambientes.ts` ya no importa nada de
+`components/`.
+
+#### Tres números por objeto, y ninguno sobra
+
+`PROPORCION` es la forma, `ALTURA` cuánto del alto de la mesa ocupa y `APOYO`
+cuánto de su ancho toca la madera. Sin `ALTURA`, una botella y un sombrero
+medirían lo mismo de alto y el sombrero saldría del tamaño de una rueda; `APOYO`
+es lo que hace que la sombra de contacto de una botella sea chica y la de un
+cajón sea todo el ancho.
+
+#### Cinco se redibujaron antes de mostrarlos
+
+Salieron y no se leían: el caracol era **un pan**, la estrella de mar era la
+estrella de puntuar cosas, la espuela una pieza de mecánica, la lata un
+escenario y la guampa un vaso cónico. Lo que se aprendió es siempre lo mismo:
+
+- **el caracol acostado es un bulto claro con rayas, o sea un pan.** Parado, la
+  silueta pasa a ser la torre de vueltas que todo el mundo tiene en la cabeza.
+  La forma dice caracol; la textura no alcanza a este tamaño.
+- **un bicho no tiene aristas.** La estrella con cinco puntas rectas es un
+  icono; con brazos gordos, curvos y picados es un animal.
+- **a la guampa se le sacó la yerba verde de adentro**, porque con ella se leía
+  un segundo mate y el mate de verdad ya está apoyado del otro lado.
+
+#### Y dos veces se midió mal el lugar
+
+1. **Cuarta vez que un número de la mesa se calcula en papel y sale mal.** A ojo
+   daba `u = 0,14` y el objeto se iba de la pantalla (x −53..−6 en 1100×800):
+   la perspectiva ABRE el frente y en el canto cercano sólo se ve de `u` 0,20 a
+   0,80.
+2. **La herramienta medía con la mano ya jugada.** `mirar-mesa-nueva.mjs` mide
+   después de tirar dos cartas, y con una carta la mano es más chica y llega más
+   abajo: todo entraba. Con la mano de TRES —o sea al empezar cada mano, que es
+   la mitad del tiempo— el objeto se metía adentro. **Hasta el vaso cruzaba, y
+   había pasado la prueba.** Ahora hay una comprobación aparte que mide los
+   cuatro objetos extremos —los dos más anchos y los dos más altos— sin jugar
+   una sola carta, en el celular más chico y en la compu más baja.
+
+Y una trampa que conviene tener escrita: **el alto de la escena en el celular
+cambia con la mano que te tocó**, porque la fila de la flor y la línea del tanto
+aparecen o no. Ajustado al límite, el farol pasaba o fallaba según el reparto.
+Por eso el objeto va con margen y no al ras.
+
+### Estado al cerrar
+`npm test` **141/141** (8 nuevos) · `tsc --noEmit` limpio · `npm run build` OK ·
+`mirar-mesa.mjs` sin scroll en los siete · `mirar-mesa-nueva.mjs` en 0 en las
+seis, más los cuatro objetos extremos medidos con la mano de tres cartas · `mirar-web.mjs` en 0, con el cartel de tantos
+verificado en celular y PC · `mirar-rivales.mjs` **14 comprobaciones OK** (7 del
+fondo y 7 de la madera).
+
+### El repaso de seguridad
+No se encontró ninguna vulnerabilidad. Lo que se miró:
+
+- **`envidoJugado` no expone nada nuevo.** Sólo se llena cuando el envido se
+  QUISO, y ahí los dos tantos ya se cantaron en voz alta: es el mismo dato que
+  ya estaba en `eventos`, estructurado. Hay tests que lo verifican sobre 80
+  partidas.
+- **Las cartas del rival siguen sin llegar al DOM**: `p.cartas.rival.map((_, i) => …)`
+  descarta la carta y usa sólo la cantidad.
+- **`objetoDe` se cerró con `Object.hasOwn`.** Indexar un objeto plano con un
+  string devuelve también la cadena de prototipos. Hoy no llega nadie de afuera
+  —el departamento sale de `PERSONALIDADES`— pero es el agujero que ya mordió a
+  este proyecto una vez. **`acentoDe` y `ambienteDe` tienen la misma forma y
+  quedaron como estaban**: no se tocaron por estar fuera del pedido, pero
+  conviene cerrarlas igual algún día.
+- **Los 19 objetos son SVG estáticos**: no reciben ni un dato de la partida ni
+  del jugador, así que no hay por dónde colar nada. Y no entra una sola imagen
+  de nadie: siguen siendo coordenadas, como todo el resto del dibujo.
+- Sin `dangerouslySetInnerHTML`, `innerHTML`, `eval` ni `javascript:`. La CSP
+  llega al HTML generado y el sitio no le pide nada a nadie.
+
+### Pendiente
+
+1. Una **copla nueva** en `versos.ts` para "primero va el envido". El botón está
+   desde la sexta pasada; falta el verso, con su marca de "sólo cuando hay un
+   truco esperando".
+2. `deNoche` **todavía controla luz y desgaste a la vez** en `madera.mjs`
+   (`deBoliche`, el graffiti y los cercos). Esta pasada le sacó el ENCUADRE, que
+   era la mitad que se veía; la del desgaste sigue.
+3. Las **constantes de la cámara siguen copiadas a mano** en
+   `mesa-perspectiva.ts`: `generar-escena.mjs` las calcula y no las emite.
+4. **La barra negra a los costados en PC** no es un bug y queda como está.
+5. ~~`FINAL_MESA` si la madera se ve blanda~~ **CERRADO**: Santiago dijo que la
+   mesa está bien.
+
+---
+
 ## 2026-08-31 (octava pasada) — El marco gris, el celular sin papelito y los botones que faltaban
 
 Tres cosas reportadas jugando. Las tres se diagnosticaron **mirando la web con
@@ -235,6 +453,7 @@ No se encontró ninguna vulnerabilidad. Lo que se miró:
    está; falta el verso.
 4. Un **objeto propio por departamento**, en el hueco que dejó el descarte.
 5. Si la madera se ve poco definida en PC, la palanca es `FINAL_MESA`.
+6. Añadir que cuando se canta envido y se juega al igual que la flor, se muestre los tantos al final de la mesa + un "Aqui esta mi envido" o "Aqui esta mi flor"
 
 ---
 

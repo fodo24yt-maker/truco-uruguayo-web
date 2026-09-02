@@ -98,9 +98,18 @@ function CapaDeAcento({ color, fuerza }: { color: string; fuerza: number }) {
  * todas formas queda tapado por tu mano y tus cartas— y nunca el lejano, que es
  * donde apoya los brazos el rival y donde está la libreta.
  *
- * La imagen tiene transparencia arriba a los costados, donde la mesa ya se
- * terminó: por ahí se ve el ambiente, y eso es lo que la convierte en una mesa
- * con esquinas en vez de un rectángulo de madera pegado al fondo.
+ * ── LA IMAGEN YA NO TIENE ESQUINAS TRANSPARENTES ─────────────────────────
+ *
+ * Las tuvo, y se sacaron a propósito el 31/8/2026: el plano se hornea a 4700 de
+ * ancho para que el borde lejano (×0,62 = 2914) tape el cuadro de 2800 entero,
+ * así que la madera llega al borde en cualquier pantalla. Este comentario decía
+ * lo contrario y costó una hora: se buscó el "gris de las esquinas" en un canal
+ * alfa que hace rato no existe.
+ *
+ * Lo que hace que la mesa no se lea como un rectángulo pegado al fondo es otra
+ * cosa: que el borde CIERRA hasta el valor del marco de la pantalla. De eso se
+ * ocupa `cierraElBorde` en `herramientas/escena/madera.mjs`, y
+ * `mirar-rivales.mjs` falla si algún ambiente deja de hacerlo.
  */
 export function TablaMesa({ ambiente, acento }: { ambiente: Ambiente; acento: string }) {
   const escena = ESCENAS[ambiente.clave];

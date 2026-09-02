@@ -132,7 +132,19 @@ console.log("\nel cierre del marco, uno por ambiente (a 1266x841):");
     await pag2.goto(`http://localhost:3000/jugar/mesa?depto=${slug}`, {
       waitUntil: "domcontentloaded",
     });
-    await pag2.addStyleTag({ content: "nextjs-portal{display:none!important}" });
+    /* SE MIDE LA ESCENA DESNUDA, SIN LO QUE ESTÁ APOYADO ENCIMA.
+       Lo que se comprueba es el borde de la textura HORNEADA. Con la mesa
+       puesta, la franja del borde derecho caía sobre la libreta y la del
+       izquierdo sobre el mazo, y los siete daban luma 62-75: un falso positivo
+       que tapaba el defecto de verdad. El medallón hace lo mismo desde la
+       esquina de arriba. Así que se esconden los dos —`[data-mesa]` es el
+       contenedor de los objetos y todo lo que va adentro— y queda a la vista
+       lo único que se quiere medir: el fondo, el rival y la madera. */
+    await pag2.addStyleTag({
+      content:
+        'nextjs-portal{display:none!important}' +
+        '[data-encima],[data-mesa]{display:none!important}',
+    });
     await pag2.waitForTimeout(2600);
 
     /* Dónde está la escena y dónde el fondo, preguntado y no supuesto: el tope
@@ -152,29 +164,56 @@ console.log("\nel cierre del marco, uno por ambiente (a 1266x841):");
     /* La franja de ABAJO del fondo, que es la que se ve en las dos pantallas.
        Y el medallón vive arriba a la derecha, así que se lo esquiva midiendo
        del medio del fondo para abajo. */
-    const arriba = Math.round((caja.arriba + caja.abajo) / 2);
-    const alto = Math.max(8, caja.abajo - arriba - 6);
-    const luma = async (izquierda, ancho) => {
+    const luma = async (izquierda, ancho, arriba, alto) => {
       const buf = await sharp(foto).extract({ left: izquierda, top: arriba, width: ancho, height: alto }).png().toBuffer();
       const [r, g, b] = (await sharp(buf).stats()).channels.slice(0, 3).map((c) => c.mean);
       return 0.2 * r + 0.7 * g + 0.1 * b;
     };
     const ANCHO_BORDE = 120;
-    const marco = await luma(4, Math.min(24, caja.x - 6));
-    const izq = await luma(caja.x + 2, ANCHO_BORDE);
-    const der = await luma(caja.x + caja.ancho - ANCHO_BORDE - 2, ANCHO_BORDE);
-    const peor = Math.max(izq, der);
-    if (peor > marco + 1) {
-      fallos++;
-      console.log(
-        `FALLA ${clave.padEnd(11)} el borde del fondo (izq ${izq.toFixed(0)}, der ${der.toFixed(0)})` +
-          ` queda MÁS CLARO que el marco (${marco.toFixed(0)}): se ve el escalón`,
-      );
-      await pag2.screenshot({ path: path.join(SALIDA, `falla-marco-${clave}.png`) });
-    } else {
-      console.log(
-        `  ${clave.padEnd(11)} OK  borde ${izq.toFixed(0)}/${der.toFixed(0)} contra marco ${marco.toFixed(0)}`,
-      );
+
+    /* DOS FRANJAS Y NO UNA, y la segunda se agregó porque el defecto volvió.
+       La primera vez el escalón estaba en el FONDO y se cerró su marco. Pero
+       abajo del fondo empieza la MADERA, que tiene su propio borde, y ése
+       quedó abierto: los seis ambientes de día seguían dejando una esquina
+       gris justo donde la madera arranca. Era el mismo bug una capa más abajo
+       —`deNoche` decidiendo cuánto cierra la viñeta en `madera.mjs`— y se
+       reportó dos veces porque acá no se estaba mirando.
+
+       El borde de abajo del fondo es también el borde de arriba de la mesa
+       (los dos caen en `d.fondo`%), así que `caja.abajo` sirve para las dos.
+
+       ── Y LA DE LA MADERA VA FINITA, QUE NO ES UN DETALLE ─────────────────
+       La del fondo puede ser gruesa porque el fondo está lejos y es parejo.
+       La madera NO: viene hacia adelante y se aclara sola, así que una franja
+       de 60px promedia la costura con madera que está bien que sea más clara,
+       y el número no dice nada. Medido en canelones, esos 60px iban de luma 5
+       en la costura a 16 abajo: el promedio daba 11 y hacía fallar una mesa
+       que estaba perfecta.
+
+       Lo que se mira es la COSTURA, que es lo que se ve: los primeros píxeles
+       de madera contra el fondo ya cerrado y contra el marco. */
+    const franjas = [
+      ["fondo", Math.round((caja.arriba + caja.abajo) / 2), Math.max(8, caja.abajo - Math.round((caja.arriba + caja.abajo) / 2) - 6)],
+      ["madera", caja.abajo + 2, 12],
+    ];
+
+    for (const [nombre, arriba, alto] of franjas) {
+      const marco = await luma(4, Math.min(24, caja.x - 6), arriba, alto);
+      const izq = await luma(caja.x + 2, ANCHO_BORDE, arriba, alto);
+      const der = await luma(caja.x + caja.ancho - ANCHO_BORDE - 2, ANCHO_BORDE, arriba, alto);
+      const peor = Math.max(izq, der);
+      if (peor > marco + 1) {
+        fallos++;
+        console.log(
+          `FALLA ${clave.padEnd(11)} el borde de la ${nombre} (izq ${izq.toFixed(0)}, der ${der.toFixed(0)})` +
+            ` queda MÁS CLARO que el marco (${marco.toFixed(0)}): se ve el escalón`,
+        );
+        await pag2.screenshot({ path: path.join(SALIDA, `falla-marco-${clave}-${nombre}.png`) });
+      } else {
+        console.log(
+          `  ${clave.padEnd(11)} ${nombre.padEnd(7)} OK  borde ${izq.toFixed(0)}/${der.toFixed(0)} contra marco ${marco.toFixed(0)}`,
+        );
+      }
     }
   }
   await ctx2.close();

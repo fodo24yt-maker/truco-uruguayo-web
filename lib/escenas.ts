@@ -31,37 +31,37 @@ export const ESCENAS: Record<ClaveAmbiente, Escena> = {
   "feria": {
     mesa: "/escenas/feria-mesa.webp",
     fondo: "/escenas/feria-fondo.webp",
-    colorMesa: "#6c4f2f",
+    colorMesa: "#674c2d",
     colorFondo: "#4c4d46",
   },
   "campo": {
     mesa: "/escenas/campo-mesa.webp",
     fondo: "/escenas/campo-fondo.webp",
-    colorMesa: "#614326",
+    colorMesa: "#5d4024",
     colorFondo: "#383524",
   },
   "sierra": {
     mesa: "/escenas/sierra-mesa.webp",
     fondo: "/escenas/sierra-fondo.webp",
-    colorMesa: "#5b4026",
+    colorMesa: "#573d25",
     colorFondo: "#343030",
   },
   "costa": {
     mesa: "/escenas/costa-mesa.webp",
     fondo: "/escenas/costa-fondo.webp",
-    colorMesa: "#634428",
+    colorMesa: "#5e4126",
     colorFondo: "#523f2f",
   },
   "litoral": {
     mesa: "/escenas/litoral-mesa.webp",
     fondo: "/escenas/litoral-fondo.webp",
-    colorMesa: "#5d4124",
+    colorMesa: "#593e22",
     colorFondo: "#4a3e2b",
   },
   "norte": {
     mesa: "/escenas/norte-mesa.webp",
     fondo: "/escenas/norte-fondo.webp",
-    colorMesa: "#684a2d",
+    colorMesa: "#63472b",
     colorFondo: "#453c2b",
   },
 };

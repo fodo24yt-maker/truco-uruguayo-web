@@ -32,6 +32,38 @@ const LUZ_Y = 0.57;
    Lo que hace que se lea como madera son tres cosas juntas: una veta fina
    (el poro), una veta gruesa (el anillo de crecimiento) y que las dos ONDULEN
    en vez de ir derechas. Lo tercero lo hace el `feDisplacementMap`. */
+/**
+ * Cuánto cierra la viñeta en el borde del encuadre.
+ *
+ * Lo que tiene que quedar igual en los siete no es cuánta pintura negra se les
+ * pone: es el VALOR al que la madera termina contra el marco de la pantalla. Y
+ * para llegar al mismo valor, una mesa clara necesita cerrar más que una
+ * oscura. Es la misma cuenta que `alcanceDelCierre` en `fondo.mjs`, y se
+ * aprendió ahí: con un número fijo pasaron seis y se quedó afuera el más claro.
+ *
+ * Medido con el cierre plano en 0,88, contra un marco de luma 10: los seis de
+ * día cayeron de 18-24 a 10-11 y `feria` —la mesa más clara de las siete— se
+ * quedó en 12. De ahí sale la pendiente.
+ *
+ *   bar-ciudad 0,41 → 0,880     sierra 0,44 → 0,888     feria 0,53 → 0,910
+ *
+ * La pendiente se subió de 0,16 a 0,24 despues de medir: con 0,16 pasaron seis
+ * y `feria` se quedó en 11 contra un marco de 10. Otra vez la más clara.
+ *
+ * El piso es `bar-ciudad`, que es el único que ya estaba bien y no se toca.
+ */
+function cierraElBorde(ambiente) {
+  const luma = (hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    return (0.2 * ((n >> 16) & 255) + 0.7 * ((n >> 8) & 255) + 0.1 * (n & 255)) / 255;
+  };
+  const claridad = (luma(ambiente.mesa[0]) + luma(ambiente.mesa[1])) / 2;
+  /* El tope en 0,94 es para que el borde nunca llegue a negro puro: una mesa
+     que termina en #000 deja de ser madera en penumbra y pasa a ser un agujero
+     recortado. */
+  return Math.min(0.88 + 0.24 * Math.max(0, claridad - 0.409), 0.94);
+}
+
 function filtros(ambiente, semilla) {
   return `
     <filter id="veta-fina" x="-2%" y="-2%" width="104%" height="104%">
@@ -101,10 +133,28 @@ function filtros(ambiente, semilla) {
       <stop offset="100%" stop-color="${ambiente.luz}" stop-opacity="0"/>
     </radialGradient>
 
+    <!-- ── LA VIÑETA DE LA MADERA ──────────────────────────────────────────
+         El stop del medio SÍ depende de la luz del lugar: en un boliche el
+         charco de la lámpara cae rápido y en una feria al mediodía la luz es
+         pareja. Eso es iluminación y está bien que la decida 'deNoche'.
+
+         EL DEL BORDE NO, Y ESE ERA EL BUG. Cerraba 0,88 de noche y 0,62 de
+         día, y como 'bar-ciudad' es el ÚNICO 'deNoche', los otros SEIS dejaban
+         la madera llegando clara hasta el borde del encuadre. Contra el marco
+         negro de la pantalla eso se lee como una esquina gris sin terminar, y
+         se reportó dos veces.
+
+         Es exactamente la misma trampa que ya se arregló en 'fondo.mjs': allá
+         'deNoche' decidía la luz Y cuánto cerraba el marco, y acá decidía la
+         luz Y cuánto cerraba la viñeta. Cuánto cierra el encuadre no depende
+         de la hora: depende de que el borde termine en el mismo valor que el
+         marco, que es el mismo para los siete. Por eso es UNA constante y no
+         una condición. Medido en 'mirar-rivales.mjs', que falla si algún
+         ambiente vuelve a quedar más claro que el marco. -->
     <radialGradient id="borde" cx="50%" cy="${LUZ_Y * 100}%" r="68%">
       <stop offset="0%"   stop-color="#000" stop-opacity="0"/>
       <stop offset="48%"  stop-color="#000" stop-opacity="${ambiente.deNoche ? 0.14 : 0.08}"/>
-      <stop offset="100%" stop-color="#000" stop-opacity="${ambiente.deNoche ? 0.88 : 0.62}"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="${cierraElBorde(ambiente).toFixed(3)}"/>
     </radialGradient>
 
     <linearGradient id="hondo" x1="0" y1="0" x2="0" y2="1">

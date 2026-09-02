@@ -86,6 +86,21 @@ export interface Partida {
    */
   trucoEnEspera: Pendiente | null;
   envidoCerrado: boolean; // ya se jugó, se rechazó o se pasó la ventana
+  /**
+   * Los dos tantos del envido, guardados SÓLO si se quiso.
+   *
+   * El cálculo ya se hacía —`responderQuiero` compara los tantos para saber
+   * quién gana— y después se tiraba a `eventos` como texto. Guardarlo acá es lo
+   * mismo que hace `historial` con las jugadas: los `eventos` son frases para
+   * leer y esto es el dato, para que la pantalla no tenga que interpretar
+   * `"27"` de una lista de strings.
+   *
+   * `null` MIENTRAS NO SE HAYA QUERIDO, y eso es la mitad del sentido del
+   * campo. Cuando el envido se quiere, los dos cantan su tanto en voz alta: son
+   * públicos y se pueden mostrar. Si se cantó y no se quiso, nadie dijo su
+   * número, y esto sigue en `null` para que no haya de dónde soplarlo.
+   */
+  envidoJugado: { vos: number; rival: number; ganador: Jugador } | null;
   florResuelta: boolean; // false mientras hay una flor cantada sin decidir
   florCantada: Record<Jugador, boolean>;
   /**
@@ -196,6 +211,7 @@ export function repartirMano(
     // alguien CANTA la flor, o cuando se juega el envido, o cuando se pasa la
     // ventana de la primera baza.
     envidoCerrado: false,
+    envidoJugado: null,
     florResuelta: true,
     florCantada: { vos: false, rival: false },
     yaHablo: { vos: false, rival: false },
@@ -630,6 +646,7 @@ function responderQuiero(p: Partida, quien: Jugador): Partida {
         : "rival";
 
   p.envidoCerrado = true;
+  p.envidoJugado = { ...tantos, ganador };
   p.eventos.push({ quien: "vos", texto: `${tantos.vos}` });
   p.eventos.push({ quien: "rival", texto: `${tantos.rival}` });
 

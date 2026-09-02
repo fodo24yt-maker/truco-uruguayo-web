@@ -18,6 +18,7 @@
  * TODO SE DIBUJA POR CÓDIGO, como el resto del juego: no hay una sola imagen.
  */
 
+import type { ClaveObjeto } from "./objetos.ts";
 import { COLOR_DEPARTAMENTO } from "./mapa-colores.ts";
 
 export type ClaveAmbiente =
@@ -148,6 +149,66 @@ const POR_DEPARTAMENTO: Record<string, ClaveAmbiente> = {
   Artigas: "norte",
   Tacuarembó: "norte",
 };
+
+/**
+ * EL OBJETO PROPIO DE CADA DEPARTAMENTO.
+ *
+ * Va aparte de `POR_DEPARTAMENTO` y no adentro del ambiente porque es
+ * justamente lo que los distingue CUANDO COMPARTEN AMBIENTE: Salto y Paysandú
+ * juegan los dos en el litoral y hoy la pantalla es la misma salvo por el tono.
+ *
+ * Por eso la única regla al llenar esta tabla es que **dos departamentos del
+ * mismo ambiente no pueden llevar el mismo objeto**. Entre ambientes distintos
+ * sí se puede repetir: nunca se ven uno al lado del otro y encima toda la
+ * escena es otra.
+ *
+ * Están los diecinueve. `objetoDe` igual sabe devolver `null`, y eso se deja a
+ * propósito: si un día se agrega un departamento y alguien se olvida de darle
+ * el suyo, la mesa queda sin objeto en vez de reventar.
+ */
+const OBJETO_DEPARTAMENTO: Record<string, ClaveObjeto> = {
+  // bar-ciudad
+  Montevideo: "vaso", //          un vaso de caña en la barra
+  // feria
+  Canelones: "cajon", //          el cajón de fruta de la feria de Las Piedras
+  // campo — son SEIS y comparten la misma escena: acá es donde más falta hace
+  "San José": "tarro", //         el tarro de la cuenca lechera
+  Florida: "boina", //            la boina apoyada del que se sentó a jugar
+  Durazno: "durazno", //          se llama así
+  Flores: "flor", //              se llama así, y además es un canto del truco
+  "Treinta y Tres": "espuela", // la rodaja de los Treinta y Tres Orientales
+  "Cerro Largo": "guampa", //     el cuerno de la frontera de Melo
+  // sierra
+  Lavalleja: "farol", //          las sierras al caer el sol
+  // costa
+  Maldonado: "caracol", //        Punta del Este
+  Rocha: "estrella", //           Cabo Polonio, La Paloma
+  // litoral — son CINCO
+  Colonia: "llave", //            el barrio histórico
+  Soriano: "espiga", //           el trigo de Mercedes
+  "Río Negro": "lata", //         Fray Bentos: la carne en lata que se comió medio mundo
+  Paysandú: "botella", //         la ciudad de la cerveza
+  Salto: "naranja", //            la citricultura
+  // norte
+  Rivera: "cafecito", //          la frontera que se cruza caminando
+  Artigas: "amatista", //         de acá salen las amatistas más grandes del mundo
+  Tacuarembó: "sombrero", //      el norte gaucho, y el rival de ahí no tiene cabeza
+};
+
+/**
+ * El objeto de ese departamento, o `null` si todavía no está dibujado.
+ *
+ * `Object.hasOwn` y no `?? null` a secas: indexar un objeto plano con un string
+ * te devuelve también lo que hay en la cadena de prototipos, así que
+ * `objetoDe("toString")` daría una función en vez de `null` y `PROPORCION[…]`
+ * reventaría. Hoy no llega nadie de afuera —el departamento sale siempre de
+ * `PERSONALIDADES`— pero es el agujero que ya mordió a este proyecto una vez y
+ * no cuesta nada cerrarlo acá.
+ */
+export const objetoDe = (departamento: string): ClaveObjeto | null =>
+  Object.hasOwn(OBJETO_DEPARTAMENTO, departamento)
+    ? OBJETO_DEPARTAMENTO[departamento]
+    : null;
 
 /** El acento del departamento, el mismo tono con el que se pinta en el mapa. */
 export const acentoDe = (departamento: string): string =>

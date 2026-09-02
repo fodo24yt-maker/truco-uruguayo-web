@@ -210,6 +210,126 @@ console.log("\nlevantar la mesa al terminar la mano:");
   await ctx.close();
 }
 
+/* ══ 4. LOS TANTOS QUE SE ENSEÑAN AL CERRAR LA MANO ════════════════════════
+   Cuando la mano se corta antes de jugarse las seis cartas y hubo un tanto
+   cantado, se enseña "Acá está mi envido" con los números, abajo del medallón.
+
+   Lo que se verifica no es que aparezca —eso ya lo prueba
+   `lib/tantos-al-cierre.test.ts`, y sin navegador— sino las TRES cosas que sólo
+   se ven en la pantalla de verdad:
+
+     · que no se le monte a la libreta, que en la compu cae de ese mismo lado;
+     · que no se salga de la escena por el costado ni por abajo;
+     · que el texto no quede cortado adentro del cartel.
+
+   El camino para llegar al caso: cantar el envido, que se quiera, y después
+   cantar truco hasta que el rival no lo quiera. Ahí la mano se cierra con las
+   cartas todavía en la mano, que es exactamente cuando hay algo que enseñar.
+   Se reintenta porque nada de eso depende de nosotros. */
+console.log("\nlos tantos al cerrar la mano:");
+for (const [ancho, alto] of [
+  [390, 844],
+  [1440, 900],
+]) {
+  const ctx = await nav.newContext({ viewport: { width: ancho, height: alto } });
+  const pag = await ctx.newPage();
+  const etiqueta = `${ancho}x${alto}`;
+  let visto = false;
+
+  const cantos = () =>
+    pag.evaluate(() =>
+      [...document.querySelectorAll("[data-canto]")]
+        .filter((b) => !b.disabled && b.offsetParent !== null)
+        .map((b) => b.dataset.canto),
+    );
+  const apretar = async (canto) => {
+    await pag.locator(`[data-canto="${canto}"]`).first().click().catch(() => {});
+    await pag.waitForTimeout(1500);
+  };
+
+  for (let intento = 0; intento < 25 && !visto; intento++) {
+    await abrir(pag, "/jugar/mesa?depto=montevideo");
+    await pag.waitForTimeout(2800);
+
+    // el tanto: la flor si la hay, y si no el envido
+    let hay = await cantos();
+    if (hay.includes("flor")) await apretar("flor");
+    else if (hay.includes("abrir-envido")) {
+      await pag.locator('[data-canto="abrir-envido"]').click().catch(() => {});
+      await pag.waitForTimeout(300);
+      await apretar("envido");
+    } else continue;
+
+    // si me contestaron subiendo, se quiere y listo: lo que importa es que se juegue
+    if ((await cantos()).includes("quiero")) await apretar("quiero");
+
+    /* Y ahora a cortar la mano: truco hasta que no lo quieran. Si lo quieren se
+       sigue tirando cartas, que también puede cerrarla con cartas en la mano
+       cuando alguien gana las dos primeras bazas. */
+    for (let paso = 0; paso < 6; paso++) {
+      const fase = await pag.getAttribute("[data-fase]", "data-fase").catch(() => null);
+      if (fase && fase !== "jugando") break;
+      hay = await cantos();
+      if (hay.includes("quiero")) await apretar("quiero");
+      else if (hay.includes("truco")) await apretar("truco");
+      else {
+        const cartas = pag.locator(".mano-abanico button:not([disabled])");
+        if ((await cartas.count()) === 0) break;
+        await cartas.first().click().catch(() => {});
+        await pag.waitForTimeout(1500);
+      }
+    }
+
+    const m = await pag.evaluate(() => {
+      const cartel = document.querySelector("[data-tantos]");
+      if (!cartel) return null;
+      const caja = (el) => {
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { arriba: r.top, abajo: r.bottom, izq: r.left, der: r.right };
+      };
+      const escena = document.querySelector('[data-mesa="tabla"]')?.closest(".penumbra");
+      return {
+        clase: cartel.dataset.tantos,
+        cartel: caja(cartel),
+        libreta: caja(document.querySelector('[data-mesa="libreta"]')),
+        escena: caja(escena),
+        // el texto adentro del cartel: si no entra, el navegador lo dice acá
+        cortadoAncho: cartel.scrollWidth > cartel.clientWidth + 1,
+        cortadoAlto: cartel.scrollHeight > cartel.clientHeight + 1,
+        texto: cartel.textContent.trim().replace(/\s+/g, " "),
+      };
+    });
+
+    if (!m) continue;
+    visto = true;
+
+    const solapan = (a, b) =>
+      a && b && a.izq < b.der && a.der > b.izq && a.arriba < b.abajo && a.abajo > b.arriba;
+
+    if (solapan(m.cartel, m.libreta)) {
+      falla(etiqueta, `el cartel de tantos se le monta a la libreta`);
+    }
+    if (m.escena && (m.cartel.der > m.escena.der + 1 || m.cartel.izq < m.escena.izq - 1)) {
+      falla(etiqueta, `el cartel de tantos se sale de la escena de costado`);
+    }
+    if (m.escena && m.cartel.abajo > m.escena.abajo + 1) {
+      falla(etiqueta, `el cartel de tantos se sale de la escena por abajo`);
+    }
+    if (m.cortadoAncho) falla(etiqueta, `el texto del cartel queda cortado de ancho`);
+    if (m.cortadoAlto) falla(etiqueta, `el texto del cartel queda cortado de alto`);
+
+    await pag.screenshot({ path: path.join(SALIDA, `tantos-${etiqueta}.png`) });
+    console.log(
+      `  ${etiqueta.padEnd(9)} ${m.clase.padEnd(6)} "${m.texto}"  ` +
+        `${Math.round(m.cartel.der - m.cartel.izq)}x${Math.round(m.cartel.abajo - m.cartel.arriba)}px` +
+        `${m.libreta ? " · con libreta en pantalla" : ""}`,
+    );
+  }
+  if (!visto) console.log(`  ${etiqueta.padEnd(9)} (no se llegó a cerrar una mano con tanto cantado)`);
+  await ctx.close();
+}
+
 await nav.close();
 console.log(fallos === 0 ? "\nTODO OK" : `\n${fallos} PROBLEMAS`);
 process.exit(fallos === 0 ? 0 : 1);

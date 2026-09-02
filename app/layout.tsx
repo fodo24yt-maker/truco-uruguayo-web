@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Caveat, Oswald, Source_Sans_3, Yeseva_One } from "next/font/google";
+import { Oswald, Source_Sans_3, Yeseva_One } from "next/font/google";
 import Link from "next/link";
 import { NOMBRE_SITIO, URL_SITIO } from "@/lib/sitio";
 import "./globals.css";
@@ -22,11 +22,10 @@ const texto = Source_Sans_3({
   variable: "--fuente-texto",
   display: "swap",
 });
-const manuscrita = Caveat({
-  subsets: ["latin"],
-  variable: "--fuente-mano",
-  display: "swap",
-});
+/* LA MANUSCRITA NO ESTÁ ACÁ, y es a propósito: vive en `app/jugar/layout.tsx`.
+   Es la más pesada de las cuatro y se usa sólo en la mesa y en la gira;
+   declarada acá, Next la precargaba también en la portada, en las lecciones y
+   en las legales, que no la usan. El porqué completo está allá. */
 
 export const metadata: Metadata = {
   // Sin esto, la imagen para compartir apuntaría a localhost y no se vería
@@ -95,7 +94,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="es-UY"
-      className={`${display.variable} ${ui.variable} ${texto.variable} ${manuscrita.variable}`}
+      className={`${display.variable} ${ui.variable} ${texto.variable}`}
     >
       <head>
         {process.env.NODE_ENV === "production" && (

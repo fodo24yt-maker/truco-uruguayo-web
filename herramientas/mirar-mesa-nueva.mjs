@@ -60,8 +60,8 @@ await mkdir(SALIDA, { recursive: true });
 const nav = await chromium.launch();
 let fallos = 0;
 
-async function abrir(pag, extra = "") {
-  await pag.goto(`http://localhost:3000/jugar/mesa?depto=montevideo${extra}`, {
+async function abrir(pag, extra = "", depto = "montevideo") {
+  await pag.goto(`http://localhost:3000/jugar/mesa?depto=${depto}${extra}`, {
     waitUntil: "domcontentloaded",
   });
   await pag.addStyleTag({ content: "nextjs-portal{display:none!important}" });
@@ -413,6 +413,71 @@ console.log("\nlos cuatro que más contrastan:");
     .toFile(path.join(SALIDA, "TIRA-rivales.png"));
   console.log(`  ${path.join(SALIDA, "TIRA-rivales.png")}`);
   await ctx.close();
+}
+
+/* ══ LOS OBJETOS EXTREMOS DE LA GIRA ═══════════════════════════════════════
+   Todo lo de arriba se mide en Montevideo, o sea con UN solo objeto: el vaso,
+   que es angosto y de alto medio. Pero cada departamento trae el suyo y no
+   miden todos igual —un sombrero es tres veces más ancho que un vaso y una
+   botella un 38% más alta—, así que pasar en Montevideo no prueba nada de los
+   otros dieciocho.
+
+   Se miran los CUATRO extremos y no los diecinueve: los dos más anchos, que
+   son los que se pueden salir por el costado, y los dos más altos, que son los
+   que se le pueden montar al mazo o cruzar el canto. Si entran los extremos,
+   entran los del medio. Y va a los dos tamaños más apretados de cada diseño. */
+console.log("\nlos objetos extremos de la gira:");
+{
+  const EXTREMOS = [
+    ["canelones", "cajón", "el más ancho"],
+    ["tacuarembo", "sombrero", "el segundo más ancho"],
+    ["paysandu", "botella", "la más alta"],
+    ["lavalleja", "farol", "el segundo más alto"],
+  ];
+  /* Los dos MÁS APRETADOS de cada diseño y no los seis: el celular más chico y
+     la compu más baja. Y con la mano de TRES cartas, o sea sin `prepararMesa`,
+     que es donde estaba el agujero: midiendo con dos cartas ya jugadas la mano
+     es más chica, llega más abajo y todo entra. */
+  for (const [ancho, alto] of [
+    [320, 568],
+    [1280, 620],
+  ]) {
+    const ctx = await nav.newContext({ viewport: { width: ancho, height: alto } });
+    const pag = await ctx.newPage();
+    for (const [depto, nombre, porque] of EXTREMOS) {
+      await abrir(pag, "", depto);
+      const m = await medir(pag);
+      const o = m.objetos.find((x) => x.que === "objeto");
+      const etiqueta = `${ancho}x${alto} ${nombre}`;
+      if (!o) {
+        fallos++;
+        console.log(`FALLA ${etiqueta.padEnd(24)} no se dibujó el objeto de ${depto}`);
+        continue;
+      }
+      const problemas = [];
+      if (o.izq < -1 || o.der > ancho + 1) {
+        problemas.push(`se sale por el costado (${o.izq.toFixed(0)}..${o.der.toFixed(0)})`);
+      }
+      if (o.arriba < m.canto - TOLERANCIA) {
+        problemas.push(`cruza el canto por ${(m.canto - o.arriba).toFixed(0)}px`);
+      }
+      if (m.mano && seCruzan(o, m.mano)) problemas.push("se solapa con tu mano");
+      const mazo = m.objetos.find((x) => x.que === "mazo");
+      if (mazo && seCruzan(o, mazo)) problemas.push("se le monta al mazo");
+
+      if (problemas.length) {
+        fallos += problemas.length;
+        console.log(`FALLA ${etiqueta.padEnd(24)} ${problemas.join(" · ")}`);
+        await pag.screenshot({ path: path.join(SALIDA, `falla-objeto-${depto}-${ancho}x${alto}.png`) });
+      } else {
+        console.log(
+          `  ${etiqueta.padEnd(24)} OK  ${(o.der - o.izq).toFixed(0)}x${(o.abajo - o.arriba).toFixed(0)}px` +
+            `  (${porque})`,
+        );
+      }
+    }
+    await ctx.close();
+  }
 }
 
 await nav.close();

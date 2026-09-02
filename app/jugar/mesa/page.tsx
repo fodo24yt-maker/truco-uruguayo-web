@@ -40,13 +40,15 @@ import {
 } from "@/lib/motor/personalidades";
 import { fichaVacia, observarMano } from "@/lib/motor/lectura";
 import { explicarEnvido, valorEnvido } from "@/lib/motor/tantos";
-import { acentoDe, ambienteDe } from "@/lib/ambientes";
+import { acentoDe, ambienteDe, objetoDe } from "@/lib/ambientes";
+import { ALTURA, APOYO, ObjetoDeMesa, PROPORCION } from "@/components/mesa/Objetos";
 import { escalaEnMesa, estiloEnMesa } from "@/lib/mesa-perspectiva";
 import { ESCENAS } from "@/lib/escenas";
 import { caraDe } from "@/lib/caras";
 import { porSlugDeDepartamento } from "@/lib/gira";
 import { usaPantallaAncha } from "@/lib/pantalla";
 import { botonera } from "@/lib/botonera";
+import { tantosAlCierre } from "@/lib/tantos-al-cierre";
 import { anotarPartida, guardarPreferencia, leerProgreso } from "@/lib/progreso";
 
 const DEMORA_BOT = 900; // lo que el bot "piensa", para que se pueda seguir
@@ -175,6 +177,46 @@ interface DisenoDeMesa {
   baza: { suya: number; tuya: number; ganador: number; ancho: string; paso: number };
   /** Las tres que le reparten a él, que existen sólo mientras dura el reparto. */
   reparto: { v: number; ancho: string };
+  /**
+   * El objeto del departamento, en el hueco que dejó el descarte.
+   *
+   * Va del lado del MAZO y hacia el borde cercano: ese costado quedó con el
+   * mazo solo cuando se sacó la pila de descartes, mientras que el otro tiene
+   * el mate y —en la compu— la libreta.
+   *
+   * Cerca y no al fondo, por lo mismo que el mate: `estiloEnMesa` ancla por la
+   * BASE y todo crece HACIA ARRIBA, así que un objeto apoyado allá lejos se le
+   * sube al rival por el pecho.
+   *
+   * PERO TAMPOCO PEGADO AL BORDE CERCANO, y esto lo fijó la medición. La
+   * perspectiva ABRE el frente: en el canto de acá sólo se ve de `u` 0,20 a
+   * 0,80, porque el plano se hornea a 4700 de ancho para un cuadro de 2800.
+   * Puesto en 0,14 —que a ojo es "al costado, cerca"— el objeto salía por la
+   * izquierda: `mirar-mesa-nueva.mjs` lo midió en x −53..−6 en 1100x800, o sea
+   * afuera de la pantalla entera. Es la cuarta vez en este proyecto que un
+   * número de la mesa se calcula en papel y sale mal.
+   *
+   * Y EN EL CELULAR VA MÁS ARRIBA (0,67 contra 0,72), porque ahí abajo está tu
+   * mano. En una pantalla de 568 de alto quedan 80px entre la base del mazo y
+   * el borde de arriba de la mano, y con 0,72 el objeto se metía 9px adentro.
+   * Ojo: **eso pasa sólo con la mano de TRES cartas**, o sea al empezar cada
+   * mano, y la herramienta medía con dos ya jugadas —cuando la mano es más
+   * chica y llega más abajo—, así que lo daba por bueno. Hasta el vaso, que es
+   * el más angosto de los diecinueve, cruzaba.
+   *
+   * Y el margen tiene que ser MARGEN, no un ajuste al límite: el alto de la
+   * escena en el celular **cambia con la mano que te tocó**, porque la fila de
+   * la flor y la línea del tanto aparecen o no. Ajustado a 3px, el farol
+   * pasaba o fallaba según el reparto. En 568 de alto quedan 80px entre la base
+   * del mazo y la mano, y el más alto de los diecinueve ocupa 45.
+   *
+   * EL TAMAÑO SE MIDE CONTRA EL MATE, que es el otro objeto de la mesa. La
+   * primera versión iba a 9,5vh y quedaba en un tercio del mate: en la mesa un
+   * vaso y un mate son parecidos de alto, así que a ese tamaño no se leía un
+   * vaso, se leía una miniatura. Va en dos tercios del mate, que es la
+   * proporción de verdad.
+   */
+  objeto: { u: number; v: number; alto: string };
 }
 
 /** Alto y angosta: el caso apretado, y el que manda si algo falla. */
@@ -205,6 +247,7 @@ const CELULAR: DisenoDeMesa = {
     paso: 0.125,
   },
   reparto: { v: 0.22, ancho: "clamp(28px, 5.6vh, 46px)" },
+  objeto: { u: 0.26, v: 0.65, alto: "clamp(32px, 7vh, 64px)" },
 };
 
 /** Ancha y baja. Lo único que cambia de fondo es el TAMAÑO de las cosas. */
@@ -221,6 +264,7 @@ const PC: DisenoDeMesa = {
     paso: 0.135,
   },
   reparto: { v: 0.22, ancho: "clamp(38px, 8vh, 72px)" },
+  objeto: { u: 0.22, v: 0.72, alto: "clamp(58px, 13vh, 112px)" },
 };
 
 /**
@@ -612,7 +656,26 @@ function Mesa() {
   const caraRival = caraDe(rival.id);
   // El tanto se cuenta con las tres cartas del reparto, nunca con las que quedan
   const miFlor = p.flor.vos;
+  /* Del DEPARTAMENTO y no del rival, igual que el ambiente y el acento de las
+     dos líneas de arriba: si mañana hay dos rivales en el mismo lugar, la mesa
+     es la misma. Vale también en partida libre, porque ahí el rival lo elegís
+     vos pero sigue siendo de algún lado. */
+  const objeto = objetoDe(rival.departamento);
+
   const miTanto = valorEnvido(p.manoInicial.vos, p.muestra);
+
+  /**
+   * LOS TANTOS QUE SE ENSEÑAN AL CERRAR LA MANO.
+   *
+   * Sólo mientras dura la ventana en la que la mesa queda a la vista, o sea
+   * hasta que empieza el barrido: `barrida` se prende a los 2 s. No hace falta
+   * un reloj propio, y no tenerlo es lo que garantiza que el cartel se vaya
+   * junto con las cartas en vez de quedar colgado sobre una mesa ya limpia.
+   *
+   * Cuándo hay algo que enseñar lo decide `tantosAlCierre`, no esto: si la mano
+   * se jugó entera devuelve vacío y acá no aparece nada.
+   */
+  const tantosEnseñados = barrida ? [] : tantosAlCierre(p);
 
   /**
    * El ancho del abanico, para que la mano lo siga.
@@ -665,6 +728,10 @@ function Mesa() {
   // La libreta es lo más ancho de la mesa: va más adentro que el mate para que
   // no se salga por el costado. En el celular no está y esto queda en null.
   const uLibreta = d.libreta ? espejo(d.libreta.u) : null;
+  /* El objeto del departamento va del lado del mazo, así que NO se espeja: el
+     `u` de los diseños se guarda del lado izquierdo y `espejo` lo manda al lado
+     del mazo, que es justo donde tiene que estar. */
+  const uObjeto = espejo(d.objeto.u);
   const altoRival = altoDelRival(d.fondo);
   /**
    * Dónde va una carta jugada, y hacia dónde se va cuando se levanta la mesa.
@@ -944,7 +1011,34 @@ function Mesa() {
                 **se quedan a la vista toda la mano**, decidido así el
                 31/8/2026: poder ver qué se jugó vale más que la costumbre. Se
                 levantan recién cuando apretás "Siguiente mano", o sea cuando
-                vos decidís que ya miraste. No volver a poner una pila acá. */}
+                vos decidís que ya miraste. No volver a poner una pila acá.
+
+                LO QUE SÍ VA ACÁ es el objeto del departamento: el hueco quedó
+                libre y es lo que hace que Salto y Paysandú no sean la misma
+                pantalla. Un objeto, no una pila de cartas. */}
+            {objeto && (
+              <div data-mesa="objeto" style={estiloEnMesa(uObjeto, d.objeto.v)}>
+                <div
+                  className="relative"
+                  /* El alto base es UNO para todos y cada objeto se lleva su
+                     fracción: sin eso una botella y un sombrero medirían lo
+                     mismo de alto y el sombrero saldría del tamaño de una
+                     rueda. La sombra sale de cuánto APOYA, que no es lo mismo
+                     que cuánto mide: una botella apoya un círculo chico y un
+                     cajón apoya todo. */
+                  style={{
+                    height: `calc(${ALTURA[objeto]} * (${d.objeto.alto}))`,
+                    aspectRatio: PROPORCION[objeto],
+                  }}
+                >
+                  <SombraApoyada
+                    ancho={APOYO[objeto]}
+                    desvio={ladoMazo === "izquierda" ? 0.3 : -0.3}
+                  />
+                  <ObjetoDeMesa objeto={objeto} />
+                </div>
+              </div>
+            )}
 
             {/* Las bazas: pares cruzando la mesa, CENTRADOS como grupo. La tuya
                 se monta sobre la de él, como quedan de verdad cuando las tirás
@@ -995,12 +1089,21 @@ function Mesa() {
           {/* ─── El medallón y lo que se dice ──────────────────────────
               El medallón es el ancla de la que cuelga el globo: por eso van
               juntos y en la misma esquina. */}
-          <div className="absolute right-1.5 top-1.5 z-20 flex w-[min(78%,340px)] flex-col items-end gap-1">
+          <div
+            /* El agarre con el que `mirar-rivales.mjs` TAPA esta columna antes
+               de medir el borde de la escena. Cuelga sobre la esquina de
+               arriba a la derecha, justo donde arranca la madera, y sin
+               esconderla la herramienta medía el medallón y daba luma 62 en
+               los siete: un falso positivo que tapaba el defecto de verdad. */
+            data-encima="medallon"
+            className="absolute right-1.5 top-1.5 z-20 flex w-[min(78%,340px)] flex-col items-end gap-1"
+          >
             <Medallon rival={rival} deLaGira={esHistoria} onCambiar={() => setEligiendo(true)} />
             <Dialogo
               lineas={verso?.lineas}
               canto={verso?.canto}
               eventos={p.eventos}
+              tantos={tantosEnseñados}
               onCerrarVerso={() => setVerso(null)}
             />
           </div>
