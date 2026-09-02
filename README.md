@@ -11,13 +11,11 @@ Una web para **aprender a jugar al truco uruguayo desde cero** y después
 
 ## Por qué este proyecto
 
-Si querés aprender truco uruguayo hoy, te chocás con dos problemas:
+Si querés aprender truco uruguayo hoy, te chocás con un gran problema:
 
 1. **Casi todo lo que hay en internet es truco argentino.** Las guías, los
    videos, los tutoriales: casi todos se saltean la muestra y las piezas, que
    son justamente el corazón del truco uruguayo. Aprendés otro juego.
-2. **Lo bueno se paga.** Las pocas apps que enseñan bien el truco uruguayo son
-   pagas o te dejan probar un rato y después te cobran.
 
 Y sobre todo: falta un lugar donde **aprender y practicar sean la misma cosa**.
 Leer las reglas no te enseña a jugar al truco; jugar sin saber contar el tanto
