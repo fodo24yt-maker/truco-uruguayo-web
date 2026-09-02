@@ -12,6 +12,178 @@
 
 ---
 
+## 2026-09-02 (segunda pasada) — Los dos bugs de la lista, y la mesa hecha para el celular
+
+Sesión de bugs. Santiago pasó `Bugs a arreglar/` con una foto de una partida en
+el celular y dos reportes escritos, y en el mismo viaje pidió que la mesa se
+mirara con ojos de app: **lo que importa ahora es el celular, la compu no.**
+
+Los dos bugs quedaron cerrados y salieron de la lista.
+
+### 1. El glitch bajo la carta: era la mano, y se pudo medir
+
+El reporte del 1/9 decía "un gliche bajo mi carta" y la sesión anterior lo dejó
+como REPORTADO, SIN REPRODUCIR. Esta vez salió, y no adivinando: **midiendo la
+foto**.
+
+El rectángulo de rayas cremas mide ~490×247 px físicos y arranca en x≈120. Con
+una carta en la mano, el `<span>` de la mano mide `2,245 × el ancho de una
+carta` ≈ 476 px en esa pantalla, y `DedosAtras` tiene `viewBox="0 0 200 96"`, o
+sea 2,08:1. El rectángulo da 1,98:1 y el mismo ancho. **El artefacto ES el SVG
+de tu mano**, rasterizado con basura. La línea blanca que cruzaba la mesa
+comparte el borde izquierdo: sale del mismo buffer.
+
+Y el dato que lo cerró lo puso Santiago: **"siempre pasa cuando me queda una
+sola carta"**. Eso lo explica el propio `Manos.tsx`, que ya lo tenía escrito
+desde que se dibujó: con tres cartas el abanico tapa el dibujo casi entero, y
+hay exactamente dos momentos en que queda desnudo —mientras se reparte y cuando
+te queda una—. O sea que el defecto probablemente estaba ahí siempre; una sola
+carta es cuando se lo puede ver.
+
+**La causa.** Cuando no es tu turno la mano se apaga con `opacity-75` —y en la
+foto no era tu turno, dice "gana el rival la baza"—. Una opacidad menor a 1
+obliga al navegador a componer **todo el subárbol** en una superficie aparte. Y
+adentro de esa superficie había tres filtros más:
+
+| dónde | qué era |
+|---|---|
+| `Manos.tsx` | `feGaussianBlur` para la sombra del pulgar |
+| `page.tsx`, cada carta | `filter: drop-shadow(…)` |
+| `page.tsx`, dos textos | `drop-shadow-[…]` de Tailwind, que es lo mismo |
+
+Filtros anidados adentro de un grupo de opacidad es lo que revienta en las GPU
+de teléfono, y es **la misma lección que dejó el ícono esta misma semana**: los
+filtros los resuelve el rasterizador y cada uno hace lo suyo.
+
+**Ahora la mano no tiene ni un filtro.** La sombra del pulgar es un
+`radialGradient` (dos elipses giradas siguiendo el dedo, contacto y proyectada,
+como `SombraApoyada`); la de las cartas es un `box-shadow` —la carta ya es un
+`<svg>` con `rounded-lg` sobre un `rect rx="7"`, así que sigue la misma silueta
+que seguía el filtro—; y los dos textos pasaron a `text-shadow`, que sobre texto
+hace exactamente lo mismo y no crea superficie.
+
+**Lo que NO se puede afirmar desde acá, y conviene tenerlo claro:** Chromium en
+esta máquina usa SwiftShader y no reproduce un defecto de GPU de un teléfono.
+Lo que sí se hizo es cuidar la condición que lo causaba, y dejarla cuidada:
+`mirar-mesa.mjs` ahora **falla si aparece cualquier `filter` computado adentro
+de `[data-mano="apagable"]`**. Comprobado saboteándolo: sin sabotaje da 0
+filtros, con un `drop-shadow` inyectado da 5.
+
+Si vuelve a pasar en el teléfono, lo próximo a mirar es el `opacity-75` en sí:
+la palanca sería apagar la mano sin componer el subárbol.
+
+### 2. El globo salía del rival aunque hablaras vos
+
+El segundo reporte: cantás la flor, la ganás, te toca cantar los tantos… y el
+número sale de la boca del otro. Era literal: `Dialogo` colgaba del medallón del
+rival y mostraba TODO, incluidos los eventos `quien: "vos"` —`partida.ts` empuja
+tu tanto como evento tuyo— y el papel "Acá está mi envido".
+
+Ahora son dos zonas:
+
+- **`DialogoRival`** cuelga del medallón, como antes. Lo que dice él y lo que
+  dice la mesa. Lo del sistema va acá y no abajo a propósito: no lo dice nadie,
+  es narración, y arriba es donde está el hueco grande.
+- **`DialogoMio`** va arriba de tus cartas, alineado a la izquierda.
+
+Tres cosas que costaron y conviene no deshacer:
+
+1. **Mi zona queda AFUERA del apagado de la mano.** Es todo el punto: justo
+   cuando no es tu turno es cuando hay que poder leer lo que cantaste. Por eso
+   el bloque de abajo pasó a ser un envoltorio con dos hijos —el diálogo y la
+   mano— en vez de un div solo.
+2. **El papel de los tantos se partió en dos, uno por dueño**, con la puntita
+   dada vuelta en el tuyo (apunta hacia abajo, a tus cartas). El título no
+   cambia: los dos dicen "Acá está mi flor", porque cada papel está en la voz de
+   su dueño.
+3. **La línea de ayudas se calla cuando la mano terminó.** No es sólo que el
+   tanto de una mano cerrada ya no sirva: es que el papel sale de ese mismo lado
+   y quedaban uno encima del otro. Se vio en la captura, no leyendo.
+
+De paso salió un tercer bug de texto, chico y viejo: `sumar()` armaba los
+eventos como `"Vos" + motivo`, con el motivo en tercera persona, así que la mesa
+decía **"Vos gana la mano: +1"** en toda partida ganada. Ahora el motivo lleva
+las dos conjugaciones (`{ vos: "Ganás la mano", el: "gana la mano" }`), que es
+el mismo par que el evento de la baza ya usaba bien desde el principio.
+
+### 3. La mesa, mirada como app de celular
+
+| | antes | ahora |
+|---|---|---|
+| casillero del marcador | 9 px (palitos de 1 px) | 14-18 px, en dos filas, con el número al lado |
+| barra de arriba | 30 px clavados | 44-48 en el celular, **30 exactos en la compu** |
+| ancho de una carta en la mano | 126 px (89% de la pantalla) | 96 px |
+| cartas de las bazas | `clamp(44px, 8.8vh, 72px)` | `clamp(40px, 8vh, 64px)` |
+| al lado de los puntos | "La Blanqueada · Tugurio" | nada: sólo los puntos |
+
+- **El marcador es la libreta mudada a la barra**: palitos de a cinco Y el
+  número al final en la manuscrita, que es lo que ya hacía `Fila` en el papel.
+  Los palitos dicen cómo viene la cosa de un vistazo; "¿cuánto voy?" se contesta
+  con un número. En la compu no lleva número porque allá la libreta está sobre
+  la mesa y ya lo dice.
+- **`DisenoDeMesa` ganó `mano: { ancho }`.** El ancho de la carta era una
+  constante suelta, la misma para los dos, y en el celular estaba mal. Los dos
+  diseños siguen teniendo los mismos campos, que es lo que obliga a decidir cada
+  tamaño DOS veces en vez de una.
+- **96 y no 104**, que fue el primer intento: a 390×844 el `clamp` llegaba al
+  techo y las tres cartas seguían de lado a lado. **El giro del abanico las
+  ensancha además de lo que miden**, así que el 72% calculado se ve como un 80%.
+  Se cerró mirando la captura.
+- **Ojo con la cuenta del alto, que en el plan estaba mal**: la mano es
+  `absolute`, así que achicarla NO le devuelve alto a la escena, le devuelve
+  mesa a la vista. Los 14-18 px que se lleva el marcador salen de la escena y de
+  ningún otro lado. Se paga igual —un marcador que no se lee no sirve— y
+  `mirar-mesa.mjs` confirma que sigue sin scrollear en los siete tamaños.
+- **El botón de Ayudas no declaraba tamaño de letra propio** —lo declaraban los
+  spans de adentro—, así que heredaba los 16 px del cuerpo y su renglón medía 24
+  de alto vacío. Eso solo le agregaba 5 px a la barra de la compu. Con
+  `text-[10px]` en el botón volvió a 30 exactos, medido.
+- **El mate se queda** (lo eligió Santiago) y la libreta ya no estaba en el
+  celular desde la pasada anterior.
+
+### Estado al cerrar
+
+`npm test` **167/167** · `tsc --noEmit` limpio · `npm run build` y
+`npm run build:app` OK · `mirar-mesa.mjs` en 0 (con la comprobación nueva de
+filtros) · `mirar-mesa-nueva.mjs` en 0 · `mirar-web.mjs` en 0 ·
+`mirar-rivales.mjs` 14 comprobaciones · `mirar-app-compilada.mjs` en 0 sobre el
+build de la app.
+
+### El repaso de seguridad
+
+**Sin hallazgos.** El cambio es todo dibujo y distribución: no agrega ni una
+entrada de usuario, ni almacenamiento, ni llamada de red.
+
+- Cero `dangerouslySetInnerHTML`, `innerHTML`, `eval` o `javascript:` en lo
+  tocado. Todo lo que se muestra son hijos JSX, que React escapa.
+- **Las dos zonas de diálogo no muestran nada que antes no se mostrara**: son la
+  misma lista repartida por `quien`. `tantos-al-cierre.ts` —que es donde vive la
+  regla de qué se puede enseñar sin soplar— no se tocó, y `p.cartas.rival` sigue
+  llegando al DOM sin la carta (`.map((_, i) => …)`).
+- La CSP llega entera al HTML compilado de la app (verificado sobre
+  `out-app/jugar/mesa/index.html`).
+- **`Bugs a arreglar/` y `capturas/` siguen ignoradas** (`.gitignore` 179 y 141),
+  comprobado con `git check-ignore`: ni la foto de WhatsApp ni las capturas de
+  esta sesión se suben. Cero rutas locales, correos o datos personales en el
+  diff.
+
+### Pendiente
+
+0. **El glitch hay que confirmarlo en el teléfono.** Es lo único de esta sesión
+   que no se pudo verificar desde acá. Lo que hay que mirar: jugar hasta quedar
+   con una sola carta, esperar el turno del rival y ver si aparece la banda.
+1. ~~BUG REPORTADO, SIN REPRODUCIR~~ **cerrado acá** (pendiente 1 de la pasada
+   anterior).
+2. **El APK todavía no se compiló.** Sale de Actions con el push.
+3. **Subir a Play Store** pide cuenta de desarrollador (25 USD, una vez), ficha,
+   capturas y la política de privacidad publicada. Y ahí sí, la keystore.
+4. Una **copla nueva** en `versos.ts` para "primero va el envido".
+5. `deNoche` todavía controla luz y desgaste a la vez en `madera.mjs`.
+6. Las **constantes de la cámara siguen copiadas a mano** en `mesa-perspectiva.ts`.
+7. `acentoDe` y `ambienteDe` siguen sin `Object.hasOwn`.
+
+---
+
 ## 2026-09-02 — La web se vuelve app de Android, y los trofeos de la gira
 
 Sesión grande. Se convirtió el sitio en una app de celular empaquetable para

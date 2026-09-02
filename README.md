@@ -40,7 +40,9 @@ vez de que el botón desaparezca sin explicación. La escena cambia con el
 departamento: el boliche de noche de Montevideo, la feria de Las Piedras, la
 rambla de Rocha, el galpón del centro, el río del litoral y las cuchillas del
 norte. Del rival se ve el cuerpo en penumbra y nada más —la cara está en el
-medallón de la derecha, de donde salen también las coplas—. **Esta parte está a
+medallón de la derecha, de donde salen también las coplas—. Lo que decís vos
+sale de TU lado, arriba de tus cartas: cada uno habla desde su silla, incluido
+el "acá está mi flor" del final de la mano. **Esta parte está a
 medio hacer**: lo que hay anda, pero todavía no se parece a lo que queremos.
 El plan para terminarla está en [`ideas/rediseno-nivel.md`](ideas/rediseno-nivel.md).
 Cada mano arranca repartiendo de a una carta —mano, pie, mano, pie— y recién
@@ -50,6 +52,10 @@ quién sea el reparto: si sos mano te queda a la izquierda, si sos pie a la
 derecha.
 Con las ayudas prendidas te muestra tu tanto ya calculado y te marca cuáles de
 tus cartas son piezas; se apagan cuando querés.
+Cómo va la partida se anota a palitos, como en la mesa de verdad: de a cinco,
+con el corte de las malas a las buenas. En la compu eso está en una libreta
+apoyada sobre la madera; en el celular no entra, así que va arriba de todo en
+dos renglones —uno tuyo y otro suyo— con el número al lado.
 
 **La baraja** — cuarenta cartas españolas dibujadas por código, con lo que hace
 que una carta se lea como carta y no como un icono: las espadas y los bastos van
@@ -162,7 +168,9 @@ herramientas/
   generar-mapa.mjs      Rehace mapa-uruguay.ts desde datos cartográficos
   generar-escena.mjs    Hornea la madera y el fondo de cada ambiente a WebP
   escena/               El dibujo de esas texturas, en código
-  mirar-mesa.mjs        Verifica que la mesa no scrollee en siete tamaños
+  mirar-mesa.mjs        Verifica que la mesa no scrollee en siete tamaños, que
+                        la barra no tape tu mano y que no haya filtros adentro
+                        de la mano (ver el glitch del 1/9 en Historial.md)
   medir-bots.mjs        Enfrenta a los 19 rivales y mide si la gira sube
 ideas/
   concepto.md           Qué juego queremos hacer

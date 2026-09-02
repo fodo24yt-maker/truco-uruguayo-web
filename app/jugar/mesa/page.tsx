@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 
 import { Carta } from "@/components/Carta";
-import { Dialogo } from "@/components/mesa/Dialogo";
+import { DialogoMio, DialogoRival } from "@/components/mesa/Dialogo";
 import {
   FondoAmbiente,
   Mate,
@@ -75,15 +75,22 @@ const MOMENTO_VOLTEO = 5 * ENTRE_CARTAS + VUELO + 60;
 /** Cuándo se puede volver a jugar: cuando terminó de girar la última. */
 const FIN_REPARTO = MOMENTO_VOLTEO + 2 * ENTRE_VOLTEOS + VOLTEO;
 /**
- * El ancho de una carta en la mano.
+ * La sombra de una carta en la mano.
  *
- * Va atado al alto de la ventana y no a puntos de corte de ancho: el problema
- * real nunca fue la pantalla angosta sino la BAJA —una ventana de 620px de alto
- * dejaba tu propia mano cortada por la barra de cantos, que es lo único que no
- * se puede permitir—. Con `clamp` se achica sola hasta donde haga falta y nunca
- * pasa del tamaño lindo en una pantalla grande.
+ * ── Es un `box-shadow` y NO un `drop-shadow`, a propósito ─────────────────
+ *
+ * Era `filter: drop-shadow(...)` en el envoltorio de cada carta, y ahí está la
+ * mitad del bug del glitch del 1/9/2026: cuando no es tu turno la mano entera
+ * se apaga con `opacity`, el navegador compone TODO el subárbol en una
+ * superficie aparte, y un filtro adentro es una segunda superficie anidada.
+ * Eso es lo que en el celular devolvía una banda de rayas del tamaño exacto
+ * de la mano. El detalle largo está en `components/mesa/Manos.tsx`.
+ *
+ * La carta es un `<svg>` con `rounded-lg` sobre un `rect` de `rx="7"`, así que
+ * la sombra sigue la misma silueta que seguía el filtro y no se ve distinto.
+ * NO VOLVER A PONER UN FILTRO ACÁ: `mirar-mesa.mjs` falla si aparece uno.
  */
-const ANCHO_MANO = "clamp(72px, 15.6vh, 126px)";
+const SOMBRA_EN_MANO = "0 10px 12px -3px rgba(0,0,0,0.75), 0 4px 8px -4px rgba(0,0,0,0.6)";
 
 /** Lo que queda un verso en pantalla si no lo cerrás ni contestás. */
 const DURA_VERSO = 6500;
@@ -142,6 +149,22 @@ interface DisenoDeMesa {
    * mesa de una sola vez, sin despegarlo del canto.
    */
   fondo: number;
+  /**
+   * El ancho de UNA carta de tu mano. De acá cuelga toda la zona de abajo: el
+   * abanico, el dibujo de la mano y el hueco que dejan.
+   *
+   * Va atado al alto de la ventana y no a puntos de corte de ancho: el problema
+   * real nunca fue la pantalla angosta sino la BAJA —una ventana de 620px de
+   * alto dejaba tu propia mano cortada por la barra de cantos, que es lo único
+   * que no se puede permitir—.
+   *
+   * ── Por qué pasó a estar acá y no en una constante suelta ──────────────
+   * Porque en el celular era demasiado grande y en la compu estaba bien: con
+   * 126px las tres cartas se llevaban el 89% del ancho de un celular de 390.
+   * Una constante sola no podía decir eso, y el resto de los tamaños de la mesa
+   * ya se decidían acá.
+   */
+  mano: { ancho: string };
   /** El mazo con la muestra, del lado del que reparte. */
   mazo: { u: number; v: number; ancho: string };
   /** El mate, siempre del lado contrario al mazo. */
@@ -222,6 +245,19 @@ interface DisenoDeMesa {
 /** Alto y angosta: el caso apretado, y el que manda si algo falla. */
 const CELULAR: DisenoDeMesa = {
   fondo: 22,
+  /* ACHICADA el 2/9/2026, y bastante: eran los mismos 126px de la compu y las
+     tres cartas tapaban el 89% del ancho de la pantalla, o sea que la mano
+     tapaba la mesa que estás jugando.
+
+     Ojo con lo que gana y lo que no: la mano es `absolute`, así que achicarla
+     NO le devuelve alto a la escena, le devuelve mesa a la vista. El alto que
+     se lleva el marcador de arriba al apilarse sale de la escena y no de acá.
+
+     96 y no 104, que fue el primer intento: el `clamp` llegaba al techo en un
+     celular de 844 de alto y las tres cartas seguían de lado a lado. El giro
+     del abanico las ensancha ADEMÁS de lo que miden, así que el 72% calculado
+     se veía como un 80%. Se cerró mirando la captura, no la cuenta. */
+  mano: { ancho: "clamp(60px, 12vh, 96px)" },
   mazo: { u: 0.24, v: 0.5, ancho: "clamp(74px, 15vh, 122px)" },
   /* EL MATE SE MUDÓ AL HUECO DE LA LIBRETA. Estaba abajo (v = 0,66) porque
      arriba estaba ocupado; ahora ese costado quedó libre entero. Y crece,
@@ -239,12 +275,15 @@ const CELULAR: DisenoDeMesa = {
      escala en perspectiva se multiplican y no se pueden separar leyendo. */
   mate: { u: 0.78, v: 0.34, alto: "clamp(62px, 13vh, 118px)" },
   libreta: null,
+  /* También bajaron, por lo mismo que la mano: con las dos bazas puestas y el
+     mate al costado, la mitad de la mesa quedaba ocupada y no se veía la
+     madera. El paso sube apenas para que sigan separándose igual. */
   baza: {
     suya: 0.46,
     tuya: 0.64,
     ganador: 0.31,
-    ancho: "clamp(44px, 8.8vh, 72px)",
-    paso: 0.125,
+    ancho: "clamp(40px, 8vh, 64px)",
+    paso: 0.13,
   },
   reparto: { v: 0.22, ancho: "clamp(28px, 5.6vh, 46px)" },
   objeto: { u: 0.26, v: 0.65, alto: "clamp(32px, 7vh, 64px)" },
@@ -253,6 +292,9 @@ const CELULAR: DisenoDeMesa = {
 /** Ancha y baja. Lo único que cambia de fondo es el TAMAÑO de las cosas. */
 const PC: DisenoDeMesa = {
   fondo: 22,
+  /* Acá no había nada que arreglar: la escena es tres veces más ancha y tres
+     cartas de 126 se llevan el 29% del ancho. Es el número de siempre. */
+  mano: { ancho: "clamp(72px, 15.6vh, 126px)" },
   mazo: { u: 0.2, v: 0.5, ancho: "clamp(120px, 26vh, 230px)" },
   mate: { u: 0.8, v: 0.66, alto: "clamp(80px, 19vh, 170px)" },
   libreta: { u: 0.79, v: 0.32, tamano: 0.45, ancho: "clamp(180px, 38vh, 330px)" },
@@ -331,6 +373,10 @@ function Mesa() {
      porqué está en `lib/pantalla.ts`. En el primer cuadro de una compu esto
      todavía dice "celular" y cambia al hidratar, adentro de "REPARTIENDO…". */
   const d = usaPantallaAncha() ? PC : CELULAR;
+  /* Pantalla de celular: alta y angosta. Lo usa la barra de arriba, que es lo
+     único de la mesa que NO se mide con (u, v) y necesita saberlo aparte. Sale
+     del mismo lugar que todo lo demás para que no haya dos formas de decidirlo. */
+  const estrecha = d === CELULAR;
   const parametros = useSearchParams();
   // Partida Rápida: la dirección puede traer a quién enfrentás.
   const rivalPedido = parametros.get("rival");
@@ -703,11 +749,11 @@ function Mesa() {
    */
   const bazasJugadas = p.bazas.filter((b) => b.vos || b.rival).length;
   const lugarDeBaza = (i: number) => (i - (Math.max(bazasJugadas, 1) - 1) / 2) * d.baza.paso;
-  const anchoAbanico = `calc(${nCartas} * ${ANCHO_MANO} - ${Math.max(0, nCartas - 1) * 16}px)`;
+  const anchoAbanico = `calc(${nCartas} * ${d.mano.ancho} - ${Math.max(0, nCartas - 1) * 16}px)`;
   /**
    * EL ANCHO DE LA MANO. Ojo: NO es el del abanico.
    *
-   * Estaba escrito `anchoAbanico + 0,8 · ANCHO_MANO`, y como el SVG va en
+   * Estaba escrito `anchoAbanico + 0,8 · el ancho de una carta`, y como el SVG va en
    * `h-auto` el alto sigue al ancho: de tres cartas a una la mano pasaba de
    * 3,8 anchos de carta a 1,8, o sea **perdía más de la mitad**. Por eso con
    * una sola carta —y durante el reparto, mientras las otras dos todavía
@@ -725,7 +771,7 @@ function Mesa() {
    * capturas de 3, 2 y 1 que saca `herramientas/mirar-mesa-nueva.mjs`, no a
    * ojo ni en papel.
    */
-  const anchoMano = `calc(1.5 * ${ANCHO_MANO} + 0.745 * (${anchoAbanico}))`;
+  const anchoMano = `calc(1.5 * ${d.mano.ancho} + 0.745 * (${anchoAbanico}))`;
 
   /* Del lado del mazo va el mazo; del otro, el mate y la libreta. Los diseños
      guardan el `u` de la IZQUIERDA y acá se espeja, así que hay un solo número
@@ -813,25 +859,44 @@ function Mesa() {
 
         {/* EL MARCADOR VA ACÁ, en el lugar que tenía el nombre del lugar.
             Es lo que hacen las referencias y, sobre todo, es lo que permite
-            sacar la libreta del celular sin que dejes de ver cómo va. El
-            nombre del lugar era decorativo —el departamento ya está en el
-            medallón— así que vuelve sólo donde sobra ancho. */}
-        <div className="flex min-w-0 items-center gap-2.5">
-          <MarcadorBarra vos={p.puntos.vos} rival={p.puntos.rival} />
-          <span className="hidden truncate font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-[0.14em] text-dorado/60 md:inline">
-            {rival.lugar} · {ambiente.nombre}
-          </span>
+            sacar la libreta del celular sin que dejes de ver cómo va.
+
+            ── ACÁ ESTABA EL NOMBRE DEL LUGAR, y se fue el 2/9/2026 ──────────
+            Decía "La Blanqueada · Tugurio" pegado a los puntos. Era decorativo
+            —el departamento ya está en el medallón, que está a la vista todo el
+            tiempo— y ese ancho es justo el que los puntos necesitaban para
+            poder crecer. Dos veces la misma información, y la que se quedó es
+            la que hace falta leer. */}
+        <div className="flex min-w-0 items-center">
+          <MarcadorBarra vos={p.puntos.vos} rival={p.puntos.rival} apilado={estrecha} />
         </div>
 
+        {/* En el celular va en dos renglones y no en uno: "Ayudas: no" seguido
+            se lleva 86px de los ~300 que tiene la barra, y ese ancho lo
+            necesita el marcador. Apilado ocupa 50 y encima se lee mejor, porque
+            el estado queda solo en su línea. El alto ya está: lo puso el
+            marcador al apilarse. */}
         <button
           onClick={() => {
             const nuevo = !ayudas;
             setAyudas(nuevo);
             guardarPreferencia("ayudas", nuevo);
           }}
-          className="shrink-0 whitespace-nowrap rounded border border-crema/20 px-2 py-0.5 font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-wide text-crema/70 transition-colors hover:border-crema/50 hover:text-crema"
+          aria-label={`Ayudas ${ayudas ? "encendidas" : "apagadas"}. Tocá para cambiar.`}
+          className="shrink-0 whitespace-nowrap rounded border border-crema/20 px-2 py-0.5 text-center font-[family-name:var(--font-ui)] text-[10px] uppercase leading-tight transition-colors hover:border-crema/50"
         >
-          Ayudas: {ayudas ? "sí" : "no"}
+          {estrecha ? (
+            <>
+              {/* Sin `tracking`: a 10px la de la interfaz ya viene separada y
+                  con un poco más se lee "AY UD AS". */}
+              <span className="block text-[10px] leading-tight text-crema/55">Ayudas</span>
+              <span className={`block text-[12px] leading-tight ${ayudas ? "text-dorado" : "text-crema/70"}`}>
+                {ayudas ? "sí" : "no"}
+              </span>
+            </>
+          ) : (
+            <span className="text-[10px] tracking-wide text-crema/70">Ayudas: {ayudas ? "sí" : "no"}</span>
+          )}
         </button>
       </div>
 
@@ -1107,7 +1172,7 @@ function Mesa() {
             className="absolute right-1.5 top-1.5 z-20 flex w-[min(78%,340px)] flex-col items-end gap-1"
           >
             <Medallon rival={rival} deLaGira={esHistoria} onCambiar={() => setEligiendo(true)} />
-            <Dialogo
+            <DialogoRival
               lineas={verso?.lineas}
               canto={verso?.canto}
               eventos={p.eventos}
@@ -1116,105 +1181,133 @@ function Mesa() {
             />
           </div>
 
-          {/* ─── Tu mano ─────────────────────────────────────────────────
-              Cuando no es tu turno se apaga TODA junta —dedos, cartas y
-              pulgar— y no carta por carta. Cada carta con su `opacity` propia
-              se volvía translúcida y dejaba ver el dorso de tu propia mano a
-              través del papel: las cartas se veían grises y con un bulto
-              adentro. Una mano es un objeto solo y se apaga como uno solo. */}
-          <div
-            className={`absolute inset-x-0 bottom-0 z-10 transition-opacity duration-200 ${
-              miTurno && b.jugar ? "" : "opacity-75"
-            }`}
-          >
-            {florSalvada && (
-              <p className="mb-0.5 text-center font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-wide text-dorado/90 drop-shadow-[0_1px_3px_rgba(0,0,0,1)]">
-                Te cantamos la flor: se perdía
-              </p>
-            )}
+          {/* ─── Tu lado de la mesa: lo que decís vos, y tu mano ──────────
+              Van en el mismo envoltorio y en este orden porque lo que decís
+              tiene que quedar ARRIBA de las cartas, empujando hacia la madera
+              y nunca sobre ellas.
 
-            {/* La ayuda espera a que las cartas estén dadas vuelta: cantarte el
-                tanto de una mano que todavía no viste rompe el reparto. */}
-            {ayudas && carasArriba && (
-              <p className="relative z-10 mb-2 text-center font-[family-name:var(--font-ui)] text-[11px] uppercase leading-tight tracking-wide text-dorado drop-shadow-[0_1px_3px_rgba(0,0,0,0.95)] sm:text-xs">
-                {miFlor.tiene ? (
-                  <>
-                    Tenés flor: {miFlor.valor}
-                    {puede("flor") && (
-                      <span className="ml-2 normal-case tracking-normal text-crema/70">
-                        (cantala antes de tirar)
-                      </span>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    Tu tanto: {miTanto}
-                    <span className="ml-2 normal-case tracking-normal text-crema/70">
-                      ({explicarEnvido(p.manoInicial.vos, p.muestra)})
-                    </span>
-                  </>
-                )}
-              </p>
-            )}
+              Y tu diálogo queda AFUERA del apagado de la mano, que es todo el
+              punto: justo cuando no es tu turno es cuando hay que poder leer
+              lo que acabás de cantar. */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
+            <DialogoMio eventos={p.eventos} tantos={tantosEnseñados} />
 
-            {/* LAS CARTAS VAN ENTRE LOS DEDOS. El dorso de la mano se dibuja
-                antes que el abanico y el pulgar después: por eso son dos
-                piezas y no una. */}
+            {/* Cuando no es tu turno la mano se apaga TODA junta —dedos, cartas
+                y pulgar— y no carta por carta. Cada carta con su `opacity`
+                propia se volvía translúcida y dejaba ver el dorso de tu propia
+                mano a través del papel: las cartas se veían grises y con un
+                bulto adentro. Una mano es un objeto solo y se apaga como uno
+                solo.
+
+                OJO: este `opacity` es lo que obliga al navegador a componer
+                todo lo de adentro en una superficie aparte, y de ahí salió el
+                glitch del 1/9/2026. Adentro de acá NO puede haber ni un
+                `filter` (ver `SOMBRA_EN_MANO` y `components/mesa/Manos.tsx`).
+                `mirar-mesa.mjs` falla si aparece uno. */}
             <div
-              className="relative flex items-end justify-center"
-              style={{ paddingBottom: `calc(0.26 * ${ANCHO_MANO})` }}
+              /* El agarre con el que `mirar-mesa.mjs` comprueba que acá adentro
+                 no haya ni un `filter`. Ver el comentario de arriba. */
+              data-mano="apagable"
+              className={`pointer-events-auto transition-opacity duration-200 ${
+                miTurno && b.jugar ? "" : "opacity-75"
+              }`}
             >
-              <span
-                className={`pointer-events-none absolute left-1/2 z-0 -translate-x-1/2 ${
-                  repartiendo ? "anim-entra-mano" : ""
-                }`}
-                style={{
-                  bottom: `calc(-0.06 * ${ANCHO_MANO})`,
-                  width: anchoMano,
-                  animationDelay: `${retrasoDeReparto("vos", 0, soyMano)}ms`,
-                }}
-              >
-                <DedosAtras ancho="100%" luz={ambiente.luz} />
-              </span>
+              {florSalvada && (
+                <p className="mb-0.5 text-center font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-wide text-dorado/90 [text-shadow:0_1px_3px_rgba(0,0,0,1)]">
+                  Te cantamos la flor: se perdía
+                </p>
+              )}
 
-              <div className="mano-abanico relative z-10 flex justify-center">
-                {p.cartas.vos.map((carta, i) => (
-                  <CartaEnMano
-                    key={`${carta.numero}-${carta.palo}`}
-                    carta={carta}
-                    posicion={i}
-                    total={p.cartas.vos.length}
-                    pieza={ayudas && esPieza(carta, p.muestra)}
-                    habilitada={miTurno && b.jugar}
-                    tapada={!carasArriba}
-                    viajando={faseReparto === "repartiendo"}
-                    retrasoViaje={retrasoDeReparto("vos", i, soyMano)}
-                    retrasoVolteo={i * ENTRE_VOLTEOS}
-                    desdeX={ladoMazo === "izquierda" ? -140 : 140}
-                    onClick={() => hacer({ tipo: "jugar", carta })}
-                  />
-                ))}
+              {/* La ayuda espera a que las cartas estén dadas vuelta: cantarte el
+                  tanto de una mano que todavía no viste rompe el reparto.
+
+                  Y SE CALLA CUANDO LA MANO TERMINÓ. No es sólo que ya no sirva
+                  —el tanto de una mano cerrada no lo vas a cantar—: es que
+                  justo ahí aparece el papel de "acá está mi flor", que sale de
+                  este mismo lado, y las dos cosas quedaban una encima de la
+                  otra. */}
+              {ayudas && carasArriba && p.fase === "jugando" && (
+                <p className="relative z-10 mb-2 text-center font-[family-name:var(--font-ui)] text-[11px] uppercase leading-tight tracking-wide text-dorado [text-shadow:0_1px_3px_rgba(0,0,0,0.95)] sm:text-xs">
+                  {miFlor.tiene ? (
+                    <>
+                      Tenés flor: {miFlor.valor}
+                      {puede("flor") && (
+                        <span className="ml-2 normal-case tracking-normal text-crema/70">
+                          (cantala antes de tirar)
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      Tu tanto: {miTanto}
+                      <span className="ml-2 normal-case tracking-normal text-crema/70">
+                        ({explicarEnvido(p.manoInicial.vos, p.muestra)})
+                      </span>
+                    </>
+                  )}
+                </p>
+              )}
+
+              {/* LAS CARTAS VAN ENTRE LOS DEDOS. El dorso de la mano se dibuja
+                  antes que el abanico y el pulgar después: por eso son dos
+                  piezas y no una. */}
+              <div
+                className="relative flex items-end justify-center"
+                style={{ paddingBottom: `calc(0.26 * ${d.mano.ancho})` }}
+              >
+                <span
+                  className={`pointer-events-none absolute left-1/2 z-0 -translate-x-1/2 ${
+                    repartiendo ? "anim-entra-mano" : ""
+                  }`}
+                  style={{
+                    bottom: `calc(-0.06 * ${d.mano.ancho})`,
+                    width: anchoMano,
+                    animationDelay: `${retrasoDeReparto("vos", 0, soyMano)}ms`,
+                  }}
+                >
+                  <DedosAtras ancho="100%" luz={ambiente.luz} />
+                </span>
+
+                <div className="mano-abanico relative z-10 flex justify-center">
+                  {p.cartas.vos.map((carta, i) => (
+                    <CartaEnMano
+                      key={`${carta.numero}-${carta.palo}`}
+                      carta={carta}
+                      posicion={i}
+                      total={p.cartas.vos.length}
+                      pieza={ayudas && esPieza(carta, p.muestra)}
+                      habilitada={miTurno && b.jugar}
+                      tapada={!carasArriba}
+                      viajando={faseReparto === "repartiendo"}
+                      retrasoViaje={retrasoDeReparto("vos", i, soyMano)}
+                      retrasoVolteo={i * ENTRE_VOLTEOS}
+                      desdeX={ladoMazo === "izquierda" ? -140 : 140}
+                      ancho={d.mano.ancho}
+                      onClick={() => hacer({ tipo: "jugar", carta })}
+                    />
+                  ))}
+                </div>
+
+                {/* El pulgar se mide contra LA MANO, no contra una carta.
+                    Clavado en 1,7 anchos de carta mientras la mano se achicaba,
+                    con una sola carta terminaba casi tan ancho como la mano
+                    entera: la proporción se rompía justo en el caso que se veía
+                    mal. 0,48 es la proporción que YA tenía con tres cartas, así
+                    que con tres no cambia nada y con una y dos se arregla. */}
+                <span
+                  className={`pointer-events-none absolute left-1/2 z-20 ${
+                    repartiendo ? "anim-entra-mano" : ""
+                  }`}
+                  style={{
+                    bottom: `calc(-0.068 * (${anchoMano}))`,
+                    width: `calc(0.48 * (${anchoMano}))`,
+                    transform: "translateX(-56%)",
+                    animationDelay: `${retrasoDeReparto("vos", 0, soyMano)}ms`,
+                  }}
+                >
+                  <PulgarAdelante ancho="100%" luz={ambiente.luz} />
+                </span>
               </div>
-
-              {/* El pulgar se mide contra LA MANO, no contra una carta.
-                  Clavado en 1,7 anchos de carta mientras la mano se achicaba,
-                  con una sola carta terminaba casi tan ancho como la mano
-                  entera: la proporción se rompía justo en el caso que se veía
-                  mal. 0,48 es la proporción que YA tenía con tres cartas, así
-                  que con tres no cambia nada y con una y dos se arregla. */}
-              <span
-                className={`pointer-events-none absolute left-1/2 z-20 ${
-                  repartiendo ? "anim-entra-mano" : ""
-                }`}
-                style={{
-                  bottom: `calc(-0.068 * (${anchoMano}))`,
-                  width: `calc(0.48 * (${anchoMano}))`,
-                  transform: "translateX(-56%)",
-                  animationDelay: `${retrasoDeReparto("vos", 0, soyMano)}ms`,
-                }}
-              >
-                <PulgarAdelante ancho="100%" luz={ambiente.luz} />
-              </span>
             </div>
           </div>
         </div>
@@ -1429,6 +1522,7 @@ function CartaEnMano({
   retrasoViaje,
   retrasoVolteo,
   desdeX,
+  ancho,
   onClick,
 }: {
   carta: CartaType;
@@ -1446,6 +1540,8 @@ function CartaEnMano({
   retrasoVolteo: number;
   /** De qué lado sale, según dónde esté el mazo. */
   desdeX: number;
+  /** El ancho de una carta, que lo decide el diseño de mesa que esté activo. */
+  ancho: string;
   onClick: () => void;
 }) {
   const centro = (total - 1) / 2;
@@ -1482,7 +1578,6 @@ function CartaEnMano({
         }`}
         style={
           {
-            filter: "drop-shadow(0 10px 12px rgba(0,0,0,0.75))",
             ...(viajando
               ? {
                   animationDelay: `${retrasoViaje}ms`,
@@ -1494,13 +1589,19 @@ function CartaEnMano({
         }
       >
         {tapada ? (
-          <Carta oculta style={{ width: ANCHO_MANO }} />
+          <Carta oculta style={{ width: ancho, boxShadow: SOMBRA_EN_MANO }} />
         ) : (
           <Carta
             carta={carta}
             pieza={pieza}
             className="anim-voltea"
-            style={{ width: ANCHO_MANO, animationDelay: `${retrasoVolteo}ms` }}
+            style={{
+              width: ancho,
+              animationDelay: `${retrasoVolteo}ms`,
+              /* La pieza tiene su propio halo y NO se le pisa: es lo que dice
+                 que esa carta vale más, y una sombra encima lo apagaría. */
+              ...(pieza ? {} : { boxShadow: SOMBRA_EN_MANO }),
+            }}
           />
         )}
       </span>

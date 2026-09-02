@@ -1,6 +1,6 @@
 /**
- * Mira la mesa de verdad y verifica LA regla: no scrollea nunca, y la barra de
- * cantos nunca tapa tu mano.
+ * Mira la mesa de verdad y verifica LA regla: no scrollea nunca, la barra de
+ * cantos nunca tapa tu mano, y adentro de la mano no hay ni un filtro.
  *
  *     npm run dev                       (en otra terminal)
  *     node herramientas/mirar-mesa.mjs
@@ -64,16 +64,43 @@ for (const [w, h] of TAMANOS) {
             d.className.includes?.("filo-dorado") && d.className.includes?.("shrink-0"));
           return b ? b.getBoundingClientRect().top : null;
         })(),
+        /* ── NINGÚN FILTRO ADENTRO DE LA MANO ──────────────────────────────
+           Cuando no es tu turno la mano se apaga con `opacity`, y eso obliga al
+           navegador a componer todo ese subárbol en una superficie aparte. Un
+           `filter` adentro es una segunda superficie anidada, y ahí es donde
+           las GPU de teléfono devuelven basura: el bug del 1/9/2026 era una
+           banda de rayas del tamaño exacto de la mano, siempre con una sola
+           carta —que es cuando el dibujo queda destapado y se ve—.
+
+           Esto NO reproduce el glitch: Chromium acá usa SwiftShader y dibuja
+           todo bien. Lo que hace es cuidar la condición que lo causaba, que es
+           lo único comprobable desde una computadora. Un `drop-shadow` o un
+           `feGaussianBlur` que vuelva a colarse en la mano falla acá y no en el
+           teléfono de alguien. */
+        filtros: (() => {
+          const zona = document.querySelector('[data-mano="apagable"]');
+          if (!zona) return null;
+          const con = [];
+          for (const el of [zona, ...zona.querySelectorAll("*")]) {
+            const f = getComputedStyle(el).filter;
+            if (f && f !== "none") con.push(`${el.tagName.toLowerCase()}: ${f}`);
+          }
+          if (zona.querySelector("filter")) con.push("hay un <filter> declarado");
+          return con;
+        })(),
       }));
       const scroll = m.doc > m.vis || m.body > m.vis;
       const tapada = m.mano && m.barra !== null && m.mano.abajo > m.barra + 1;
-      if (scroll || tapada) {
+      const conFiltro = m.filtros !== null && m.filtros.length > 0;
+      if (scroll || tapada || conFiltro) {
         fallos++;
         console.log(`FALLA ${w}x${h} [${etiqueta}] scroll=${scroll} manoTapada=${tapada} ` +
+          `filtroEnLaMano=${conFiltro} ` +
           `doc=${m.doc} vis=${m.vis} manoAbajo=${m.mano?.abajo?.toFixed(0)} barraArriba=${m.barra?.toFixed(0)}`);
+        if (conFiltro) console.log(`  filtros: ${m.filtros.join(" | ")}`);
         await pag.screenshot({ path: `${SALIDA}/falla-${w}x${h}-${etiqueta}.png` });
       }
-      return !scroll && !tapada;
+      return !scroll && !tapada && !conFiltro;
     };
 
     await revisar("normal");
@@ -99,5 +126,9 @@ for (const [w, h] of TAMANOS) {
   await ctx.close();
 }
 await nav.close();
-console.log(fallos === 0 ? "\nTODO OK: la mesa no scrollea y la barra nunca tapa la mano." : `\n${fallos} FALLAS`);
+console.log(
+  fallos === 0
+    ? "\nTODO OK: la mesa no scrollea, la barra nunca tapa la mano y no hay filtros adentro de la mano."
+    : `\n${fallos} FALLAS`,
+);
 process.exit(fallos === 0 ? 0 : 1);

@@ -248,23 +248,45 @@ function revelarFlores(p: Partida) {
   }
 }
 
+/**
+ * Por qué qué, dicho en la voz de cada uno.
+ *
+ * Era un string solo, en tercera persona, con "Vos" o "El rival" pegado
+ * adelante: o sea que cuando ganabas vos la mesa decía **"Vos gana la mano"**.
+ * Se veía en toda partida y se arregló el 2/9/2026.
+ *
+ * Lo tuyo va en voseo y SIN sujeto, que es como se habla: el verbo ya dice
+ * quién, y en el celular cada palabra que sobra es una que se corta. Es el
+ * mismo par que ya usaba el evento de la baza —"Ganás la baza" / "Gana el
+ * rival la baza"—, que estaba bien desde el principio.
+ */
+interface Motivo {
+  /** Si fuiste vos. Conjugado en voseo, con mayúscula: abre la frase. */
+  vos: string;
+  /** Si fue él. En tercera y en minúscula: va detrás de "El rival". */
+  el: string;
+}
+
+const comoSeDice = (quien: Jugador, motivo: Motivo) =>
+  quien === "vos" ? motivo.vos : `El rival ${motivo.el}`;
+
 /** El equipo se lleva la partida entera: es lo que paga una contraflor al resto. */
-function ganarLaPartida(p: Partida, quien: Jugador, motivo: string): Partida {
+function ganarLaPartida(p: Partida, quien: Jugador, motivo: Motivo): Partida {
   p.puntos[quien] = Math.max(p.puntos[quien], PUNTOS_PARA_GANAR);
   p.eventos.push({
     quien: "sistema",
-    texto: `${quien === "vos" ? "Vos" : "El rival"} ${motivo}: gana la partida`,
+    texto: `${comoSeDice(quien, motivo)}: gana la partida`,
   });
   p.ganadorPartida = quien;
   p.fase = "partida-terminada";
   return p;
 }
 
-function sumar(p: Partida, quien: Jugador, puntos: number, motivo: string) {
+function sumar(p: Partida, quien: Jugador, puntos: number, motivo: Motivo) {
   p.puntos[quien] += puntos;
   p.eventos.push({
     quien: "sistema",
-    texto: `${quien === "vos" ? "Vos" : "El rival"} ${motivo}: +${puntos}`,
+    texto: `${comoSeDice(quien, motivo)}: +${puntos}`,
   });
   if (p.puntos[quien] >= PUNTOS_PARA_GANAR) {
     p.ganadorPartida = quien;
@@ -571,7 +593,7 @@ function cantarFlor(p: Partida, quien: Jugador, canto: CantoFlor | null): Partid
     // Nadie con quién discutirla: se cobran los 3 y se sigue jugando.
     revelarFlores(p);
     p.florResuelta = true;
-    sumar(p, quien, 3, "cobra la flor");
+    sumar(p, quien, 3, { vos: "Cobrás la flor", el: "cobra la flor" });
     return seguirDespuesDeApuesta(p);
   }
 
@@ -591,7 +613,7 @@ function resolverFlorASecas(p: Partida): Partida {
   revelarFlores(p);
   p.pendiente = null;
   p.florResuelta = true;
-  sumar(p, ganador, 3, "se lleva la flor");
+  sumar(p, ganador, 3, { vos: "Te llevás la flor", el: "se lleva la flor" });
   return seguirDespuesDeApuesta(p);
 }
 
@@ -627,9 +649,9 @@ function responderQuiero(p: Partida, quien: Jugador): Partida {
     revelarFlores(p);
     p.florResuelta = true;
     if (pendiente.cadena.includes("contraflor-al-resto")) {
-      return ganarLaPartida(p, ganador, "gana la contraflor al resto");
+      return ganarLaPartida(p, ganador, { vos: "Ganás la contraflor al resto", el: "gana la contraflor al resto" });
     }
-    sumar(p, ganador, 6, "gana la flor con envido");
+    sumar(p, ganador, 6, { vos: "Ganás la flor con envido", el: "gana la flor con envido" });
     return seguirDespuesDeApuesta(p);
   }
 
@@ -651,7 +673,7 @@ function responderQuiero(p: Partida, quien: Jugador): Partida {
   p.eventos.push({ quien: "rival", texto: `${tantos.rival}` });
 
   const { querido } = puntosEnvido(pendiente.cadena as CantoEnvido[], p.puntos);
-  sumar(p, ganador, querido, "gana el envido");
+  sumar(p, ganador, querido, { vos: "Ganás el envido", el: "gana el envido" });
   return seguirDespuesDeApuesta(p);
 }
 
@@ -675,13 +697,13 @@ function responderNoQuiero(p: Partida, quien: Jugador): Partida {
     // 3 si venía sólo de la flor, 6 si venía de un "con flor envido" ya en pie.
     const ultimo = pendiente.cadena[pendiente.cadena.length - 1];
     const valorAntes = ultimo === "contraflor-al-resto" && pendiente.cadena.length > 1 ? 6 : 3;
-    sumar(p, pendiente.de, valorAntes, "cobra la flor no querida");
+    sumar(p, pendiente.de, valorAntes, { vos: "Cobrás la flor no querida", el: "cobra la flor no querida" });
     return seguirDespuesDeApuesta(p);
   }
 
   p.envidoCerrado = true;
   const { noQuerido } = puntosEnvido(pendiente.cadena as CantoEnvido[], p.puntos);
-  sumar(p, pendiente.de, noQuerido, "cobra el envido no querido");
+  sumar(p, pendiente.de, noQuerido, { vos: "Cobrás el envido no querido", el: "cobra el envido no querido" });
   return seguirDespuesDeApuesta(p);
 }
 
@@ -765,7 +787,7 @@ export function ganadorDeLaMano(p: Partida): Jugador | null {
 function terminarMano(p: Partida, ganador: Jugador, puntos: number): Partida {
   p.ganadorMano = ganador;
   p.fase = "mano-terminada";
-  sumar(p, ganador, puntos, "gana la mano");
+  sumar(p, ganador, puntos, { vos: "Ganás la mano", el: "gana la mano" });
   return p;
 }
 

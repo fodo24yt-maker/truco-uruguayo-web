@@ -171,9 +171,25 @@ footer {
 
 /* La barra de juego: la franja finita de arriba mientras jugás.
    Reemplaza a la navegación del sitio, que adentro de una partida no pinta nada
-   y se llevaba 76px de alto. En un celular de 640 eso son las cartas. */
+   y se llevaba 76px de alto. En un celular de 640 eso son las cartas.
+
+   ── ES `min-height` Y NO `height`, desde el 2/9/2026 ──────────────────────
+   Estaba clavada en 30px, y eso obligaba al marcador de puntos a entrar en una
+   sola línea: en el celular eso son casilleros de 9px con los palitos en 1px,
+   o sea que no se leía cómo iba la partida. Ahora el marcador se apila en dos
+   filas y la barra crece con él, hasta unos 46px.
+
+   Sigue midiendo 30 EXACTOS en la compu —medido, no supuesto— porque allá el
+   marcador va en una línea. En el celular pasa a 44-48 según el ancho.
+
+   Y esos 14-18px salen de la escena, no de otro lado: la mano es `absolute`,
+   así que achicarla en la misma pasada devolvió mesa A LA VISTA pero ni un
+   píxel de alto. Vale la pena igual —un marcador que no se lee no sirve de
+   nada— y `mirar-mesa.mjs` confirma que la mesa sigue sin scrollear en los
+   siete tamaños, 320x568 incluido. */
 .barra-juego {
-  height: 30px;
+  min-height: 30px;
+  padding-block: 2px;
   background: linear-gradient(180deg, #1a120c 0%, #0e0906 100%);
   border-bottom: 1px solid color-mix(in srgb, var(--color-dorado) 30%, transparent);
 }

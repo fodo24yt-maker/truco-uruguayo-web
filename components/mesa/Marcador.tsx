@@ -280,10 +280,11 @@ export function Marcador({
 
    ── Por qué va en la barra y no flotando sobre la escena ──────────────────
 
-   La barra ya existe y mide 30px fijos. Metido ahí, el marcador no le saca ni
-   un píxel a la mesa; puesto encima de la escena taparía el fondo o al rival,
-   que es donde ya está el medallón. Ocupa el lugar del texto del ambiente, que
-   era decorativo y sigue estando —pegado al marcador— donde hay ancho.
+   La barra ya existe y es finita. Metido ahí, el marcador casi no le saca alto
+   a la mesa; puesto encima de la escena taparía el fondo o al rival, que es
+   donde ya está el medallón. Ocupa el lugar que tenía el texto del ambiente,
+   que era decorativo y se sacó el 2/9/2026: el departamento ya está en el
+   medallón y ese ancho lo necesitaban los puntos.
 
    Los seis grupos son los 30 puntos de la partida, con el corte de las malas
    después del tercero: la misma cuenta que la libreta. */
@@ -298,68 +299,129 @@ export function Marcador({
    ancho, porque la barra reparte tres cosas en una línea. Del piso al techo
    crece parejo, sin que en ningún ancho salte de golpe.
 
+   El alto sigue la proporción del dibujo (22x26), así que va con el mismo
+   clamp multiplicado por 1,18. Si se toca uno se toca el otro o los palitos
+   salen aplastados.
+
+   ── SON DOS JUEGOS DE MEDIDAS, uno por forma ──────────────────────────────
+   `enFila` es el de siempre, el de la compu:
+
      320px → 9px (el piso, que es lo que entra al lado de "Mapa" y "Ayudas")
      1266  → 14px
      1440+ → 16px (el techo: más alto que esto no entra en una barra de 30px)
 
-   El alto sigue la proporción del dibujo (22x26), así que va con el mismo
-   clamp multiplicado por 1,18. Si se toca uno se toca el otro o los palitos
-   salen aplastados. */
-const CASILLERO = { ancho: "clamp(9px, 1.1vw, 16px)", alto: "clamp(11px, 1.3vw, 19px)" };
+   `apilado` es el del celular, y existe porque ese piso de 9px NO SE LEÍA. Un
+   casillero de 9px de ancho deja los palitos en 1px: en la foto del 1/9 el
+   marcador era una hilera de puntitos grises y no se sabía cómo iba la
+   partida, que es exactamente lo único que ese marcador tiene que decir.
+   Puesto en dos filas, cada una tiene la barra entera para ella y el casillero
+   puede casi duplicarse. */
+const CASILLERO = {
+  enFila: { ancho: "clamp(9px, 1.1vw, 16px)", alto: "clamp(11px, 1.3vw, 19px)" },
+  apilado: { ancho: "clamp(14px, 4.4vw, 18px)", alto: "clamp(17px, 5.2vw, 21px)" },
+};
 
-/** Una vez cada jugador: la etiqueta y los seis grupos. */
+/** Una vez cada jugador: la etiqueta, los seis grupos y —apilado— el número. */
 function TiraDeBarra({
   etiqueta,
   puntos,
   color,
   claseEtiqueta,
+  apilado,
 }: {
   etiqueta: string;
   puntos: number;
   color: string;
   claseEtiqueta: string;
+  apilado: boolean;
 }) {
   const malas = Math.min(puntos, 15);
   const buenas = Math.max(puntos - 15, 0);
+  const medida = apilado ? CASILLERO.apilado : CASILLERO.enFila;
   return (
     <span
       className="flex min-w-0 items-center gap-[2px]"
       aria-label={`${etiqueta}: ${puntos} ${puntos === 1 ? "punto" : "puntos"}`}
     >
-      <span className={`mr-[2px] shrink-0 ${claseEtiqueta}`}>{etiqueta}</span>
+      {/* Apilado la etiqueta lleva ancho fijo: es lo que deja "Yo" y "Él" en
+          columna, con los casilleros de las dos filas arrancando a la misma
+          altura. Sin eso, "Él" es más angosto y la fila de abajo queda corrida
+          dos píxeles, que se ven. */}
+      <span
+        className={`mr-[2px] shrink-0 ${claseEtiqueta} ${apilado ? "text-right" : ""}`}
+        style={apilado ? { width: "1.7em" } : undefined}
+      >
+        {etiqueta}
+      </span>
       <span className="flex gap-px">
         {enGrupos(malas).map((n, i) => (
           <Palitos
             key={`m${i}`}
             cantidad={n}
             color={color}
-            alto={CASILLERO.alto}
-            ancho={CASILLERO.ancho}
+            alto={medida.alto}
+            ancho={medida.ancho}
             opacidad={0.95}
             fantasma
           />
         ))}
       </span>
       {/* la raya de las malas a las buenas, la misma que tiene la libreta */}
-      <span className="w-px shrink-0 bg-crema/25" style={{ height: CASILLERO.ancho }} />
+      <span className="w-px shrink-0 bg-crema/25" style={{ height: medida.ancho }} />
       <span className="flex gap-px">
         {enGrupos(buenas).map((n, i) => (
           <Palitos
             key={`b${i}`}
             cantidad={n}
             color={color}
-            alto={CASILLERO.alto}
-            ancho={CASILLERO.ancho}
+            alto={medida.alto}
+            ancho={medida.ancho}
             opacidad={0.95}
             fantasma
           />
         ))}
       </span>
+      {/* EL NÚMERO, y sólo apilado.
+
+          Es lo mismo que hace la libreta al final de cada `Fila`, y por la
+          misma razón: los palitos dicen cómo viene la cosa de un vistazo, pero
+          "¿cuánto voy?" se contesta con un número. En la compu no va porque
+          allá la libreta está en la mesa y ya lo dice; acá la libreta no
+          existe, así que este marcador es todo lo que hay.
+
+          En la manuscrita, igual que en el papel: un tanto es algo que alguien
+          anotó. Y con ancho fijo, para que las dos filas queden en columna. */}
+      {apilado && (
+        <span className="ml-[4px] shrink-0 text-right" style={{ width: "1.9em" }}>
+          <span
+            className="block font-[family-name:var(--font-mano)] text-[15px] leading-none"
+            style={{ color }}
+          >
+            {puntos}
+          </span>
+        </span>
+      )}
     </span>
   );
 }
 
-export function MarcadorBarra({ vos, rival }: { vos: number; rival: number }) {
+export function MarcadorBarra({
+  vos,
+  rival,
+  /**
+   * Dos filas en vez de una.
+   *
+   * Lo manda la mesa con el diseño que ya tenía elegido —celular o compu— y no
+   * un punto de corte nuevo: la regla del proyecto es que no se agregan cortes
+   * por ancho, y acá no hace falta ninguno porque esa decisión ya está tomada
+   * una vez en `usaPantallaAncha()`.
+   */
+  apilado = false,
+}: {
+  vos: number;
+  rival: number;
+  apilado?: boolean;
+}) {
   /* Los tuyos en dorado y los de él en crema: es el mismo par que ya usa el
      resto de la mesa —"TU TANTO" va en dorado— así que de un vistazo se sabe
      cuál fila es cuál sin leer la etiqueta. */
@@ -367,23 +429,44 @@ export function MarcadorBarra({ vos, rival }: { vos: number; rival: number }) {
      en la compu las dos cosas están en pantalla a la vez, y con "Vos" arriba y
      "Yo" en el papel parecen tres jugadores. Además "Yo" entra donde "Vos" no:
      a 320px la fila necesitaba 185px y había 170. */
+  const tuya = (
+    <TiraDeBarra
+      etiqueta="Yo"
+      puntos={vos}
+      color="var(--color-dorado)"
+      claseEtiqueta="text-dorado/90"
+      apilado={apilado}
+    />
+  );
+  const suya = (
+    <TiraDeBarra
+      etiqueta="Él"
+      puntos={rival}
+      color="var(--color-crema)"
+      claseEtiqueta="text-crema/60"
+      apilado={apilado}
+    />
+  );
+
+  /* Apilado va en `grid` y no en dos `flex` sueltos: es lo que hace que las dos
+     filas midan lo mismo y queden alineadas por la izquierda aunque una tenga
+     el número de dos dígitos y la otra de uno. */
+  if (apilado) {
+    return (
+      <div className="grid gap-[3px] font-[family-name:var(--font-ui)] text-[12px] uppercase tracking-wide">
+        {tuya}
+        {suya}
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-w-0 items-center gap-[clamp(6px,0.8vw,14px)] font-[family-name:var(--font-ui)] text-[clamp(10px,0.85vw,13px)] uppercase tracking-wide">
-      <TiraDeBarra
-        etiqueta="Yo"
-        puntos={vos}
-        color="var(--color-dorado)"
-        claseEtiqueta="text-dorado/90"
-      />
+      {tuya}
       <span aria-hidden="true" className="text-crema/20">
         ·
       </span>
-      <TiraDeBarra
-        etiqueta="Él"
-        puntos={rival}
-        color="var(--color-crema)"
-        claseEtiqueta="text-crema/60"
-      />
+      {suya}
     </div>
   );
 }

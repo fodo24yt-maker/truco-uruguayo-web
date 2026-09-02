@@ -53,7 +53,16 @@ const HONDO = "#7d5837";
 /** El fondo del bulto, donde ya no llega nada de la lámpara. */
 const NOCHE = "#553a20";
 
-function Tonos({ id, luz }: { id: string; luz: string }) {
+function Tonos({
+  id,
+  luz,
+  sombra = false,
+}: {
+  id: string;
+  luz: string;
+  /** El degradé de la sombra del pulgar. Sólo lo usa él, así que no va siempre. */
+  sombra?: boolean;
+}) {
   return (
     <defs>
       <linearGradient id={`${id}-piel`} x1="0.3" y1="0" x2="0.55" y2="1">
@@ -71,9 +80,30 @@ function Tonos({ id, luz }: { id: string; luz: string }) {
         <stop offset="0%" stopColor={HONDO} stopOpacity="0.7" />
         <stop offset="100%" stopColor={HONDO} stopOpacity="0" />
       </linearGradient>
-      <filter id={`${id}-blanda`} x="-40%" y="-40%" width="180%" height="180%">
-        <feGaussianBlur stdDeviation="6" />
-      </filter>
+      {/* ── LA SOMBRA DEL PULGAR, Y POR QUÉ NO ES UN `feGaussianBlur` ──────
+          Acá había un filtro. Lo sacó el bug del 1/9/2026: en el celular
+          aparecía una banda de rayas cremas del tamaño EXACTO de esta mano
+          —medido sobre la foto: mismo ancho y la misma proporción 200:96 del
+          `viewBox`—, siempre con una sola carta, que es cuando el dibujo queda
+          destapado y se puede mirar.
+
+          Cuando no es tu turno, el bloque entero de la mano se apaga con
+          `opacity-75`, y eso obliga al navegador a componer TODO el subárbol
+          —dedos, cartas y pulgar— en una superficie aparte. Un filtro adentro
+          de esa superficie es una segunda superficie anidada, y ahí es donde
+          las GPU de teléfono devuelven basura.
+
+          Es la misma lección que dejó el ícono el 2/9: los filtros los resuelve
+          el rasterizador y cada uno hace lo suyo. Allá el halo pasó a
+          `radialGradient` y acá la sombra también. NO VOLVER A METER UN FILTRO
+          EN LA MANO: `mirar-mesa.mjs` falla si aparece uno. */}
+      {sombra && (
+        <radialGradient id={`${id}-sombra`}>
+          <stop offset="0%" stopColor="#000" stopOpacity="0.5" />
+          <stop offset="55%" stopColor="#000" stopOpacity="0.34" />
+          <stop offset="100%" stopColor="#000" stopOpacity="0" />
+        </radialGradient>
+      )}
     </defs>
   );
 }
@@ -192,6 +222,11 @@ export function DedosAtras({ ancho, luz }: { ancho: string; luz: string }) {
  *
  * Lleva SU PROPIA SOMBRA dibujada adentro, antes del dedo: sin eso el pulgar se
  * ve pegado como una calcomanía. La sombra es lo que lo apoya sobre la carta.
+ *
+ * Son DOS manchas y no una, por lo mismo que `SombraApoyada`: la chica y oscura
+ * dice que el dedo TOCA la carta y la grande dice de dónde viene la luz. Van
+ * giradas siguiendo el dedo, que cruza en diagonal: una elipse a escuadra
+ * debajo de algo diagonal se lee como un charco y no como una sombra.
  */
 export function PulgarAdelante({ ancho, luz }: { ancho: string; luz: string }) {
   const dedo =
@@ -204,10 +239,14 @@ export function PulgarAdelante({ ancho, luz }: { ancho: string; luz: string }) {
       className="pointer-events-none block h-auto"
       aria-hidden="true"
     >
-      <Tonos id="pulgar" luz={luz} />
+      <Tonos id="pulgar" luz={luz} sombra />
 
-      {/* la sombra sobre la carta: corrida abajo y a la derecha, contraria a la luz */}
-      <path d={dedo} transform="translate(8 10)" fill="rgba(0,0,0,0.45)" filter="url(#pulgar-blanda)" />
+      {/* la sombra sobre la carta: corrida abajo y a la derecha, contraria a la
+          luz. El desenfoque lo da el degradé, no un filtro (ver `Tonos`). */}
+      <g transform="rotate(-42 97 89)">
+        <ellipse cx="97" cy="89" rx="66" ry="30" fill="url(#pulgar-sombra)" />
+        <ellipse cx="93" cy="87" rx="46" ry="17" fill="url(#pulgar-sombra)" opacity="0.7" />
+      </g>
 
       <path d={dedo} fill="url(#pulgar-piel)" />
 
