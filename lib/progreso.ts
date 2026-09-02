@@ -13,10 +13,30 @@
 const CLAVE = "truco-uy:progreso";
 const VERSION = 1;
 
+/**
+ * El marcador con el que se cerró una partida ganada.
+ *
+ * Es lo que convierte "le gané a Luquita" en "le gané 30 a 4", que es lo que se
+ * cuenta cuando se cuenta. No hay dato nuevo acá: los dos números ya se ven en
+ * la barra durante toda la partida y en el cartel del final.
+ */
+export interface Marcador {
+  vos: number;
+  rival: number;
+}
+
 export interface Progreso {
   version: number;
-  /** Partidas ganadas y jugadas contra cada rival, por su id. */
-  rivales: Record<string, { ganadas: number; jugadas: number }>;
+  /**
+   * Partidas ganadas y jugadas contra cada rival, por su id, y el marcador de
+   * la mejor victoria si la hubo.
+   *
+   * `mejor` es opcional a propósito: los progresos guardados antes de que esto
+   * existiera no lo traen, y ésa es toda la migración que hace falta. Subir
+   * `VERSION` para agregar un campo opcional sólo serviría para tirarle el
+   * progreso a quien ya venía jugando.
+   */
+  rivales: Record<string, { ganadas: number; jugadas: number; mejor?: Marcador }>;
   /** Lecciones que el jugador marcó como leídas. */
   leccionesLeidas: string[];
   /** Si quiere las ayudas prendidas en la mesa. */
@@ -37,6 +57,27 @@ const esEnteroNoNegativo = (v: unknown): v is number =>
   typeof v === "number" && Number.isInteger(v) && v >= 0 && v < 1e6;
 
 /**
+ * El techo de un marcador guardado.
+ *
+ * La partida se gana a los 30, pero **el ganador no queda siempre en 30**:
+ * `sumar()` en `lib/motor/partida.ts` suma y DESPUÉS compara, así que estando
+ * 29 le ganás un vale cuatro y quedás en 33. Con el techo en 30 se descartarían
+ * victorias legítimas —justo las más grandes—. 40 deja lugar de sobra y sigue
+ * rechazando cualquier número inventado a mano desde la consola.
+ */
+const TOPE_MARCADOR = 40;
+
+const esMarcador = (v: unknown): v is Marcador => {
+  if (typeof v !== "object" || v === null) return false;
+  const m = v as Record<string, unknown>;
+  const bien = (n: unknown) =>
+    typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= TOPE_MARCADOR;
+  // `vos > rival` porque esto guarda VICTORIAS: un marcador donde perdiste no
+  // es un trofeo, es basura.
+  return bien(m.vos) && bien(m.rival) && (m.vos as number) > (m.rival as number);
+};
+
+/**
  * Convierte lo que haya guardado en un progreso confiable. Nunca lanza: ante
  * cualquier duda devuelve el progreso vacío.
  */
@@ -55,6 +96,16 @@ function sanear(crudo: unknown): Progreso {
       // no se puede haber ganado más de lo que se jugó
       if (v.ganadas > v.jugadas) continue;
       rivales[id] = { ganadas: v.ganadas, jugadas: v.jugadas };
+      /* El marcador se valida aparte y, si no cierra, SE DESCARTA SÓLO ÉL: la
+         entrada del rival queda con sus victorias intactas. Descartarla entera
+         —que es lo que hace la línea de arriba con `ganadas`/`jugadas`— haría
+         que un marcador corrupto le borrara el progreso a alguien, y un trofeo
+         vale mucho menos que una victoria.
+         Y sin `ganadas > 0` no puede haber marcador: sería el de una partida
+         que nunca se ganó. */
+      if (v.ganadas > 0 && esMarcador(v.mejor)) {
+        rivales[id].mejor = { vos: v.mejor.vos, rival: v.mejor.rival };
+      }
     }
   }
 
@@ -99,10 +150,27 @@ export function guardarProgreso(progreso: Progreso): void {
   }
 }
 
-/** Anota el resultado de una partida contra un rival. */
-export function anotarPartida(id: string, gane: boolean): Progreso {
+/**
+ * Anota el resultado de una partida contra un rival.
+ *
+ * `marcador` es opcional para que la firma vieja siga andando, y sólo se mira
+ * cuando ganaste. De las victorias se guarda **la mejor**, medida por la
+ * diferencia: entre ganar 30 a 27 y ganar 30 a 2, la que se cuenta es la
+ * segunda. Nunca se pisa una mejor con una peor.
+ */
+export function anotarPartida(id: string, gane: boolean, marcador?: Marcador): Progreso {
   const progreso = leerProgreso();
-  const actual = progreso.rivales[id] ?? { ganadas: 0, jugadas: 0 };
+  /* `Object.hasOwn` y no un acceso pelado: indexar un objeto plano con un texto
+     devuelve también lo que hay en la cadena de prototipos, y `rivales["__proto__"]`
+     saldría con un objeto que nadie guardó. Hoy el id sale de PERSONALIDADES y
+     no llega nadie de afuera, pero es el agujero que ya mordió a este proyecto
+     una vez. */
+  const actual = Object.hasOwn(progreso.rivales, id)
+    ? progreso.rivales[id]
+    : { ganadas: 0, jugadas: 0 };
+
+  const mejor = elMejorMarcador(actual.mejor, gane ? marcador : undefined);
+
   const nuevo: Progreso = {
     ...progreso,
     rivales: {
@@ -110,11 +178,19 @@ export function anotarPartida(id: string, gane: boolean): Progreso {
       [id]: {
         ganadas: actual.ganadas + (gane ? 1 : 0),
         jugadas: actual.jugadas + 1,
+        ...(mejor ? { mejor } : {}),
       },
     },
   };
   guardarProgreso(nuevo);
   return nuevo;
+}
+
+/** El que se queda de los dos, o `undefined` si no hay ninguno válido. */
+function elMejorMarcador(viejo?: Marcador, nuevo?: Marcador): Marcador | undefined {
+  const validos = [viejo, nuevo].filter((m): m is Marcador => esMarcador(m));
+  if (validos.length === 0) return undefined;
+  return validos.reduce((a, b) => (b.vos - b.rival > a.vos - a.rival ? b : a));
 }
 
 /** Guarda una preferencia suelta sin tocar el resto. */

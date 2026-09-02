@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Los colores del sitio, para el lado nativo.
+
+  Son los mismos tokens que declara `app/globals.css`; están escritos otra vez
+  porque Android no lee CSS. Si alguno cambia allá, cambia acá.
+-->
+<resources>
+    <!-- `noche`: el fondo de todo, fuera del cono de luz de la lámpara -->
+    <color name="noche">#14100E</color>
+    <!-- `madera`: las tablas del boliche -->
+    <color name="madera">#3A2418</color>
+    <color name="dorado">#C9922E</color>
+
+    <!-- Los tres que el tema de Capacitor da por sentados -->
+    <color name="colorPrimary">#3A2418</color>
+    <color name="colorPrimaryDark">#14100E</color>
+    <color name="colorAccent">#C9922E</color>
+</resources>

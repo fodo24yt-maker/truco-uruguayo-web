@@ -15,7 +15,11 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const leccion = buscarLeccion((await params).leccion);
   if (!leccion) return {};
-  return { title: leccion.titulo, description: leccion.resumen };
+  return {
+    title: leccion.titulo,
+    description: leccion.resumen,
+    alternates: { canonical: `/aprender/${leccion.slug}` },
+  };
 }
 
 export default async function PaginaLeccion({ params }: Props) {
@@ -30,10 +34,9 @@ export default async function PaginaLeccion({ params }: Props) {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:py-12">
-      <div className="mb-5 flex items-center justify-between gap-4 font-[family-name:var(--font-ui)] text-sm">
-        <Link href="/aprender" className="text-crema/60 hover:text-crema">
-          ← Aprender
-        </Link>
+      {/* El "volver" lo pone la barra de la app. Lo que sí se queda es el
+          contador: no es navegación, es saber cuánto falta. */}
+      <div className="mb-5 flex items-center justify-end font-[family-name:var(--font-ui)] text-sm">
         <span className="text-crema/40">
           {indice + 1} de {LECCIONES.length}
         </span>

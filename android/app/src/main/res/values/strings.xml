@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Truco Uruguayo</string>
+    <string name="title_activity_main">Truco Uruguayo</string>
+    <string name="package_name">uy.trucouruguayo.app</string>
+    <string name="custom_url_scheme">uy.trucouruguayo.app</string>
+</resources>

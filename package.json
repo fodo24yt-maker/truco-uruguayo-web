@@ -6,20 +6,30 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:app": "DESTINO=app next build && rm -rf out-app && mv out out-app",
+    "servir:app": "python3 -m http.server --directory out-app 4173",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "node --test lib/*.test.ts lib/motor/*.test.ts"
   },
   "dependencies": {
+    "@capacitor-community/safe-area": "8.0.1",
+    "@capacitor/android": "8.5.1",
+    "@capacitor/app": "8.1.1",
+    "@capacitor/core": "8.5.1",
+    "@capacitor/splash-screen": "8.0.2",
     "next": "^16.3.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@capacitor/cli": "8.5.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26.3.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
+    "playwright": "^1.62.1",
+    "sharp": "^0.35.4",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2"
   }

@@ -5,8 +5,10 @@
  *     node herramientas/mirar-web.mjs
  *
  * `mirar-mesa.mjs` verifica que la mesa no scrollee y `mirar-mesa-nueva.mjs`
- * mide dónde cae cada objeto. Lo que faltaba es lo de acá: **que las jugadas se
- * puedan hacer**, que es una cosa distinta de que se vean bien.
+ * mide dónde cae cada objeto. Lo de acá son las dos cosas que ninguna de esas
+ * ve: **que la navegación de la app sea la que tiene que ser** —la barra, el
+ * volver, las pantallas que no scrollean— y **que las jugadas se puedan
+ * hacer**, que es distinto de que se vean bien.
  *
  * El bug que lo motivó: cantabas envido, el rival te subía a real envido y no
  * había ningún botón para subirle. La barra se convertía entera en "Quiero /
@@ -20,6 +22,8 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
 import { chromium } from "playwright";
+
+import { volverDesde } from "../lib/navegacion.ts";
 
 const SALIDA = path.join("capturas", "web");
 const RAIZ = "http://localhost:3000";
@@ -44,59 +48,211 @@ async function abrir(pag, ruta) {
   await pag.addStyleTag({ content: "nextjs-portal{display:none!important}" });
 }
 
-/* ══ 1. LA PORTADA ═════════════════════════════════════════════════════════
-   Es nueva: dos botones y nada más, ocupando la pantalla. Las tres cosas que
-   pueden salir mal son que se salga de ancho, que los botones queden abajo del
-   pliegue —o sea que haya que scrollear para ver a qué viniste— y que la
-   portada tape lo que sigue sin avisar que hay más. */
-console.log("la portada:");
+/* ══ 1. EL ARMAZÓN DE APP ══════════════════════════════════════════════════
+   Desde que esto se empaqueta para Android, la navegación es de app y no de
+   web: una barra fija arriba con el volver y los dos atajos, y pantallas que
+   no scrollean.
+
+   Se verifican tres cosas, y las tres son fallas que ya se pagaron antes:
+
+   1. **Las pantallas fijas entran enteras.** El inicio y el menú de jugar son
+      pantallas: si hay que arrastrar para ver a qué viniste, están rotas. El
+      menú de jugar scrolleaba 205 px a 360×640 y no se veía en un celular
+      normal.
+   2. **La barra está donde tiene que estar Y FALTA donde tiene que faltar.**
+      Lo segundo importa más: en la mesa se esconde con
+      `body:has(.mesa-pantalla-completa) > header`, y si alguien envuelve la
+      barra en un `<div>` esa regla deja de encontrarla y la barra reaparece
+      encima de la mesa, robándole el alto que necesita para no scrollear.
+   3. **El volver lleva a donde dice `volverDesde()`.** La misma función la usan
+      la barra y el botón físico de Android, así que si acá coinciden, allá
+      también. */
+console.log("el armazón de app:");
+{
+  /** Las pantallas que no pueden scrollear nunca. */
+  const FIJAS = ["/", "/jugar"];
+  /** Dónde tiene que haber barra, y dónde no. */
+  const CON_BARRA = ["/", "/aprender", "/aprender/la-flor", "/jugar", "/legales/terminos"];
+  const SIN_BARRA = ["/jugar/gira", "/jugar/mesa?depto=montevideo"];
+
+  const medir = (pag) =>
+    pag.evaluate(() => {
+      const doc = document.documentElement;
+      /* Se busca al hijo DIRECTO del body a propósito: es la forma del DOM de la
+         que depende que la mesa pueda esconder la barra. */
+      const barra = document.querySelector("body > header.barra-app");
+      const visible = barra ? barra.getBoundingClientRect().height > 0 : false;
+      const atajos = [...(barra?.querySelectorAll("nav > div a") ?? [])];
+      const volver = [...(barra?.querySelectorAll("nav > a") ?? [])][0] ?? null;
+      const caja = (el) => {
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { arriba: r.top, abajo: r.bottom, izq: r.left, der: r.right };
+      };
+      return {
+        hayBarra: visible,
+        altoBarra: barra ? Math.round(barra.getBoundingClientRect().height) : 0,
+        volver: visible && volver ? volver.getAttribute("href") : null,
+        atajos: atajos.map((a) => a.textContent.trim()),
+        activo: barra?.querySelector('[aria-current="page"]')?.textContent?.trim() ?? null,
+        sobraAlto: doc.scrollHeight - doc.clientHeight,
+        sobraAncho: doc.scrollWidth - doc.clientWidth,
+        aprender: caja(
+          [...document.querySelectorAll("main a")].find((a) =>
+            a.textContent.trim().toLowerCase().startsWith("aprender a jugar"),
+          ),
+        ),
+        jugar: caja(
+          [...document.querySelectorAll("main a")].find(
+            (a) => a.textContent.trim().toLowerCase() === "jugar",
+          ),
+        ),
+      };
+    });
+
+  for (const [ancho, alto] of TAMANOS) {
+    const ctx = await nav.newContext({ viewport: { width: ancho, height: alto } });
+    const pag = await ctx.newPage();
+    const etiqueta = `${ancho}x${alto}`;
+    const antes = fallos;
+
+    for (const ruta of [...CON_BARRA, ...SIN_BARRA]) {
+      await abrir(pag, ruta);
+      await pag.waitForTimeout(ruta.includes("mesa") ? 3200 : 500);
+      const m = await medir(pag);
+      const donde = `${etiqueta} ${ruta}`;
+
+      // 1. la barra, presente o ausente
+      const deberia = !SIN_BARRA.includes(ruta);
+      if (m.hayBarra !== deberia) {
+        falla(donde, deberia ? "no está la barra de la app" : "la barra tapa la pantalla de juego");
+      }
+      if (deberia && m.atajos.join("·") !== "Aprender·Jugar") {
+        falla(donde, `los atajos son [${m.atajos}] y tienen que ser Aprender y Jugar`);
+      }
+
+      // 2. el volver, contra la función que también usa el botón de Android
+      if (deberia) {
+        const busqueda = ruta.includes("?") ? ruta.slice(ruta.indexOf("?")) : "";
+        const camino = ruta.split("?")[0];
+        const esperado = volverDesde(camino, busqueda);
+        if (m.volver !== esperado) {
+          falla(donde, `el volver apunta a ${m.volver ?? "ningún lado"} y volverDesde() dice ${esperado ?? "ninguno"}`);
+        }
+      }
+
+      // 3. nada se sale de ancho, en ninguna pantalla
+      if (m.sobraAncho > 1) falla(donde, `se sale de ancho ${m.sobraAncho}px`);
+
+      // 4. las pantallas fijas entran enteras
+      if (FIJAS.includes(ruta) && m.sobraAlto > 1) {
+        falla(donde, `es una pantalla y scrollea ${m.sobraAlto}px`);
+      }
+
+      // 5. en el inicio, las dos puertas se ven sin arrastrar nada
+      if (ruta === "/") {
+        for (const [nombre, caja] of [["Aprender a jugar", m.aprender], ["Jugar", m.jugar]]) {
+          if (!caja) falla(donde, `no está el botón "${nombre}"`);
+          else if (caja.abajo > alto) falla(donde, `"${nombre}" queda fuera de la pantalla`);
+        }
+        await pag.screenshot({ path: path.join(SALIDA, `inicio-${etiqueta}.png`) });
+      }
+    }
+
+    if (fallos === antes) console.log(`  ${etiqueta.padEnd(9)} OK`);
+    await ctx.close();
+  }
+}
+
+/* ══ 2. LA VITRINA DE TROFEOS ══════════════════════════════════════════════
+   Se abre desde el mapa de la gira y muestra los diecinueve objetos: los
+   ganados con su marcador, los que faltan apagados.
+
+   Lo que puede salir mal y no se ve leyendo el código:
+
+   · **que no entre.** Diecinueve filas no caben en ningún celular, así que la
+     lista scrollea por dentro. Lo que NO puede pasar es que scrollee la página:
+     ahí el encabezado se va para arriba y te quedás sin botón de cerrar.
+   · **que el objeto no se dibuje.** `ObjetoDeMesa` necesita que el contenedor
+     tenga alto; en una caja sin medidas el SVG se colapsa a 0 y la fila queda
+     con el nombre y un hueco.
+   · **que se regalen trofeos**: uno que no ganaste no puede mostrar marcador.
+
+   El progreso se siembra a mano en el `localStorage`, que es de donde sale. */
+console.log("\nla vitrina de trofeos:");
 for (const [ancho, alto] of TAMANOS) {
   const ctx = await nav.newContext({ viewport: { width: ancho, height: alto } });
   const pag = await ctx.newPage();
-  await abrir(pag, "/");
-  await pag.waitForTimeout(600);
   const etiqueta = `${ancho}x${alto}`;
 
-  const m = await pag.evaluate(() => {
-    const caja = (el) => {
-      if (!el) return null;
-      const r = el.getBoundingClientRect();
-      return { arriba: r.top, abajo: r.bottom, izq: r.left, der: r.right };
-    };
-    const enlaces = [...document.querySelectorAll("a")];
-    const busca = (texto) =>
-      caja(enlaces.find((a) => a.textContent.trim().toLowerCase().includes(texto)));
-    return {
-      scrollAncho: document.documentElement.scrollWidth,
-      scrollAlto: document.documentElement.scrollHeight,
-      aprender: busca("aprender a jugar"),
-      jugar: busca("jugar contra el bot"),
-      pista: busca("por qué existe esto"),
-      porQue: caja(document.querySelector("#por-que")),
-    };
-  });
+  for (const cuantos of [3, 19]) {
+    await abrir(pag, "/jugar/gira");
+    await pag.evaluate((n) => {
+      const ids = ["luki","la-coca","el-rulo","tito","la-nelly","marito","el-pescador",
+        "don-aparicio","cachila","el-trinitario","la-rosa","el-tucho","el-fray","beto",
+        "don-ramon","el-piedra","joao","peralta","el-melo"];
+      const rivales = {};
+      for (const id of ids.slice(0, n)) {
+        rivales[id] = { ganadas: 1, jugadas: 2, mejor: { vos: 30, rival: 4 } };
+      }
+      localStorage.setItem("truco-uy:progreso", JSON.stringify({ version: 1, rivales }));
+    }, cuantos);
+    await abrir(pag, "/jugar/gira");
+    await pag.waitForTimeout(900);
 
-  // no se sale de ancho: una portada que scrollea de costado está rota
-  if (m.scrollAncho > ancho + 1) {
-    falla(etiqueta, `la portada scrollea de costado (${m.scrollAncho} > ${ancho})`);
-  }
-  // los dos botones se ven SIN scrollear: es la única decisión de la pantalla
-  for (const [nombre, caja] of [
-    ["aprender a jugar", m.aprender],
-    ["jugar contra el bot", m.jugar],
-  ]) {
-    if (!caja) falla(etiqueta, `no está el botón "${nombre}"`);
-    else if (caja.abajo > alto) {
-      falla(etiqueta, `"${nombre}" queda abajo del pliegue (${caja.abajo.toFixed(0)} > ${alto})`);
+    const boton = pag.locator('button[aria-label^="Trofeos"]');
+    if ((await boton.count()) === 0) {
+      falla(`${etiqueta} ${cuantos}`, "no está el botón de trofeos en el mapa");
+      continue;
     }
-  }
-  // y abajo tiene que seguir habiendo web
-  if (!m.porQue) falla(etiqueta, 'se perdió la sección "por qué existe esto"');
-  if (m.scrollAlto <= alto + 10) falla(etiqueta, "la portada es todo: no hay nada abajo");
-  if (!m.pista) falla(etiqueta, "no hay pista de que abajo hay más");
+    await boton.click();
+    await pag.waitForTimeout(400);
 
-  if (fallos === 0) console.log(`  ${etiqueta.padEnd(9)} OK  (alto total ${m.scrollAlto}px)`);
-  await pag.screenshot({ path: path.join(SALIDA, `portada-${etiqueta}.png`) });
+    const m = await pag.evaluate(() => {
+      const hoja = document.querySelector('[role="dialog"][aria-labelledby="titulo-trofeos"]');
+      if (!hoja) return null;
+      const lista = hoja.querySelector("ul");
+      const filas = [...(lista?.querySelectorAll("li") ?? [])];
+      const cerrar = [...hoja.querySelectorAll("button")].find(
+        (b) => b.textContent.trim().toLowerCase() === "cerrar",
+      );
+      const dibujos = [...hoja.querySelectorAll("svg")].filter((sv) => {
+        const r = sv.getBoundingClientRect();
+        return r.width > 4 && r.height > 4;
+      });
+      const doc = document.documentElement;
+      const rc = cerrar?.getBoundingClientRect();
+      return {
+        filas: filas.length,
+        conMarcador: filas.filter((li) => /\d+\s*a\s*\d+/.test(li.textContent)).length,
+        dibujos: dibujos.length,
+        listaScrollea: lista ? lista.scrollHeight > lista.clientHeight : false,
+        paginaScrollea: doc.scrollHeight - doc.clientHeight,
+        cerrarVisible: !!rc && rc.top >= 0 && rc.bottom <= window.innerHeight,
+        seSaleDeAncho: hoja.scrollWidth - hoja.clientWidth,
+      };
+    });
+
+    const donde = `${etiqueta} con ${cuantos}`;
+    if (!m) { falla(donde, "no se abrió la vitrina"); continue; }
+    if (m.filas !== 19) falla(donde, `hay ${m.filas} filas y tienen que ser los 19`);
+    if (m.conMarcador !== cuantos) {
+      falla(donde, `${m.conMarcador} filas muestran marcador y se ganaron ${cuantos}`);
+    }
+    // un dibujo por trofeo ganado, más la copa del encabezado si estuviera
+    if (m.dibujos < cuantos) {
+      falla(donde, `sólo se dibujaron ${m.dibujos} objetos de ${cuantos}: se colapsó el SVG`);
+    }
+    if (m.paginaScrollea > 1) falla(donde, `la página scrollea ${m.paginaScrollea}px`);
+    if (m.seSaleDeAncho > 1) falla(donde, `la vitrina se sale de ancho ${m.seSaleDeAncho}px`);
+    if (!m.cerrarVisible) falla(donde, "el botón de cerrar quedó fuera de la pantalla");
+    if (cuantos === 19 && !m.listaScrollea) {
+      falla(donde, "con los 19 la lista tendría que scrollear por dentro");
+    }
+
+    await pag.screenshot({ path: path.join(SALIDA, `trofeos-${cuantos}-${etiqueta}.png`) });
+  }
+  console.log(`  ${etiqueta.padEnd(9)} OK`);
   await ctx.close();
 }
 

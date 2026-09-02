@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Sobrevive por si algún launcher viejo lo pide: el ícono adaptativo usa
+  `@mipmap/ic_launcher_background`, que es la madera horneada por
+  `herramientas/generar-icono.mjs`. Venía en blanco.
+-->
+<resources>
+    <color name="ic_launcher_background">#14100E</color>
+</resources>

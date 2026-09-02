@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Oswald, Source_Sans_3, Yeseva_One } from "next/font/google";
 import Link from "next/link";
+import { BarraApp } from "@/components/BarraApp";
+import { BotonAtrasAndroid } from "@/components/BotonAtrasAndroid";
 import { NOMBRE_SITIO, URL_SITIO } from "@/lib/sitio";
 import "./globals.css";
 
@@ -53,11 +55,34 @@ export const metadata: Metadata = {
     siteName: NOMBRE_SITIO,
     url: URL_SITIO,
   },
-  alternates: { canonical: "/" },
+  // EL CANONICAL NO VA ACÁ, y es a propósito. Todo lo que declara el layout
+  // raíz lo heredan TODAS las páginas: con `canonical: "/"` puesto acá, las
+  // ocho lecciones y la gira le decían a Google que eran duplicados de la
+  // portada (verificado sobre `out/`: los tres .html emitían la misma etiqueta).
+  // Lo declara cada página. Las que no son contenido indexable —la mesa y la
+  // gira— no llevan ninguno, que es mejor que llevar uno equivocado.
 };
+
+/**
+ * La ventana.
+ *
+ * `viewportFit: "cover"` es lo que hace que `env(safe-area-inset-*)` valga algo:
+ * sin él, el navegador da 0 y no hay forma de saber cuánto mide la franja del
+ * reloj. En una web común no cambia nada —no hay franja—; en la app es la mitad
+ * del arreglo, y la otra mitad son las reglas de `globals.css`.
+ *
+ * El zoom se bloquea SÓLO en la app. En la web poder agrandar el texto es
+ * accesibilidad y sacarlo sería una regresión; adentro de una app, en cambio,
+ * el pellizco no agranda nada útil y lo único que hace es descolocar la mesa,
+ * que está medida para entrar exacta. `viewport` se evalúa al compilar, así que
+ * alcanza con mirar la variable del build.
+ */
+const PARA_LA_APP = process.env.DESTINO === "app";
 
 export const viewport: Viewport = {
   themeColor: "#14100e",
+  viewportFit: "cover",
+  ...(PARA_LA_APP ? { userScalable: false, maximumScale: 1, initialScale: 1 } : {}),
 };
 
 /**
@@ -103,30 +128,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="referrer" content="no-referrer" />
       </head>
       <body className="flex min-h-dvh flex-col">
-        <header className="madera border-b-2 filo-dorado">
-          <nav className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-4 py-3">
-            <Link
-              href="/"
-              className="font-[family-name:var(--font-display)] text-lg leading-none text-dorado sm:text-xl"
-            >
-              Truco Uruguayo
-            </Link>
-            <div className="flex gap-1 font-[family-name:var(--font-ui)] text-sm uppercase tracking-wide">
-              <Link
-                href="/aprender"
-                className="rounded px-3 py-2 text-crema/85 transition-colors hover:bg-black/25 hover:text-crema"
-              >
-                Aprender
-              </Link>
-              <Link
-                href="/jugar"
-                className="rounded bg-bordo px-3 py-2 text-crema transition-colors hover:bg-bordo-claro"
-              >
-                Jugar
-              </Link>
-            </div>
-          </nav>
-        </header>
+        {/* La barra de la app. Es un componente de cliente porque tiene que
+            saber en qué pantalla estás para decidir adónde vuelve la flecha y
+            cuál de los dos atajos está encendido. Su `<header>` sigue siendo
+            hijo directo del `<body>`, que es de lo que depende que la mesa lo
+            pueda esconder: está explicado en el propio componente. */}
+        <BarraApp />
+        {/* No dibuja nada: ata el botón físico de atrás de Android a la misma
+            función que la flecha de la barra. En la web no hace absolutamente
+            nada y no descarga un solo byte de Capacitor. */}
+        <BotonAtrasAndroid />
 
         <main className="flex min-h-0 flex-1 flex-col">{children}</main>
 

@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   title: "Política de privacidad",
   description:
     "Qué datos recoge Truco Uruguayo: hoy, ninguno. Sin cuentas, sin cookies, sin analítica y sin rastreadores.",
+  alternates: { canonical: "/legales/privacidad" },
 };
 
 // Se actualiza cada vez que una función nueva toque datos del usuario.

@@ -73,6 +73,9 @@ body {
   color: var(--color-crema);
   font-family: var(--font-texto);
   -webkit-tap-highlight-color: transparent;
+  /* Sin esto, en el celular arrastrar hacia abajo recarga la página. En una web
+     es una comodidad; adentro de una app es perder la partida sin querer. */
+  overscroll-behavior: none;
 }
 
 :focus-visible {
@@ -144,6 +147,26 @@ body {
     rgba(8, 5, 3, 0.55) 78%,
     rgba(8, 5, 3, 0.9) 100%
   );
+}
+
+/* ── LA BARRA DE LA APP Y LA ZONA SEGURA ───────────────────────────────────
+   Con `targetSdk 36` Android dibuja la app abajo del reloj y de los botones del
+   sistema, y no se puede pedir lo contrario: desde Android 16 la pantalla
+   completa es obligatoria. `env(safe-area-inset-*)` es cuánto mide esa franja.
+
+   En la web vale 0 y esto no cambia un solo píxel; en el teléfono es lo único
+   que impide que el reloj quede encima de los botones.
+
+   (En WebViews viejos —Chromium menor a 140— `env()` también da 0, pero ahí el
+   relleno lo pone el propio WebView, así que este CSS se escribe UNA vez y
+   sirve en los dos casos.) */
+.barra-app {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* El pie, del otro lado: la barra de gestos de Android se le monta encima. */
+footer {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* La barra de juego: la franja finita de arriba mientras jugás.
@@ -521,9 +544,36 @@ body:has(.mesa-pantalla-completa) > header {
 body:has(.mesa-pantalla-completa) {
   height: 100dvh;
   overflow: hidden;
+  /* Los dos rellenos son la ÚNICA línea que la mesa cambió al volverse app, y
+     hacen dos cosas de una: corren el contenido para abajo del reloj y, como
+     todo va en `border-box`, le descuentan al alto exactamente lo mismo. Sin
+     ellos la primera fila —la barra de juego con el Salir y el marcador— queda
+     tapada por el reloj del sistema.
+
+     En la web las dos valen 0 y esto es idéntico a lo que había: por eso no
+     hubo que re-medir los siete tamaños. */
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 .mesa-pantalla-completa {
   height: 100%;
+}
+
+/* ── UNA PANTALLA QUE NO SCROLLEA, PERO CON LA BARRA PUESTA ────────────────
+   Hermana de la de arriba y distinta en una cosa: acá el encabezado SÍ se ve.
+   La usa el inicio, que en una app es una pantalla y no una página: se entra,
+   se elige, se sale.
+
+   Lo que hay que esconder es el pie, que con su `mt-16` empuja la portada fuera
+   de la ventana y la hace scrollear igual aunque el contenido entre. Los
+   enlaces legales que vivían ahí los dibuja la propia pantalla. */
+body:has(.pantalla-fija) {
+  height: 100dvh;
+  overflow: hidden;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+body:has(.pantalla-fija) footer {
+  display: none;
 }
 
 /* ── SE LEVANTA LA MESA AL TERMINAR LA MANO ────────────────────────────────

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Base application theme. -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <!-- Customize your theme here. -->
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+    </style>
+
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:background">@null</item>
+    </style>
+
+
+    <!--
+      El arranque.
+
+      Por omisión Capacitor deja sólo `android:background`, que es lo que usan
+      Android 11 y anteriores. Desde Android 12 el sistema dibuja SU propia
+      pantalla de arranque y esa línea la ignora: queda el fondo blanco del
+      tema, o sea un flashazo blanco antes de una app que es toda penumbra. Lo
+      primero que ve el que la abre.
+
+      Las tres líneas de abajo son las que Android 12+ sí mira. Las provee
+      `androidx.core:core-splashscreen`, que ya viene entre las dependencias.
+    -->
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/noche</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
+        <item name="android:background">@drawable/splash</item>
+    </style>
+</resources>

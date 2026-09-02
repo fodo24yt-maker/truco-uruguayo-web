@@ -535,11 +535,19 @@ function Mesa() {
     ficha.current = observarMano(ficha.current, p, "vos");
   }, [p]);
 
-  // Cuando termina una partida se anota, una sola vez
+  /* Cuando termina una partida se anota, una sola vez.
+     Junto con el resultado va el MARCADOR, que es lo que después convierte el
+     trofeo en "le ganaste 30 a 4". No es un dato nuevo: los dos números están a
+     la vista en la barra durante toda la partida y en el cartel del final. Del
+     otro lado, `anotarPartida` sólo se queda con la mejor victoria y descarta
+     el marcador si perdiste. */
   useEffect(() => {
     if (!p || p.fase !== "partida-terminada" || anotada.current === p) return;
     anotada.current = p;
-    setMarcas(anotarPartida(rival.id, p.ganadorPartida === "vos").rivales);
+    const gane = p.ganadorPartida === "vos";
+    setMarcas(
+      anotarPartida(rival.id, gane, { vos: p.puntos.vos, rival: p.puntos.rival }).rivales,
+    );
   }, [p, rival]);
 
   if (!p) return <Cargando />;

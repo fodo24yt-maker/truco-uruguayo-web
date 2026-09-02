@@ -170,3 +170,10 @@ _*.mjs
 # y alcanza con que alguien meta ahí una imagen ajena para que se filtre. Si
 # algún día hay que publicar alguna, se saca a otro lado a propósito.
 /DISENO-NIVEL/
+
+# El export de la app (lo rehace `npm run build:app`)
+/out-app/
+
+# Los reportes que Santiago deja mientras se trabaja: adentro hay capturas y
+# fotos de WhatsApp. Mismo criterio que DISENO-NIVEL/: no se suben.
+/Bugs a arreglar/

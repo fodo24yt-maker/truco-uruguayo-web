@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Lo mismo que `backup_rules.xml`, para Android 12 (API 31) en adelante, donde
+  Google partió las reglas en dos: la copia a la nube y el pase directo de un
+  teléfono al otro.
+
+  Desde API 31 declarar esto es OBLIGATORIO si `allowBackup` está en true; sin
+  el archivo, el sistema decide por su cuenta qué se lleva.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="root" path="app_webview" />
+        <exclude domain="root" path="app_webview/Default/Cache" />
+        <exclude domain="root" path="app_webview/Default/Code Cache" />
+        <exclude domain="root" path="app_webview/Default/GPUCache" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="root" path="app_webview" />
+    </device-transfer>
+</data-extraction-rules>

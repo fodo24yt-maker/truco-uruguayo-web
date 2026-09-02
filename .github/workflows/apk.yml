@@ -1,0 +1,95 @@
+# Compila el APK de Android en la nube.
+#
+# ── Por qué acá y no en la máquina ────────────────────────────────────────────
+# Compilar Android pide el JDK, las herramientas del SDK y la plataforma 36:
+# entre 2 y 4 GB. Esto lo hace GitHub gratis en repos públicos, y el APK queda
+# para bajar en la pestaña Actions de cada corrida.
+#
+# ── Por qué NO se firma todavía, y es a propósito ────────────────────────────
+# Un APK de depuración se firma solo con una clave de mentira que Android genera
+# y sirve perfecto para instalarlo a mano y probarlo. La clave de verdad —la que
+# hace falta para subir a Play Store— es un archivo que, si se pierde, no se
+# puede volver a generar: pierde la app para siempre. Meterla como secreto de un
+# repo público es superficie que hoy no hace falta. Se agrega el día que se vaya
+# a publicar, y ese día se agrega también el `bundleRelease`.
+name: APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Lo mínimo. Este trabajo lee el repo y no escribe nada en ningún lado.
+permissions:
+  contents: read
+
+# Si se empujan dos commits seguidos, se cancela la corrida vieja.
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      # Las mismas dos comprobaciones que se corren en la máquina. Si el motor
+      # del truco está roto, no tiene sentido empaquetar nada.
+      - name: Pruebas y tipos
+        run: |
+          npm test
+          npm run typecheck
+
+      # `android/gradle/wrapper/gradle-wrapper.jar` es un binario de 43 KB que
+      # está versionado en el repo y que la compilación EJECUTA. Es el vector
+      # de cadena de suministro clásico de los proyectos Android: nadie lee un
+      # .jar en una revisión, y con cambiarlo se ejecuta lo que sea en el CI.
+      # Esta acción lo compara contra la lista de huellas que publica Gradle.
+      # (La distribución que ese wrapper se baja va anclada aparte, con
+      # `distributionSha256Sum` en gradle-wrapper.properties.)
+      - name: Verificar el wrapper de Gradle
+        uses: gradle/actions/wrapper-validation@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # El SDK ya viene en la imagen de Ubuntu de GitHub. Se usa el que está en
+      # vez de una acción de terceros: una acción menos de la que fiarse en un
+      # repo público, que es donde eso importa.
+      - name: Plataforma de Android 36
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Compilar la web de la app
+        run: npm run build:app
+
+      - name: Meterla adentro del proyecto Android
+        run: npx cap sync android
+
+      - name: Compilar el APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: truco-uruguayo-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30

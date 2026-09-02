@@ -21,12 +21,45 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { MapaUruguay } from "@/components/mapa/MapaUruguay";
-import { type Marcas, armarGira, proximaParada, slugDepartamento } from "@/lib/gira";
-import { leerProgreso } from "@/lib/progreso";
+import { Trofeos } from "@/components/Trofeos";
+import { armarGira, proximaParada, slugDepartamento } from "@/lib/gira";
+import { type Progreso, leerProgreso } from "@/lib/progreso";
+import { trofeosDe } from "@/lib/trofeos";
+
+/** La copa del botón de trofeos. Dibujada, como todo acá: ni un icono ajeno. */
+function Copa() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-dorado" aria-hidden="true">
+      <g
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {/* La copa: boca ancha arriba y panza que se cierra, que es lo que la
+            distingue de un vaso a este tamaño. */}
+        <path d="M7.5 3.5h9v4a4.5 4.5 0 0 1-9 0z" />
+        {/* Las dos asas, que son lo que la hace copa y no maceta */}
+        <path d="M7.5 4.8H5.6a1.9 1.9 0 0 0 1.9 3.6" />
+        <path d="M16.5 4.8h1.9a1.9 1.9 0 0 1-1.9 3.6" />
+        {/* Pie */}
+        <path d="M12 12v3.4" />
+        <path d="M8.8 19.5h6.4" />
+        <path d="M10.2 15.4h3.6l1.4 4.1H8.8z" />
+      </g>
+    </svg>
+  );
+}
 
 export default function Gira() {
   const [elegido, setElegido] = useState<string | null>(null);
-  const [marcas, setMarcas] = useState<Marcas>({});
+  const [verTrofeos, setVerTrofeos] = useState(false);
+  /* El tipo es el del progreso y no el `Marcas` de `lib/gira.ts`, que declara
+     sólo `ganadas`/`jugadas`. Los dos sirven para armar la gira —`Marcas` se
+     pide por forma—, pero la vitrina necesita además el marcador de cada
+     victoria, y con el tipo chico TypeScript creería que nunca está. */
+  const [marcas, setMarcas] = useState<Progreso["rivales"]>({});
 
   // El progreso vive en el navegador, así que se lee recién del lado del cliente
   useEffect(() => {
@@ -37,6 +70,7 @@ export default function Gira() {
   const parada = paradas.find((p) => p.personalidad.departamento === elegido) ?? null;
   const proximo = proximaParada(paradas);
   const ganadas = paradas.filter((p) => p.estado === "ganada").length;
+  const trofeos = useMemo(() => trofeosDe(marcas), [marcas]);
   const rival = parada?.personalidad;
 
   // Pantalla completa, igual que la mesa: la gira es una pantalla de juego, no
@@ -44,7 +78,7 @@ export default function Gira() {
   // página y la barra, y en escritorio los nombres no se leen. La clase
   // `mesa-pantalla-completa` ya existe y esconde el pie.
   return (
-    <div className="mesa-pantalla-completa flex min-h-0 flex-1 flex-col bg-noche">
+    <div className="mesa-pantalla-completa relative flex min-h-0 flex-1 flex-col bg-noche">
       {/* Barra de arriba, como la del mapa de la referencia */}
       <header className="madera flex shrink-0 items-center justify-between border-b-2 filo-dorado px-3 py-2.5">
         {/* CON EL DESTINO ESCRITO, no una flecha suelta. Era un `←` en un
@@ -69,10 +103,23 @@ export default function Gira() {
         <h1 className="font-[family-name:var(--font-display)] text-xl text-dorado sm:text-2xl">
           Gira Nacional
         </h1>
-        <span className="font-[family-name:var(--font-ui)] text-xs text-crema/60">
+        {/* El contador de victorias PASA A SER el botón de la vitrina: es el
+            mismo número que ya mostraba, ahora clicable. No se agrega un cuarto
+            hijo a la fila —es un `justify-between` de tres y a 320px ya va
+            justo—, y va con la copa dibujada en vez de la palabra "Trofeos",
+            que suma unos 60px que no hay. */}
+        <button
+          type="button"
+          onClick={() => setVerTrofeos(true)}
+          aria-label={`Trofeos: ${ganadas} de ${paradas.length}`}
+          className="flex items-center gap-1.5 rounded px-2 py-1.5 font-[family-name:var(--font-ui)] text-xs text-crema/70 transition-colors hover:bg-black/30 hover:text-crema"
+        >
+          <Copa />
           {ganadas}/{paradas.length}
-        </span>
+        </button>
       </header>
+
+      {verTrofeos && <Trofeos trofeos={trofeos} onCerrar={() => setVerTrofeos(false)} />}
 
       {/* El mapa. El papel está apoyado sobre la mesa oscura del boliche, así
           que va sobre el fondo de noche del sitio y no sobre una caja crema.

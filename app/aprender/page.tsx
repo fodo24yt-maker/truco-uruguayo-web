@@ -8,18 +8,14 @@ export const metadata: Metadata = {
   title: "Aprender",
   description:
     "Ocho lecciones para aprender truco uruguayo de cero: la baraja, la jerarquía, la muestra y las piezas, el envido, la flor y el truco.",
+  alternates: { canonical: "/aprender" },
 };
 
 export default function Aprender() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-12">
-      {/* El mismo "volver" que ya usan las lecciones y los legales. */}
-      <div className="mb-5 font-[family-name:var(--font-ui)] text-sm">
-        <Link href="/" className="text-crema/60 hover:text-crema">
-          ← Inicio
-        </Link>
-      </div>
-
+      {/* El "volver" ya no va acá: lo pone la barra de la app, y tener dos
+          flechas de volver en la misma pantalla es peor que no tener ninguna. */}
       <h1 className="font-[family-name:var(--font-display)] text-3xl text-dorado sm:text-4xl">
         Aprender truco uruguayo
       </h1>
@@ -28,6 +24,25 @@ export default function Aprender() {
         jugás al truco argentino, andá derecho a la tercera: ahí está todo lo que
         cambia.
       </p>
+
+      {/* POR QUÉ EXISTE ESTO — venía de la portada, que al volverse una pantalla
+          de app se quedó con el nombre y las dos puertas y nada más. Se muda acá
+          y no se pierde: el que aprieta "Aprender" es justamente el que quiere
+          saber qué es esto, y para Google sigue siendo una página indexable de
+          las trece del sitemap. */}
+      <div className="mt-8 rounded border-l-2 border-dorado/40 pl-4 text-[17px] leading-relaxed text-crema/75">
+        <p>
+          El truco uruguayo tiene algo que no tiene ningún otro: la muestra. Casi
+          todo lo que vas a encontrar en internet la saltea, porque está escrito
+          para la versión argentina. Y las pocas apps que enseñan bien la de acá,
+          se pagan.
+        </p>
+        <p className="mt-3">
+          <strong className="text-crema">Esto es gratis y sin registro.</strong>{" "}
+          Entrás, leés y jugás. No hay cuenta que crear ni versión paga
+          esperándote más adelante.
+        </p>
+      </div>
 
       <ol className="mt-9 space-y-3">
         {LECCIONES.map((leccion, i) => (

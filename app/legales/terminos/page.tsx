@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   title: "Términos de uso",
   description:
     "Las condiciones de uso de Truco Uruguayo: gratis, sin garantías, y con las reglas del juego liberadas para quien las quiera usar.",
+  alternates: { canonical: "/legales/terminos" },
 };
 
 const ULTIMA_ACTUALIZACION = "26 de agosto de 2026";

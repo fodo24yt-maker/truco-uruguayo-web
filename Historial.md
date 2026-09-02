@@ -12,6 +12,269 @@
 
 ---
 
+## 2026-09-02 — La web se vuelve app de Android, y los trofeos de la gira
+
+Sesión grande. Se convirtió el sitio en una app de celular empaquetable para
+Play Store, con el **mismo código** —no hay dos versiones—, y la gira ganó
+trofeos.
+
+### Las cuatro decisiones que tomó Santiago antes de empezar
+
+| | |
+|---|---|
+| Dónde se compila el APK | **GitHub Actions.** Esta máquina no tiene `java`, ni Android SDK, ni `gradle`, y no hace falta que los tenga |
+| `appId` (permanente) | **`uy.trucouruguayo.app`** |
+| La web pública | **Se convierte también.** Un solo código |
+| La barra dentro de la mesa | **No va.** La mesa mantiene su `.barra-juego` de 30px |
+
+### 1. Un bug que ya existía: el `canonical` estaba mal en TODO el sitio
+
+Antes de mover nada de la portada hubo que arreglar esto, y salió midiendo el
+`out/` de verdad:
+
+    out/index.html          canonical → truquito.smmqo08.workers.dev
+    out/aprender.html       canonical → truquito.smmqo08.workers.dev   ← mal
+    out/jugar/gira.html     canonical → truquito.smmqo08.workers.dev   ← mal
+
+Salía de `alternates: { canonical: "/" }` en `app/layout.tsx`. **Todo lo que
+declara el layout raíz lo heredan todas las páginas**, así que las ocho
+lecciones le estaban diciendo a Google que eran duplicados de la portada. Ahora
+lo declara cada página; la mesa y la gira no llevan ninguno, que es mejor que
+llevar uno equivocado.
+
+Era precondición de lo demás: vaciar la portada con el canonical así habría
+dejado el sitio entero apuntando a una página sin texto.
+
+### 2. El armazón de app
+
+- **`lib/navegacion.ts`** (nuevo, con test). Dos funciones puras, y van primero
+  porque de ellas cuelgan **los dos botones de atrás**: el de la barra y el
+  físico de Android. Decidir una sola vez es lo que hace que no puedan
+  contradecirse.
+  - `volverDesde(ruta, busqueda)` devuelve el PADRE de la ruta, no el historial.
+    Ojo con `/legales/*`: resolver el padre cortando por la última barra deja
+    `/legales`, que **no existe**. Hay un test que lo exige.
+  - `normalizarRuta()` saca la barra final. No es cosmético: con `trailingSlash`
+    —que es como se compila la app— `usePathname()` devuelve `/aprender/`, y
+    todo lo que compare contra `/aprender` anda en `next dev` y falla adentro
+    del APK.
+- **`components/BarraApp.tsx`** reemplaza al `<header>` del layout. **Su
+  `<header>` tiene que ser el elemento raíz del componente**: la regla
+  `body:has(.mesa-pantalla-completa) > header` de `globals.css` sólo lo
+  encuentra si sigue siendo hijo directo del `<body>`. Envolverlo en un `<div>`
+  hace reaparecer la barra encima de la mesa, y `mirar-web.mjs` lo verifica
+  (comprobado saboteándolo: da 30 fallas).
+- **La portada pasa a ser una pantalla.** El "por qué existe esto" se mudó a
+  `/aprender`; el `<ol>` del camino ERA UN DUPLICADO del que `/aprender` ya
+  dibujaba, así que no se perdió nada indexable.
+- **`.pantalla-fija`**, hermana de `.mesa-pantalla-completa` pero sin esconder
+  el encabezado. Esconde el pie, que con su `mt-16` hacía scrollear la portada
+  igual aunque el contenido entrara.
+- **`/jugar` también es pantalla.** Scrolleaba 205 px a 360×640 y había que
+  arrastrar para ver la gira. Los espacios pasaron a `clamp(…vh…)`: la regla de
+  siempre, el problema es la pantalla BAJA.
+
+### 3. La zona segura: UNA línea de CSS toca la mesa
+
+Con `targetSdk 36` Android dibuja la app abajo del reloj y **no se puede pedir
+lo contrario**: desde Android 16 la pantalla completa es obligatoria.
+
+Lo que se creía —y estaba desactualizado— es que `env(safe-area-inset-*)` no
+reporta las barras del sistema en Android. **Sí las reporta desde Chromium
+140.** Abajo de eso da 0, y ahí el relleno lo pone `@capacitor-community/safe-area`
+sobre el propio WebView. O sea que **el CSS se escribe una sola vez y sirve en
+los dos casos**, que es lo que evitó tener que parchear la Activity a mano.
+
+La mesa cambió esto y nada más:
+
+    body:has(.mesa-pantalla-completa) {
+      height: 100dvh; overflow: hidden;
+      padding-top: env(safe-area-inset-top, 0px);       ← nuevo
+      padding-bottom: env(safe-area-inset-bottom, 0px); ← nuevo
+    }
+
+Con `border-box`, los dos rellenos corren el contenido para abajo del reloj Y le
+descuentan lo mismo al alto. **En la web valen 0 y queda idéntico a antes**: por
+eso no hubo que re-medir los siete tamaños, y `mirar-mesa.mjs` lo confirma.
+
+### 4. Los trofeos
+
+Cada departamento ya tenía su objeto dibujado. Ahora ganarle al rival te lo
+deja, con el marcador de la mejor victoria.
+
+- **`lib/progreso.ts`** gana `mejor?: { vos, rival }` por rival. Tres cosas que
+  costaron y conviene no deshacer:
+  1. **`sanear()` reconstruye cada entrada** como `{ ganadas, jugadas }` y borra
+     lo que sobre. Guardar el marcador sin tocar esa función no habría andado:
+     se perdía en la primera relectura.
+  2. **El techo es 40, no 30.** `sumar()` en `partida.ts` suma y DESPUÉS
+     compara: estando 29 le ganás un vale cuatro y quedás en **33**. Con el techo
+     en 30 se descartaban las victorias más grandes.
+  3. **Si `mejor` no valida se descarta SÓLO `mejor`**, no la entrada. Es lo
+     contrario de lo que hace con `ganadas`/`jugadas`, y a propósito: un trofeo
+     roto no puede costar una victoria.
+- **`VERSION` no subió.** Un guardado viejo no trae `mejor` y el trofeo se
+  muestra sin número. Subirla sólo serviría para tirar progreso ajeno.
+- **`lib/trofeos.ts`** (puro, con test) devuelve **los diecinueve**, no sólo los
+  ganados: una vitrina donde faltan los que no conseguiste no dice cuántos
+  faltan.
+- **`components/Trofeos.tsx`** reusa `<ObjetoDeMesa>` tal cual —no sabe nada de
+  la perspectiva, sólo necesita una caja con alto y `PROPORCION`—. **`ALTURA` NO
+  se usa acá**: allá una botella tiene que medir más que una llave porque están
+  apoyadas en el mismo lugar; en una lista eso deja la llave del tamaño de una
+  uña.
+- **La hoja se abre desde la gira y no desde la mesa**, porque los `<defs>` de
+  los objetos usan ids fijos y la mesa ya dibuja el de su ambiente.
+- En el mapa, **el contador `n/19` PASÓ A SER el botón**. No se agregó un cuarto
+  hijo a esa fila: es un `justify-between` de tres que a 320px ya va justo. Va
+  con la copa dibujada y no con la palabra "Trofeos", que suma ~60px que no hay.
+- **El trofeo se gana también en Partida Rápida**, y es a propósito: el
+  desbloqueo de la gira YA funciona así.
+
+### 5. Capacitor, en dos etapas — y la primera no necesita Android
+
+- **`trailingSlash` en la app no es un gusto: sin él la app no anda.** Medido:
+  `out/jugar/mesa/` existe pero **sólo tiene los `.txt`**; el HTML está en
+  `out/jugar/mesa.html`. El servidor local de Capacitor pide
+  `jugar/mesa/index.html`, no lo encuentra y cae a la raíz: **la app hidrataría
+  la portada con la dirección de la mesa**.
+- `npm run build` → `out/` (la web, **idéntica**). `npm run build:app` →
+  `out-app/`, con la barra final y el zoom bloqueado. Sale de
+  `process.env.DESTINO` en `next.config.ts`.
+- **`herramientas/mirar-app-compilada.mjs`** prueba ESE build servido como
+  estático, que es donde aparecen los bugs que `next dev` no puede mostrar: la
+  CSP de producción (en desarrollo no se inyecta), las rutas con barra final y
+  la recarga dura en ruta profunda. Las ocho rutas hidratan **su** página.
+- `capacitor.config.ts` con `minWebViewVersion: 105`: de `:has()` cuelga toda la
+  familia de reglas de pantalla completa, y en un WebView más viejo el navegador
+  **descarta la regla entera sin avisar** —la mesa scrollearía y la barra
+  taparía las cartas—.
+- **El origen `https://localhost` quedó anotado en `CLAUDE.md` como intocable**,
+  al lado de los `id` de personalidades: de él cuelga el `localStorage`.
+- El botón físico de atrás usa la MISMA `volverDesde()`. Si hay un
+  `[role="dialog"]` abierto manda Escape en vez de navegar, así el que agregue
+  una hoja nueva no tiene que acordarse de avisarle a ese archivo. Y **no
+  importa Capacitor arriba del archivo**: mira el global que el WebView inyecta
+  y recién ahí pide el módulo, para no meterle peso a la descarga de la web.
+
+### 6. El ícono, dibujado por código
+
+`herramientas/generar-icono.mjs` (playwright no, sólo `sharp`) hornea los 33
+archivos y **borra el robot verde de Android Studio y el splash de Capacitor**,
+que no son nuestros.
+
+Es una carta con un oro, sobre la madera, con el halo. Dos cosas que salieron
+mal primero:
+
+- **el halo en rectángulos apilados se veía a escalones.** Pasó a
+  `radialGradient`. La lección es la misma que ya tenía la mesa: **`feGaussianBlur`
+  lo resuelve el rasterizador y no todos lo hacen igual.** Lo mismo vale para
+  el navegador, y hay que tenerlo presente (ver el bug de abajo);
+- **la pinta era una franja de lado a lado y partía la carta al medio.** La
+  pinta es una muesca en el filo, no un tajo.
+
+### 7. Un problema que ya existía y mordió: `playwright` no estaba declarado
+
+`npm install` se llevó puesto playwright, del que dependen las **seis**
+herramientas: estaba instalado pero no en `package.json`, así que npm lo trató
+como sobrante. `playwright` y `sharp` ahora son devDependencies de verdad.
+
+### Estado al cerrar
+`npm test` **167/167** (26 nuevos) · `tsc --noEmit` limpio · `npm run build` OK ·
+`npm run build:app` OK · `mirar-mesa.mjs` sin scroll en los siete ·
+`mirar-mesa-nueva.mjs` en 0 · `mirar-rivales.mjs` 14 comprobaciones ·
+`mirar-web.mjs` en 0 (armazón de app en 3 tamaños + vitrina en 3) ·
+`mirar-app-compilada.mjs` en 0 sobre el build de la app.
+
+### El repaso de seguridad
+
+**No se encontró ninguna vulnerabilidad explotable.** Lo que se miró y con qué:
+
+- **MASVS sobre `android/`**: un solo permiso (`INTERNET`), **cero código Java
+  propio** (`MainActivity` es un `BridgeActivity` vacío), cero llamadas a
+  `addJavascriptInterface` / `setAllowFileAccess`, `webContentsDebuggingEnabled`
+  en false, `usesCleartextTraffic="false"`, `debuggable` fuera del release, y
+  los únicos dos componentes son la Activity del lanzador y un `FileProvider`
+  con `exported="false"`. Sin deep links: no hay superficie de secuestro de
+  enlaces.
+- **`allowBackup="true"` es una decisión, no un descuido**, y ahora va con
+  `backup_rules.xml` + `data_extraction_rules.xml`: no hay servidor, así que la
+  copia de Android es lo ÚNICO que hace que la gira sobreviva a cambiar de
+  teléfono. Lo que se copia es progreso de un juego: ni un dato personal.
+- **Cadena de suministro, medida con el colector** (17 dependencias directas,
+  201 transitivas):
+  - **0 avisos en producción.** `npm audit --omit=dev`: 0.
+  - **1 aviso transitivo, sólo de desarrollo**: `uuid@7.0.3` por
+    `@capacitor/cli → xcode`. `xcode` es la librería de proyectos de iOS y en un
+    proyecto sólo-Android **no se ejecuta nunca**; el "arreglo" que propone npm
+    es bajar el CLI a 8.4.3 y desalinearlo del runtime 8.5.1. **Se deja como
+    está, anotado.**
+  - El eslabón más flaco de producción es `@capacitor-community/safe-area`
+    (89.010 descargas/semana, sin provenance ni política de seguridad
+    publicada). Es el único paquete no oficial y vale tenerlo mirado.
+- **Gradle, que el colector NO cubre, se miró a mano** y salieron dos cosas
+  reales, las dos cerradas:
+  1. **`gradle-wrapper.jar` es un binario de 43 KB versionado que el CI
+     ejecuta.** Nadie lee un `.jar` en una revisión. El workflow ahora lo
+     valida con `gradle/actions/wrapper-validation`.
+  2. **La distribución de Gradle se bajaba sin verificar nada más que el
+     certificado.** Se ancló `distributionSha256Sum` con la huella oficial
+     (`ed1a8d68…`), traída y comprobada byte a byte.
+- **El CI no tiene ningún secreto, y es a propósito**: compila un APK de
+  depuración, que Android firma con su clave de mentira. La clave de verdad —la
+  que si se pierde, se pierde la app para siempre— se agrega recién cuando se
+  vaya a publicar. `permissions: contents: read` y `persist-credentials: false`.
+- **La capa web**: cero `dangerouslySetInnerHTML`, `innerHTML`, `eval` o
+  `javascript:` en `app/`, `components/` y `lib/`. La CSP llega entera adentro
+  del APK (se verificó sobre el HTML compilado). `?depto=` y `?rival=` siguen
+  pasando por las mismas dos funciones.
+- **Los trofeos no soplan nada.** `mejor` son los puntos finales, que ya se ven
+  en la barra durante toda la partida y en el cartel del final. Las cartas del
+  rival siguen sin llegar al DOM (`p.cartas.rival.map((_, i) => …)`).
+- **`Object.hasOwn` en tres lugares nuevos** (`anotarPartida`, `trofeosDe`, la
+  tabla de nombres de la barra), con test de que un id `__proto__` no ensucia
+  `Object.prototype` ni regala trofeos.
+- **La carpeta `Bugs a arreglar/` se agregó al `.gitignore`** y se verificó:
+  adentro hay una foto de WhatsApp y este repo es público.
+
+Dos cosas anotadas que NO son vulnerabilidades pero conviene saber:
+- **`'unsafe-inline'` en `script-src` es lo que deja pasar el puente que
+  Capacitor inyecta.** El día que se endurezca a nonces, se rompe la app y no la
+  web.
+- `frame-ancestors` en un `<meta>` lo ignora el navegador (ya pasaba, está en
+  `ideas/publicar.md`). Adentro del APK da igual: no hay iframe donde meterla.
+  `public/_headers` viaja al APK como archivo muerto.
+
+### Pendiente
+
+1. **BUG REPORTADO, SIN REPRODUCIR** — `Bugs a arreglar/`, 1/9 a las 23:09.
+   Jugando en el celular apareció **una banda de rayas cremas horizontales a los
+   costados de la última carta de la mano**, más una línea blanca cruzando la
+   mesa. Partida normal. Lo que se sabe:
+   - son **dos artefactos horizontales en el mismo cuadro**, lo que apunta a
+     rasterizado y no a distribución;
+   - el sospechoso es `feGaussianBlur` en `components/mesa/Manos.tsx:74-75`, con
+     una región de filtro de 180%×180% sobre un SVG que va al 100% del ancho;
+   - **es exactamente la trampa que mordió al ícono esta misma sesión**: los
+     filtros SVG los resuelve el rasterizador y cada uno hace lo suyo;
+   - **no se intentó arreglar a ciegas**, que es lo que el proyecto tiene
+     prohibido. Chromium en modo headless usa SwiftShader y no reproduce un
+     defecto de GPU de un teléfono.
+   Lo que hace falta para cerrarlo: saber **si se va al scrollear o al girar el
+   teléfono** (si se va, es compositing y la palanca es cambiar el blur por una
+   forma estática, como se hizo con el halo del ícono).
+2. **El APK todavía no se compiló.** Sale de Actions con el primer push. Ahí se
+   mide **la zona segura de verdad**, que es lo único de esta sesión que no se
+   pudo verificar sin un teléfono.
+3. **Subir a Play Store** pide cuenta de desarrollador (25 USD, una vez), ficha,
+   capturas y la política de privacidad publicada. Y ahí sí, la keystore.
+4. Una **copla nueva** en `versos.ts` para "primero va el envido".
+5. `deNoche` todavía controla luz y desgaste a la vez en `madera.mjs`.
+6. Las **constantes de la cámara siguen copiadas a mano** en `mesa-perspectiva.ts`.
+7. `acentoDe` y `ambienteDe` siguen sin `Object.hasOwn`.
+
+---
+
 ## 2026-09-01 — El gris de las esquinas era el mismo bug, y los tantos al cerrar la mano
 
 Sesión de pendientes. Santiago eligió tres de la lista (6, 4 y 1) y en el medio

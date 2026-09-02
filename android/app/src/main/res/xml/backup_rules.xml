@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Qué se copia en la copia de seguridad de Android, hasta Android 11 (API 30).
+
+  Acá no hay servidor ni cuenta: el progreso de la gira vive en el
+  `localStorage` del WebView y en ningún otro lado. Sin esto, cambiar de
+  teléfono es empezar la gira de cero. Es el único motivo por el que la copia
+  está prendida.
+
+  Lo que se copia es la carpeta del WebView, que es donde el navegador guarda el
+  `localStorage`; los cachés se dejan afuera porque son archivos que se rehacen
+  solos y sólo engordarían la copia.
+-->
+<full-backup-content>
+    <include domain="root" path="app_webview" />
+    <exclude domain="root" path="app_webview/Default/Cache" />
+    <exclude domain="root" path="app_webview/Default/Code Cache" />
+    <exclude domain="root" path="app_webview/Default/GPUCache" />
+</full-backup-content>
