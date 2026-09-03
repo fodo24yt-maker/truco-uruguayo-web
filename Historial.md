@@ -12,6 +12,125 @@
 
 ---
 
+## 2026-09-02 (tercera pasada) — El APK se compila acá, y el celular se mira por USB
+
+Santiago pidió poder compilar el APK en la máquina y ver el proyecto en el
+celular enchufándolo por USB, sin depender de GitHub Actions. Tenía Android
+Studio instalado **en Windows**, no en Ubuntu, y no sabía qué hacía.
+
+### El problema real, que no era el que parecía
+
+Android Studio ya había instalado del lado de Windows todo lo importante: el
+SDK (plataforma 37, build-tools 36.0.0), las licencias aceptadas y `adb.exe`.
+Lo que faltaba no era eso. **Faltaba que WSL2 viera el USB, y WSL2 no ve el
+USB.** Para que lo viera habría que instalar `usbipd-win`, cargar módulos del
+kernel y ceder el dispositivo a mano cada vez que se enchufa.
+
+La salida fue no pelearlo: **Linux compila, Windows enchufa.** WSL puede
+EJECUTAR programas de Windows (el interop está activo, verificado en
+`/proc/sys/fs/binfmt_misc/WSLInterop`), así que se llama al `adb.exe` de
+Windows y el USB nunca sale de Windows.
+
+### Por qué no se compila en Windows, si el SDK ya estaba ahí
+
+Se evaluó y se descartó, por tres razones:
+
+1. El código vive en el disco de Linux. Windows lo ve por `\\wsl.localhost\...`,
+   que es un sistema de archivos de red, y Gradle sobre rutas UNC da problemas.
+2. **El CI compila en Linux.** Compilando igual, el APK de casa y el de Actions
+   salen del mismo proceso. Compilando distinto, algún día uno anda y el otro
+   no y no se sabe por qué.
+3. Hay 946 GB libres en Linux y la descarga es una sola vez.
+
+### Lo que se instaló, y dónde
+
+No hay `sudo` en esta máquina (pide contraseña), así que **nada se instaló en el
+sistema**: son dos carpetas sueltas en `~/herramientas-android/`, fuera del
+repositorio.
+
+| Qué | Versión | Verificación |
+|---|---|---|
+| Temurin JDK | 21.0.12.1+1 | SHA-256 de la API de Adoptium |
+| Command-line Tools | 23.0 | SHA-1 del índice de Google |
+| Plataforma + build-tools | android-36, 36.0.0 | las que pide `variables.gradle` |
+
+Dos detalles que costaron: **no hay `unzip`** y sin sudo no se puede instalar, así
+que se descomprimió con `python3 -m zipfile` —que **no conserva el permiso de
+ejecución** y hay que devolverlo con `chmod +x`—; y **las herramientas versión 23
+jubilaron `sdkmanager`** en favor de un binario `android`. Sigue andando como
+puente y el CI usa el SDK de la imagen de Ubuntu, así que por ahora no cambia
+nada, pero queda anotado.
+
+### `herramientas/celular-usb.mjs`
+
+Tres modos. El primero es el que más se va a usar:
+
+    node herramientas/celular-usb.mjs             vista previa EN VIVO
+    node herramientas/celular-usb.mjs --apk       compila, instala y abre
+    node herramientas/celular-usb.mjs --compilar  sólo deja el .apk
+    node herramientas/celular-usb.mjs --desinstalar
+
+**En vivo** usa `adb reverse`: el `localhost:3000` del celular sale por el cable
+y lo atiende la computadora. Mejor que poner la IP de la red porque no depende
+del wifi ni de que WSL sea alcanzable desde afuera. Se verificó la cadena
+entera, que era la parte dudosa: `next dev` escucha en `*:3000`, y
+`curl.exe` **de Windows** contra `localhost:3000` devuelve **200**. O sea que el
+reenvío de WSL2 hacia adentro funciona y el túnel cierra.
+
+Tres cosas que se resolvieron a propósito y no hay que deshacer:
+
+- **La ruta de `adb.exe` no se escribe a mano**: tiene el nombre de usuario de
+  Windows adentro y el repo es público. Se deduce de `%LOCALAPPDATA%`
+  preguntándole a `cmd.exe`. Comprobado que lo encuentra.
+- **El APK se copia al temporal de Windows antes de instalar**, en vez de que
+  `adb.exe` lo lea por UNC desde el disco de Linux.
+- **Ninguna llamada usa shell.** Todo es `spawnSync` con argumentos sueltos. La
+  única que armaba una cadena (`bash -c` para mirar el puerto) se reescribió con
+  `ss` y el filtro en JavaScript: el puerto ya pasaba por `Number()` y era
+  seguro, pero no vale la pena dejar el patrón escrito.
+
+### Medido, no supuesto
+
+- **Compilación completa: 2 minutos.** Recompilar sin cambios: **1,8 segundos**
+  (con demonio de Gradle, al revés que el CI, que va `--no-daemon` porque allá
+  el proceso arranca de cero igual).
+- El APK pesa **6,4 MB** y se inspeccionó por dentro: `uy.trucouruguayo.app`,
+  minSdk 24 / targetSdk 36, `usesCleartextTraffic=false`, vertical, 143 archivos
+  de web y 14 escenas `.webp`. **Y `index.html` dentro de cada carpeta profunda**,
+  o sea que el arreglo del `trailingSlash` viajó de verdad adentro del paquete.
+- `npm test` **167/167** y `tsc --noEmit` limpio.
+
+### Una falla de seguridad que se encontró de paso
+
+`android/.gitignore` viene de la plantilla de Google con **las dos líneas de la
+keystore comentadas**, y el `.gitignore` de la raíz cubría `*.pem`, `*.key`,
+`*.p12` y `*.pfx` pero **no `*.jks` ni `*.keystore`**.
+
+O sea: el día que se genere la clave de firma para Play Store —un archivo que si
+se filtra deja a cualquiera publicar actualizaciones haciéndose pasar por vos, y
+que no se puede revocar— este repo público se la llevaba en el primer `git add`.
+Se ancló arriba, con los secretos, y se comprobó desde tres ubicaciones.
+
+### Lo que NO se pudo verificar
+
+**La instalación en un teléfono de verdad.** No había ninguno enchufado. Todo lo
+demás está medido; el `adb install` y el `adb reverse` contra un aparato real
+son lo único que queda pendiente de comprobar, y se comprueba solo la primera
+vez que Santiago enchufe el cable.
+
+Sí se probó el camino de error: sin celular, la herramienta explica los cuatro
+pasos para habilitar la depuración por USB en vez de tirar un error de `adb`.
+
+### Ojo con esto
+
+Si en el celular ya está instalado el APK que compiló **GitHub Actions**, el de
+esta máquina **no lo va a poder reemplazar**: están firmados con claves de
+depuración distintas y para Android son dos apps peleando por el mismo nombre.
+Hay que desinstalar, y desinstalar **borra el progreso de la gira**. La
+herramienta lo detecta, lo explica y ofrece `--desinstalar` en vez de fallar con
+el mensaje críptico de `adb`. **Conviene elegir una sola fuente de APK.**
+---
+
 ## 2026-09-02 (segunda pasada) — Los dos bugs de la lista, y la mesa hecha para el celular
 
 Sesión de bugs. Santiago pasó `Bugs a arreglar/` con una foto de una partida en

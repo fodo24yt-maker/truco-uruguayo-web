@@ -9,6 +9,14 @@
 *.crt
 *.p12
 *.pfx
+# La clave con la que se firma el APK para Play Store. Si se filtra, cualquiera
+# puede publicar actualizaciones de la app haciéndose pasar por vos, y no se
+# puede revocar. El .gitignore de `android/` la trae comentada por defecto
+# —viene así de la plantilla de Google—, así que se ancla también acá arriba,
+# donde están los secretos, para que no dependa de un archivo que Capacitor
+# puede regenerar.
+*.jks
+*.keystore
 id_rsa*
 id_ed25519*
 .ssh/
