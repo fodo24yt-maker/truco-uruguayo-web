@@ -1,13 +1,21 @@
-# Truco Uruguayo — aprender y practicar, gratis
+# Truco Uruguayo — aprender y jugar
 
-Una web para **aprender a jugar al truco uruguayo desde cero** y después
-**practicar contra un bot**, sin pagar nada y sin registrarse.
+Una **app para aprender a jugar al truco uruguayo desde cero y jugarlo**, sin
+pagar nada y sin registrarse. La idea es esa y no otra: que aprender y jugar
+sean la misma cosa, en el mismo lugar.
 
-### 🎴 [Jugar ahora → truquito.smmqo08.workers.dev](https://truquito.smmqo08.workers.dev)
+Se está preparando para **Google Play**, y **la misma app es también una web**:
+no hay dos versiones ni dos códigos, hay un código con dos builds.
 
-> **Estado: en desarrollo.** Ya andan la sección Aprender (8 lecciones) y la
-> mesa mano a mano contra el bot. Entrás desde el navegador, sin instalar ni
-> descargar nada. Todavía se ve un poco justo en celular; se está puliendo.
+### 🎴 [Probarla en el navegador → truquito.smmqo08.workers.dev](https://truquito.smmqo08.workers.dev)
+
+> **Estado: en desarrollo, camino a Play Store.** Andan las 8 lecciones, la mesa
+> mano a mano contra el bot y la gira por los 19 departamentos. El APK ya se
+> compila —en GitHub Actions y también en casa— y se instala en un teléfono por
+> USB. Lo que falta para publicar está más abajo, en *Qué falta*.
+>
+> **La prioridad es el celular.** Que se vea bien en una computadora está bueno,
+> pero cuando las dos cosas no entran, manda el teléfono.
 
 ## Por qué este proyecto
 
@@ -42,9 +50,9 @@ rambla de Rocha, el galpón del centro, el río del litoral y las cuchillas del
 norte. Del rival se ve el cuerpo en penumbra y nada más —la cara está en el
 medallón de la derecha, de donde salen también las coplas—. Lo que decís vos
 sale de TU lado, arriba de tus cartas: cada uno habla desde su silla, incluido
-el "acá está mi flor" del final de la mano. **Esta parte está a
-medio hacer**: lo que hay anda, pero todavía no se parece a lo que queremos.
-El plan para terminarla está en [`ideas/rediseno-nivel.md`](ideas/rediseno-nivel.md).
+el "acá está mi flor" del final de la mano. **La mesa está medida para el
+celular**: no scrollea nunca, en ningún tamaño, y hay una herramienta que lo
+verifica en siete pantallas distintas cada vez que se toca algo.
 Cada mano arranca repartiendo de a una carta —mano, pie, mano, pie— y recién
 cuando terminó se dan vuelta. El mazo tiene la muestra metida abajo, atravesada
 y asomando lo justo para verle el número y el palo, y cambia de lado según de
@@ -68,7 +76,7 @@ reconoce el palo asomando la carta en el abanico sin abrirla del todo. Hay un
 solo componente de carta en todo el sitio, así que las mismas cuarenta están en
 las lecciones, en la mesa y en la portada.
 
-**El motor** — las reglas en TypeScript, con 128 tests que las verifican contra
+**El motor** — las reglas en TypeScript, con 167 tests que las verifican contra
 `reglas.txt`: una pasada por fuerza bruta sobre las 40 cartas y todas las
 muestras posibles, 40 partidas de bot contra bot que terminan sin una sola
 jugada inválida, y una enumeración de las 365.560 manos posibles que confirma
@@ -125,6 +133,18 @@ un test que no la deja volver a darse vuelta sin que nadie se entere.
 
 ## Qué falta
 
+Para publicar en Play Store:
+
+- La **cuenta de desarrollador** (25 USD, una sola vez) y la ficha de la tienda.
+- La **clave de firma** (keystore). Hoy el APK se firma con la clave de
+  depuración, que sirve para instalarlo a mano y no para publicarlo. La de
+  verdad no se puede perder ni rotar: si se pierde, se pierde la app.
+- El **banner de anuncios**, que hoy es un hueco reservado y nada más. Los
+  trámites, el consentimiento y qué edad conviene declarar están explicados paso
+  por paso en *Publicidad*, más abajo.
+
+Del juego:
+
 - El modo situaciones y la práctica de tanto contrarreloj.
 - 2 contra 2, con compañero y señas.
 - Un bot de verdad, con un modelo de IA open source detrás.
@@ -141,9 +161,55 @@ levantan el proyecto. Los comandos disponibles:
 | Comando | Qué hace |
 |---|---|
 | `npm run dev` | Levanta el sitio para desarrollar |
-| `npm run build` | Genera el sitio estático en `out/` |
-| `npm test` | Corre las pruebas del motor del juego |
+| `npm run build` | Genera **la web** en `out/` |
+| `npm run build:app` | Genera **la app** en `out-app/` (ver abajo) |
+| `npm run servir:app` | Sirve `out-app/` como estático, para probar ese build |
+| `npm test` | Corre las 167 pruebas del motor del juego |
 | `npm run typecheck` | Revisa los tipos sin compilar |
+
+### Los dos builds, y por qué no son el mismo
+
+| | Sale en | Qué tiene distinto |
+|---|---|---|
+| `npm run build` | `out/` | nada: es la web de siempre |
+| `npm run build:app` | `out-app/` | `trailingSlash`, y el zoom bloqueado |
+
+**`trailingSlash` en la app no es un gusto: sin él la app no arranca bien.** El
+export normal deja `out/jugar/mesa.html`, y el servidor local de Capacitor busca
+`jugar/mesa/index.html`: no lo encuentra, cae a la raíz y la app termina cargando
+la portada con la dirección de la mesa. Está en `next.config.ts`, que elige según
+`process.env.DESTINO`.
+
+El zoom se bloquea sólo en la app: en una web poder agrandar el texto es
+accesibilidad, y adentro de una app el pellizco no agranda nada útil y descoloca
+la mesa, que está medida para entrar exacta.
+
+### Mirarla como app
+
+    node herramientas/celular.mjs              una ventana con forma de celular
+    node herramientas/celular.mjs --fotos      + las capturas de cada pantalla
+
+    npm run build:app && npm run servir:app
+    node herramientas/mirar-app-compilada.mjs  prueba EL BUILD DE LA APP
+
+Lo segundo es lo que encuentra los bugs que `next dev` no puede mostrar: la CSP
+de producción —que en desarrollo no se inyecta—, las rutas con barra final y la
+recarga en una ruta profunda.
+
+### El APK
+
+Lo compila [`.github/workflows/apk.yml`](.github/workflows/apk.yml) en GitHub
+Actions y se baja de la pestaña Actions. También se compila en una máquina con
+un JDK y un SDK de Android instalados:
+
+    node herramientas/celular-usb.mjs             vista previa EN VIVO en el celular
+    node herramientas/celular-usb.mjs --apk       compila, instala y abre la app
+    node herramientas/celular-usb.mjs --compilar  sólo deja el .apk
+
+El `appId` es `uy.trucouruguayo.app`, minSdk 24 y targetSdk 36. **El `appId` y el
+origen de la app (`https://localhost`, en `capacitor.config.ts`) no se tocan
+nunca**: de ese origen cuelga el `localStorage` con el progreso de la gira, y
+cambiarlo se lo borra a todo el que ya jugó.
 
 ## Cómo está organizado
 
@@ -167,11 +233,23 @@ lib/
 herramientas/
   generar-mapa.mjs      Rehace mapa-uruguay.ts desde datos cartográficos
   generar-escena.mjs    Hornea la madera y el fondo de cada ambiente a WebP
+  generar-icono.mjs     Hornea el ícono de Android. GENERADO: no se edita a mano
   escena/               El dibujo de esas texturas, en código
   mirar-mesa.mjs        Verifica que la mesa no scrollee en siete tamaños, que
-                        la barra no tape tu mano y que no haya filtros adentro
-                        de la mano (ver el glitch del 1/9 en Historial.md)
+                        la barra no tape tu mano y que no haya NI UN FILTRO en
+                        la escena (ver los glitches del 1/9 y del 4/9 en
+                        Historial.md: es el bug más caro que tuvo el proyecto)
+  mirar-mesa-nueva.mjs  Mide el rectángulo real de cada objeto de la mesa y
+                        falla si algo se solapa o se le monta al rival
+  mirar-web.mjs         El armazón de app: la barra, el volver y las pantallas
+  mirar-rivales.mjs     Los bordes de las siete escenas horneadas
+  mirar-app-compilada.mjs  Prueba el build de la app, no el de desarrollo
+  celular.mjs           Una ventana con forma de celular
+  celular-usb.mjs       Compila, instala y abre la app en un teléfono por USB
   medir-bots.mjs        Enfrenta a los 19 rivales y mide si la gira sube
+android/                El proyecto de Android (Capacitor). Los dibujos de
+                        `app/src/main/res` los hornea generar-icono.mjs
+capacitor.config.ts     appId, origen y ajustes del WebView. NO SE TOCAN
 ideas/
   concepto.md           Qué juego queremos hacer
   estetica.md           Cómo se tiene que ver
@@ -194,6 +272,16 @@ ideas/
   cuadro. Son dos WebP de ~45 KB por departamento y es lo que permite que la
   mesa tenga nudos, rayones y perspectiva de verdad sin arrastrar un celular.
 - **Sin librerías de interfaz.** Next, React y Tailwind, y nada más.
+- **La app y la web son el mismo código.** No hay una versión web y una versión
+  app: hay dos builds del mismo proyecto, y las diferencias son dos (la barra
+  final en las rutas y el zoom bloqueado). Todo lo que se arregla, se arregla
+  para las dos.
+- **Nada de la escena de la mesa puede llevar un `filter`.** Suena a detalle y
+  es el bug más caro que tuvo el proyecto, dos veces: un desenfoque adentro de
+  un subárbol que el navegador compone aparte hace que las GPU de teléfono
+  devuelvan basura —píxeles blancos sueltos, bandas de rayas—. Las sombras se
+  dibujan con degradés y `box-shadow`, que hacen lo mismo sin crear una
+  superficie de composición. `mirar-mesa.mjs` falla si vuelve a aparecer uno.
 - **La partida corre entera en tu navegador.** Eso significa que las cartas del
   bot están en la memoria del cliente: no salen en el HTML, pero alguien
   decidido puede espiarlas con las herramientas de desarrollo. Hoy da igual —no
@@ -219,7 +307,7 @@ reglas del truco valen y cuáles no, y qué se deja afuera por no hacer falta.
 
 Las reglas de [`reglas.txt`](reglas.txt) se contrastaron entre varias fuentes
 —que se contradecían bastante— y las decisiones sobre cuál tomar en cada caso
-están explicadas en el apéndice A del documento. Además hay 128 pruebas
+están explicadas en el apéndice A del documento. Además hay 167 pruebas
 automáticas que verifican que el juego se comporte exactamente como dice ese
 archivo.
 
@@ -244,14 +332,89 @@ que quieras, incluso comercialmente, sólo citando de dónde salió.
 ¿Querés hacer algo que la licencia no permite? Abrí un issue y se conversa. Los
 usos educativos y sin fines de lucro se ven con muy buenos ojos.
 
+## Publicidad
+
+Vale la pena decirlo con precisión, porque este archivo antes prometía otra cosa.
+
+**Hoy no hay publicidad y no hay nada que la cargue.** Ni un script de terceros,
+ni una cookie, ni una sola petición de red: el juego corre entero en tu
+navegador. Eso se puede comprobar mirando la pestaña de red.
+
+**Lo que sí hay es el lugar reservado.** `components/EspacioAnuncio.tsx` es un
+hueco medido —abajo de la mesa, en el pie y abajo de cada lección— y nada más:
+un `<div>` con una altura y, si está prendida, una silueta dibujada con CSS.
+
+Está desde ahora por una razón concreta: **la mesa está medida para entrar
+exacta en una pantalla que no scrollea nunca**, y un banner que aparece después
+le come 50px a las cartas. Con el hueco puesto, `mirar-mesa.mjs` mide la mesa
+CON el banner en los siete tamaños y el día que se encienda no se rompe nada.
+
+### Cómo se enciende, y qué significa cada trámite
+
+Lo primero, porque cambia todo lo demás: **con el plugin nativo de Capacitor el
+anuncio NO corre adentro del WebView.** Es una vista de Android puesta abajo del
+todo. O sea que la CSP no se afloja, la parte web sigue sin pedirle nada a nadie,
+y el hueco que ya está reservado se llena por debajo. Si algún día alguien
+propone meter AdSense en un `<iframe>`, es exactamente lo contrario y no va.
+
+**1. AdMob.** Es la red de anuncios de Google para apps. Cuenta en
+`admob.google.com`, con la misma cuenta de Google que Play Console, y las dos
+vinculadas. Se registra la app —se puede antes de publicarla— y salen un **App
+ID** (`ca-app-pub-…~…`) y, creando una unidad de tipo *Banner*, un **Ad unit ID**
+(`ca-app-pub-…/…`).
+
+**2. "Yo no quiero recolectar datos de nadie."** Y no los vas a recolectar vos:
+los recolecta AdMob. Cuando el SDK pide un anuncio manda el identificador de
+publicidad del aparato, la IP (de donde sale la ubicación aproximada) y datos del
+dispositivo. Eso es justamente lo que se paga. No hay forma de tener anuncios sin
+eso, y por eso hay que declararlo.
+
+**3. El formulario de "Seguridad de los datos"** de Play Console es un
+cuestionario donde declarás qué recoge la app. Con AdMob adentro se declara
+*Identificadores del dispositivo → se recopilan · se comparten con terceros ·
+para publicidad*. Declararlo bien no cuesta nada; declararlo mal es de las
+razones más comunes por las que bajan una app.
+
+**4. El consentimiento (UMP).** Para quien abra la app en Europa o el Reino
+Unido hay que mostrar un cartel de consentimiento ANTES de pedir el primer
+anuncio. Google lo da hecho: el SDK de *User Messaging Platform*, que se
+configura desde AdMob (Privacidad y mensajes). En Uruguay no aparece nada.
+
+**5. La edad, que es la decisión que más plata mueve.** Play Console pregunta
+por el público objetivo:
+
+- Si incluís **menores de 13**, la app entra en *Diseñado para familias*: Google
+  obliga a anuncios **no personalizados**, que pagan bastante menos, y hay
+  revisión de contenido más estricta.
+- El truco, aunque no haya un peso de por medio, suele clasificar **12+** en el
+  cuestionario de IARC por "juego de apuestas simulado". Conviene contestarlo
+  con la verdad: mentir ahí es lo que hace que te bajen la app después.
+
+**Lo recomendado: público objetivo 13+ y la app marcada como NO dirigida a
+niños** (`tagForChildDirectedTreatment = false`). Es lo honesto —una app de truco
+es para gente que juega al truco—, mantiene los anuncios personalizados y no te
+achica el público. 18+ no aporta nada: te saca gente sin darte un peso más.
+
+**6. Lo que hay que tener escrito**: la política de privacidad (ya existe, en
+`/legales/privacidad`) con AdMob mencionado y cargada en Play Console, el
+cuestionario de clasificación, el público objetivo y la casilla "contiene
+anuncios". La política **se actualiza ANTES de encender nada, no después**.
+
+**7. Dos avisos que valen la cuenta entera.** Se prueba SIEMPRE con las unidades
+de prueba que publica AdMob: tocar tus propios anuncios reales es baneo
+definitivo y sin apelación. Y AdMob paga recién cuando pasás los **US$100**,
+contra una dirección y un formulario de impuestos de Estados Unidos (W-8BEN),
+porque el que paga es Google desde allá.
+
+**Cuánto da, en serio.** Un banner en Uruguay anda entre US$0,20 y US$1 por cada
+mil veces que se muestra. Vale la pena ponerlo porque cuesta casi nada, no porque
+vaya a financiar algo al principio.
+
 ## Legales
 
-- [Política de privacidad](app/legales/privacidad/page.tsx) — hoy el sitio no
+- [Política de privacidad](app/legales/privacidad/page.tsx) — hoy la app no
   recoge ningún dato: sin cuentas, sin cookies, sin analítica.
 - [Términos de uso](app/legales/terminos/page.tsx)
 
 Las dos se actualizan **antes** de agregar cualquier función que toque datos
 del usuario.
-
-**El sitio no lleva publicidad**, y no es sólo una promesa: no carga ningún
-script de terceros, no pone cookies y no hace una sola petición de red.

@@ -133,7 +133,7 @@ export function DialogoRival({
             {previos.map((e, i) => (
               <p
                 key={`${suyos.length}-${i}`}
-                className="truncate font-[family-name:var(--font-ui)] text-[10px] uppercase leading-snug tracking-wide text-crema/40 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
+                className="truncate font-[family-name:var(--font-ui)] text-[10px] uppercase leading-snug tracking-wide text-crema/40 [text-shadow:0_1px_2px_rgba(0,0,0,0.9)]"
               >
                 {e.quien === "sistema" ? "" : "Él: "}
                 {e.texto}
@@ -144,7 +144,7 @@ export function DialogoRival({
                 key={suyos.length}
                 className={`anim-pop mt-0.5 inline-block max-w-full truncate rounded-full px-3 py-1 font-[family-name:var(--font-ui)] text-[13px] uppercase tracking-wide sm:text-sm ${
                   ultimo.quien === "sistema"
-                    ? "text-crema/80 drop-shadow-[0_2px_3px_rgba(0,0,0,0.95)]"
+                    ? "text-crema/80 [text-shadow:0_2px_3px_rgba(0,0,0,0.95)]"
                     : "bg-crema text-tinta shadow-lg shadow-black/60"
                 }`}
               >

@@ -23,11 +23,11 @@ function Contenido({ rival, alPie }: { rival: Personalidad; alPie: string }) {
   return (
     <>
       <span className="min-w-0 text-right">
-        <span className="block truncate font-[family-name:var(--font-ui)] text-[12px] uppercase leading-tight tracking-wide text-crema drop-shadow-[0_1px_3px_rgba(0,0,0,0.95)] sm:text-[14px]">
+        <span className="block truncate font-[family-name:var(--font-ui)] text-[12px] uppercase leading-tight tracking-wide text-crema [text-shadow:0_1px_3px_rgba(0,0,0,0.95)] sm:text-[14px]">
           {rival.nombre}
         </span>
         <span
-          className="block font-[family-name:var(--font-ui)] text-[9px] leading-tight tracking-wide text-dorado drop-shadow-[0_1px_3px_rgba(0,0,0,0.95)] sm:text-[10px]"
+          className="block font-[family-name:var(--font-ui)] text-[9px] leading-tight tracking-wide text-dorado [text-shadow:0_1px_3px_rgba(0,0,0,0.95)] sm:text-[10px]"
           aria-label={`dificultad ${rival.dificultad} de 5`}
         >
           {"★".repeat(rival.dificultad)}
@@ -65,8 +65,17 @@ export function Medallon({
   deLaGira: boolean;
   onCambiar: () => void;
 }) {
-  const clases =
-    "flex items-center gap-2 rounded-full bg-black/45 py-1 pl-3 pr-1 backdrop-blur-[2px]";
+  /* ── ACÁ HABÍA UN `backdrop-blur-[2px]`, Y ERA EL MÁS CARO DE TODOS ──────
+     Un `backdrop-filter` no desenfoca lo propio: obliga al navegador a LEER DE
+     VUELTA todo lo que ya dibujó detrás, desenfocarlo y volver a componer, y
+     eso pasa en cada cuadro en que algo de abajo se mueve —o sea toda la
+     partida, porque abajo está la mesa—. El medallón cuelga sobre la esquina
+     donde arranca la madera, que es justo donde Santiago fotografió basura.
+
+     Sobre un fondo al 45% de negro el desenfoque casi no se veía; lo que hacía
+     el trabajo de despegarlo de la madera era la opacidad. Sube a 55% y queda
+     igual de legible, sin leer de vuelta un solo píxel. */
+  const clases = "flex items-center gap-2 rounded-full bg-black/55 py-1 pl-3 pr-1";
 
   if (deLaGira) {
     return (
@@ -79,7 +88,7 @@ export function Medallon({
   return (
     <button
       onClick={onCambiar}
-      className={`${clases} transition-colors hover:bg-black/70`}
+      className={`${clases} transition-colors hover:bg-black/75`}
       aria-label={`Estás jugando contra ${rival.nombre}. Tocá para cambiar de rival.`}
     >
       <Contenido rival={rival} alPie={`${rival.lugar} · cambiar`} />

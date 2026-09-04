@@ -6,12 +6,12 @@ import { PanelPapel } from "@/components/PanelPapel";
 export const metadata: Metadata = {
   title: "Política de privacidad",
   description:
-    "Qué datos recoge Truco Uruguayo: hoy, ninguno. Sin cuentas, sin cookies, sin analítica y sin rastreadores.",
+    "Qué datos recoge Truco Uruguayo: ninguno que salga de tu dispositivo. Sin cuentas, sin cookies, sin analítica y sin rastreadores.",
   alternates: { canonical: "/legales/privacidad" },
 };
 
 // Se actualiza cada vez que una función nueva toque datos del usuario.
-const ULTIMA_ACTUALIZACION = "26 de agosto de 2026";
+const ULTIMA_ACTUALIZACION = "4 de septiembre de 2026";
 
 export default function Privacidad() {
   return (
@@ -33,15 +33,19 @@ export default function Privacidad() {
 
           <h2>La versión corta</h2>
           <p>
-            <strong>Este sitio no recoge ningún dato tuyo.</strong> No hay
-            registro, no hay cuentas, no hay cookies, no hay analítica y no hay
-            rastreadores. No sabemos quién entró, ni cuántos entraron, ni desde
-            dónde.
+            <strong>No recogemos ningún dato tuyo.</strong> No hay registro, no
+            hay cuentas, no hay cookies, no hay analítica y no hay rastreadores.
+            No sabemos quién entró, ni cuántos entraron, ni desde dónde.
           </p>
           <p>
-            No es una promesa de buena voluntad: es una consecuencia técnica.
-            El sitio es un montón de archivos estáticos y el juego corre entero
-            dentro de tu navegador. No hay ningún servidor nuestro al que
+            Lo único que se guarda es <strong>tu progreso en la gira</strong>, y
+            se guarda <em>en tu propio dispositivo</em>: nunca nos llega. Está
+            explicado más abajo.
+          </p>
+          <p>
+            No es una promesa de buena voluntad: es una consecuencia técnica. La
+            app son archivos estáticos y el juego corre entero adentro de tu
+            teléfono o de tu navegador. No hay ningún servidor nuestro al que
             mandarle nada.
           </p>
 
@@ -61,27 +65,45 @@ export default function Privacidad() {
             <li>No vendemos ni compartimos información, porque no tenemos.</li>
           </ul>
 
-          <h2>Lo que se guarda en tu navegador</h2>
+          <h2>Lo que se guarda en tu dispositivo</h2>
           <p>
-            Hoy, nada. Cuando agreguemos el progreso de las lecciones, se va a
-            guardar en el almacenamiento local de tu navegador
-            (<em>localStorage</em>): esa información{" "}
-            <strong>se queda en tu dispositivo</strong>, no viaja a ningún
-            lado, y la podés borrar limpiando los datos del sitio desde tu
-            navegador. Cuando eso pase, se actualiza esta página.
+            <strong>Tu progreso en la gira</strong>: contra qué rivales jugaste,
+            a cuáles les ganaste y con qué marcador, más dos preferencias (si
+            las ayudas están prendidas y contra quién jugaste la última vez).
+          </p>
+          <p>
+            Eso se guarda en el almacenamiento local de tu navegador
+            (<em>localStorage</em>) y{" "}
+            <strong>se queda en tu dispositivo</strong>: no viaja a ningún lado
+            porque no hay ningún lado adonde viajar —no hay servidor—. Lo podés
+            borrar limpiando los datos del sitio desde tu navegador, o
+            desinstalando la app.
+          </p>
+          <p>
+            En la app de Android, la copia de seguridad de Android puede
+            incluirlo, para que la gira no se pierda al cambiar de teléfono. Es
+            progreso de un juego: no hay un dato personal adentro.
           </p>
 
           <h2>Publicidad</h2>
           <p>
-            <strong>Este sitio no tiene publicidad.</strong> No carga ningún
-            script de terceros, no pone cookies de rastreo y no manda datos a
-            ninguna red de anuncios.
+            <strong>Hoy no hay publicidad.</strong> No se carga ningún script de
+            terceros, no se pone ninguna cookie de rastreo y no se manda un solo
+            dato a una red de anuncios. Se puede comprobar: abrí las
+            herramientas del navegador y mirá la pestaña de red mientras jugás.
           </p>
           <p>
-            Fue una decisión, no un descuido: poner anuncios habría significado
-            rastrearte para que a alguien le sirviera de algo, y no vale la
-            pena. Si en algún momento eso cambiara, esta página se actualiza{" "}
-            <em>antes</em>, no después.
+            <strong>Y avisamos antes, que es lo que esta página prometió.</strong>{" "}
+            La idea es que la app lleve un banner de anuncios abajo, y por eso
+            vas a ver un rectángulo vacío ahí: es el lugar reservado, sin nada
+            adentro todavía. Se reservó desde ahora para que el día que se
+            encienda no haya que rehacer la pantalla.
+          </p>
+          <p>
+            Cuando ese banner se encienda de verdad,{" "}
+            <strong>esta página se actualiza primero</strong> y va a decir con
+            nombre y apellido qué red de anuncios es, qué recoge y cómo
+            desactivar la publicidad personalizada. Nada de eso pasa todavía.
           </p>
 
           <h2>Enlaces a otros sitios</h2>

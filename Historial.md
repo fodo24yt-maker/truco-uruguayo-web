@@ -12,6 +12,245 @@
 
 ---
 
+## 2026-09-04 — Las manchitas del celular, el hueco del anuncio, y una hipótesis descartada con números
+
+Sesión larga y en dos pasadas. Lo más importante que deja no es un arreglo: es
+**una hipótesis descartada**, y el método para no volver a caer.
+
+### El pedido
+
+Santiago mandó capturas nuevas jugando en el celular: manchitas claras sueltas
+por toda la mesa, alrededor del mate, del vaso y del mazo; el cartelito de la
+muestra encima del mazo; y pidió además lugar para un banner de anuncios,
+adaptar *aprender* al celular y sacar su GitHub, "porque ya es una aplicación un
+poco más seria".
+
+### Primera pasada: los filtros. Se hizo, y NO era eso
+
+El 1/9 se había encontrado que una banda de basura del tamaño de la mano venía
+de un `filter` adentro de un subárbol con `opacity`, que en las GPU de teléfono
+devuelve basura. El guard que quedó cuidaba **sólo la mano**, y en el resto de
+la escena habían quedado **nueve filtros**, incluido un `@keyframes` que animaba
+`filter: blur()` cuadro a cuadro. La explicación cerraba perfecto con la frase
+de Santiago ("va variando dependiendo de la animación"), así que se sacaron
+todos:
+
+- `Sombra.tsx`: los dos `filter: blur()` pasaron a degradés radiales, con la
+  caja crecida 2,5σ y la opacidad corregida por `erf(b/(σ√2))`. Diferencia media
+  contra el original: 0,27–1,38 sobre 255. Invisible.
+- `@keyframes sombra-aterriza` dejó de animar el desenfoque.
+- Seis `drop-shadow` sobre texto pasaron a `text-shadow` (el primero es un
+  `filter`, el segundo no crea superficie de composición).
+- El `backdrop-blur` del medallón se fue: un `backdrop-filter` obliga a leer de
+  vuelta todo lo ya dibujado detrás, y es el más caro de todos.
+- Medido: **9 filtros → 0** en la escena, en cuatro tamaños.
+
+**Y no alcanzó.** Santiago compiló el APK a las 19:05 y a las 19:07 sacó
+capturas con las manchitas intactas.
+
+### Cómo se descartó, para que no se vuelva a suponer
+
+1. **Se abrió el APK como zip** para ver si de verdad tenía los arreglos
+   adentro: `data-anuncio` en 85 archivos, `muestra-cartel` presente,
+   `ApoyarProyecto` borrado. Los tenía.
+2. **Se contaron las manchitas** —componentes conexas claras de ≤12 px sobre la
+   banda de la mesa— en las capturas de antes y de después:
+
+   | | motas |
+   |---|---|
+   | 15:38, sin el arreglo | 48 y 76 |
+   | 19:14, con el arreglo | 105 y 71 |
+
+   Mismo orden de magnitud. El arreglo **ni las causó ni las curó**.
+3. **Se midió a qué distancia de un borde cae cada píxel de color imposible.**
+   En el recorte del mapa, el 100% estaba pegado a un borde de mucho contraste.
+   Ésa es la firma del submuestreo de croma de un compresor de imagen, no la de
+   un fallo de dibujo: el color falso del códec sólo aparece al lado de un
+   borde, la basura de rasterizado también aparece en el medio de la nada.
+4. **El teléfono es un Redmi 13C** (2023, 720x1600, Android 13), no un aparato
+   viejo. Un driver de video roto es mucho menos probable de lo que parecía.
+
+**Conclusión: parte de lo que estábamos arreglando lo puede haber inventado el
+espejo de pantalla de Windows por el que pasaron las cuatro capturas.** No está
+probado que sea todo; está probado que no se puede decidir nada mirándolas.
+
+### Lo que se hizo en vez de seguir adivinando
+
+**`herramientas/motas.mjs`** (nuevo): convierte "se ve sucio" en un número. Con
+una foto cuenta motas; con varias de la misma pantalla quieta dice qué se movió,
+que es el detector honesto —en una pantalla quieta, todo píxel que cambia es
+basura, y eso no necesita saber nada del diseño—.
+
+**`celular-usb.mjs --foto` y `--vigilar N`**: `adb exec-out screencap -p` saca
+la imagen del framebuffer del teléfono, sin pérdida y a resolución real. Sin
+espejo, sin códec, sin reescalado. **Es la única foto sobre la que vale la pena
+decidir algo**, y quedó pendiente correrla porque no había teléfono enchufado.
+
+Las tres salidas posibles quedaron escritas ANTES de mirar, para no acomodar la
+conclusión después: cero motas → era el espejo; motas fijas → es nuestro dibujo;
+motas que se mueven → es el rasterizador del WebView.
+
+### La mesa deja de saltar cuando cantás
+
+Ésta sí es una falla nuestra, medida y arreglada. Santiago tenía la teoría de
+que "cuando cantás, el mapa cambia". Tenía razón:
+
+**Al abrir el envido la barra de cantos pasaba de 48 a 103 px y la mesa entera
+saltaba 43 px** —345→302 a 320x568, o sea el 12% de la mesa yéndose y volviendo
+en el momento exacto en que estás decidiendo si querés—. La escena es `flex-1`,
+así que cede sola cuando la barra crece.
+
+**El primer arreglo se hizo, se midió y se descartó.** Fue reservarle a la barra
+el alto de un renglón: el salto pasó de 43 px a 0 en todos los tamaños, y el
+guard nuevo lo confirmó. Pero dejaba una franja marrón de 103 px abajo de todo,
+casi siempre vacía. Se le mandó la captura a Santiago —como manda `CLAUDE.md`
+antes de un cambio visual grande— y la rechazó: *"me parece una atrocidad eso
+que sea tan gruesa para evitar el movimiento"*. Tenía razón: la cura era peor.
+
+**Lo que quedó es la idea de él, y es mejor que las dos anteriores.** Los
+botones que aparecen y desaparecen —la flor, lo que podés subir— **salieron del
+flujo**: flotan sobre tus cartas, sueltos, con el dorado que ya tenían y una
+sombra propia que los despega de la madera, sin la franja marrón atrás. Al
+abrir el envido salen tres botones separados (Envido · Real envido · Falta) y
+**la mesa no se mueve un solo píxel**: 484 px antes y 484 después, con la barra
+en sus 48 px de siempre.
+
+De paso se igualó la fila de Quiero/No quiero, que medía 58 px contra los 48 de
+la de referencias y hacía un saltito de 10 px cada vez que el rival te cantaba
+algo. Ahora los dos botones ocupan el alto entero de la barra.
+
+`mirar-mesa-nueva.mjs` gana la comprobación —el alto de `[data-mesa="tabla"]`
+no cambia al abrir el envido— y se probó saboteándola: con la reserva puesta en
+cero falla en los cinco tamaños que tenían envido y nombra el salto exacto de
+43 px.
+
+**Lección, que es la que vale para la próxima**: el arreglo se midió, dio bien,
+y aun así estaba mal. Un número que mejora no alcanza si nadie miró la pantalla.
+La captura antes de aplicar no es burocracia.
+
+### El efecto colateral que se fue solo
+
+Mientras la barra reservaba 55 px, fallaron tres cosas en PC a 1280x620: la
+botella se le montaba al mazo por 3,4 px, la libreta cruzaba el canto por 4,3 px
+y la baza se le montaba a la mano por 3,3 px. Se bajaron tres `clamp` para
+compensar, y al volver la barra a su alto natural **se revirtieron los tres**:
+`mano` y `libreta` quedaron como estaban y `objeto` quedó en 11,6vh, que es el
+valor que ya tenía por el hueco del anuncio.
+
+Quedó escrita la causa de fondo en el código, porque va a volver:
+
+> Los objetos miden en `vh` **del viewport**, y la escena ya no es el viewport:
+> es lo que queda después de la barra de arriba, la de cantos y el anuncio. Cada
+> vez que algo de eso crece, la escena se achica y los objetos NO.
+
+**Lo correcto es `container-type: size` en el contenedor de la escena y `cqh` en
+lugar de `vh` en las dos tablas de diseño.** Chromium lo soporta desde el 105,
+que es justo el mínimo que la app ya exige por `:has()`. No se hizo porque
+obliga a recalibrar los clamps de las dos tablas, o sea que es un cambio visual
+grande, y ésos van con captura y permiso antes. **Es lo primero a hacer la
+próxima vez que un `clamp` de la mesa haya que bajarlo.**
+
+### El cartelito de la muestra
+
+Dos cosas rotas que se sumaban: la caja del mazo tenía `height: 0.875em` escrito
+a mano y ni la pila ni la muestra girada 78° entraban, y la pila era un `<div>`
+sin `height` con todos los hijos `absolute`, o sea de alto 0, así que su
+`-translate-y-1/2` no movía nada. Ahora los altos salen de la trigonometría del
+giro y el cartel se centra sobre `centroMazo` y no sobre la caja —por eso
+"cambiaba de lugar": no seguía al mazo—. Se solapaba en los cuatro tamaños
+medidos; ahora no cruza nada.
+
+### El hueco del anuncio, aprender y el GitHub
+
+- **`components/EspacioAnuncio.tsx`** (nuevo): un solo lugar donde vive la
+  altura de los tres huecos, con las alturas exactas del banner adaptativo de
+  AdMob (32/50/90 según el alto de ventana). **No carga nada de nadie**: es un
+  `<div>` con una altura. Va abajo de la mesa y en el pie.
+- Se descubrió y se corrigió que **había dos huecos apilados** en `/aprender`
+  (cuerpo y pie, sin nada en el medio). Además de quedar feo, AdMob lo prohíbe.
+- **`ApoyarProyecto.tsx` borrado**: era el bloque "¿Te sirvió? / Seguir en
+  GitHub". `/aprender` bajó 29% de alto a 390x844 y 34% a 320x568 **incluyendo**
+  el hueco nuevo.
+- **El GitHub queda sólo en Términos y Privacidad** (3 enlaces), que es la vía
+  de contacto pública que Play Store exige. Santiago: *"si Play Store me pide un
+  lugar para contactar, dejá GitHub sólo en los legales, el resto fuera"*.
+- **`components/PieLegales.tsx`** (nuevo): los enlaces a los legales dejaron de
+  aparecer en todas las pantallas. Quedan en la parte de aprender y adentro de
+  las propias páginas legales, para poder ir de una a otra. También se sacó el
+  bloque suelto que la portada tenía abajo: existía porque la portada esconde el
+  pie y era el único camino, y ahora el camino es portada → Aprender. Play pide
+  que existan y se encuentren, no que estén repetidos en cada pantalla.
+
+### Un error de hecho en la política de privacidad
+
+Decía *"Lo que se guarda en tu navegador: **hoy, nada**"*, y `lib/progreso.ts`
+guarda la gira en `localStorage` desde hace semanas. En una app que va a Play
+Store eso es una declaración de privacidad inexacta. Se reescribió. Y la promesa
+de "si algún día hay publicidad, esta página se actualiza ANTES" se cumplió
+ahora, con el hueco reservado y vacío.
+
+### Lo que se decidió NO hacer, y por qué
+
+- **No se horneó el `feTurbulence` del mapa.** Es el filtro más caro del
+  proyecto, pero es estático (se rasteriza una vez y no se vuelve a tocar) y la
+  medición dice que las manchitas del mapa eran compresión de la foto.
+  Rehornearlo arriesga el aspecto de una pantalla que está bien, a cambio de
+  nada medido.
+- **`rival-foco` se queda.** Es un `feGaussianBlur` de σ=1,5 sobre el cuerpo del
+  rival: un degradé sabe dibujar una elipse borrosa, no un cuerpo entero
+  borroso. Si algún día sale basura ARRIBA, la salida es hornear al rival.
+  Su hermano `rival-sombra-sola` (σ=9, región al 180%, o sea que se metía 80 px
+  DENTRO de la mesa) sí se fue: eran dos elipses.
+- **No se tocaron las clases fantasma de Tailwind.** El CSS publicado define
+  `.blur`, `.drop-shadow`, `.filter`, `.backdrop-filter` y hasta un
+  `.drop-shadow-[…]` con puntos suspensivos, todas generadas **a partir de los
+  comentarios**, porque Tailwind 4 lee el texto crudo y no sabe qué es un
+  comentario. Son 2.511 bytes, el 4,3% del CSS, adentro de un APK que va sin
+  conexión. Contorsionar los comentarios para engañar al escáner deja el código
+  peor de lo que arregla.
+
+### Publicidad: lo que hay que saber, sin haber tocado nada
+
+Está escrito paso por paso en el README, sección *Publicidad*. Lo esencial:
+
+- Con el plugin nativo de Capacitor **el anuncio no corre adentro del WebView**,
+  así que la CSP no se afloja y la parte web sigue sin pedirle nada a nadie.
+- Santiago no quiere recolectar datos de nadie, y no los va a recolectar él:
+  **los recolecta AdMob** (identificador de publicidad, IP). Por eso hay que
+  declararlo en el formulario de Seguridad de los datos.
+- **Recomendado: público objetivo 13+, la app NO dirigida a niños.** Marcar
+  menores de 13 mete la app en "Diseñado para familias" y obliga a anuncios no
+  personalizados, que pagan mucho menos. El truco suele clasificar 12+ por
+  "juego de apuestas simulado", y conviene contestarlo con la verdad.
+
+### El `.gitignore`, mirando hacia Play Store
+
+`*.jks` y `*.keystore` ya estaban desde el 2/9. Se sumaron los tres que
+aparecen cuando una app entra a la tienda de verdad y que hoy no estaban
+cubiertos por el `.gitignore` de `android/`:
+
+- **`keystore.properties`**: Gradle lee de ahí la contraseña de la clave de
+  firma, en texto plano. Filtrarlo es filtrar la firma.
+- **`google-services.json`**: la configuración de los servicios de Google, con
+  el id del proyecto y las claves de las APIs habilitadas. Es el archivo que
+  aparece el día que se prenda AdMob.
+- **`local.properties`**: dónde está el SDK en esta máquina. No es un secreto,
+  pero tiene la ruta de casa adentro y este repo es público.
+
+Van anclados en el `.gitignore` de la raíz y no en el de `android/`, por lo
+mismo que ya estaba escrito para la clave: Capacitor puede regenerar el de
+`android/` y llevarse la protección puesta.
+
+### Lo que quedó pendiente
+
+1. **Correr `celular-usb.mjs --vigilar` con el teléfono enchufado.** Es el paso
+   que decide si las manchitas existen o las inventó el espejo. Todo lo demás de
+   este tema es especulación hasta que eso corra.
+2. `container-type: size` + `cqh`, ver arriba.
+3. Prender AdMob, con todo lo que eso arrastra.
+
+---
+
 ## 2026-09-02 (tercera pasada) — El APK se compila acá, y el celular se mira por USB
 
 Santiago pidió poder compilar el APK en la máquina y ver el proyecto en el

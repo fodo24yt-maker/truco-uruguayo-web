@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { ApoyarProyecto } from "@/components/ApoyarProyecto";
 import { PanelPapel } from "@/components/PanelPapel";
 import { LECCIONES, buscarLeccion } from "@/lib/lecciones";
 
@@ -33,7 +32,7 @@ export default async function PaginaLeccion({ params }: Props) {
   const { Contenido } = leccion;
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 sm:py-12">
+    <div className="mx-auto max-w-3xl px-3 py-[clamp(0.75rem,3vh,3rem)] sm:px-4">
       {/* El "volver" lo pone la barra de la app. Lo que sí se queda es el
           contador: no es navegación, es saber cuánto falta. */}
       <div className="mb-5 flex items-center justify-end font-[family-name:var(--font-ui)] text-sm">
@@ -44,45 +43,54 @@ export default async function PaginaLeccion({ params }: Props) {
 
       <PanelPapel>
         <article className="prosa mx-auto max-w-[62ch]">
-          <h1 className="mb-2 font-[family-name:var(--font-display)] text-3xl leading-tight text-tinta sm:text-4xl">
+          <h1 className="mb-2 font-[family-name:var(--font-display)] text-[clamp(1.5rem,5.5vw,2.25rem)] leading-tight text-tinta">
             {leccion.titulo}
           </h1>
-          <p className="mb-8 border-b border-tinta/15 pb-5 text-base text-tinta/70">
+          <p className="mb-6 border-b border-tinta/15 pb-4 text-[clamp(0.95rem,2vh,1rem)] text-tinta/70 sm:mb-8 sm:pb-5">
             {leccion.resumen}
           </p>
           <Contenido />
         </article>
       </PanelPapel>
 
-      <nav className="mt-8 flex flex-wrap items-stretch justify-between gap-3 font-[family-name:var(--font-ui)]">
+      {/* EN CELULAR VAN APILADOS, y el que sigue va PRIMERO.
+          Al lado, en un celular de 320, cada botón queda de 150px con un título
+          de cinco palabras adentro: "El truco, el retruco y el vale cuatro" se
+          partía en cuatro renglones. Y el orden invertido no es capricho: el
+          botón que se usa en el 95% de los casos es "siguiente", así que en la
+          columna va arriba, al alcance del pulgar. En una compu vuelven a la
+          fila de siempre, con el anterior a la izquierda. */}
+      <nav className="mt-6 flex flex-col-reverse gap-2 font-[family-name:var(--font-ui)] sm:mt-8 sm:flex-row sm:items-stretch sm:justify-between sm:gap-3">
         {anterior ? (
           <Link
             href={`/aprender/${anterior.slug}`}
-            className="flex-1 rounded border border-crema/15 px-4 py-3 text-sm text-crema/70 transition-colors hover:border-dorado/50 hover:text-crema"
+            className="rounded border border-crema/15 px-4 py-3 text-sm text-crema/70 transition-colors hover:border-dorado/50 hover:text-crema sm:flex-1"
           >
             ← {anterior.titulo}
           </Link>
         ) : (
-          <span className="flex-1" />
+          <span className="hidden sm:block sm:flex-1" />
         )}
         {siguiente ? (
           <Link
             href={`/aprender/${siguiente.slug}`}
-            className="flex-1 rounded bg-bordo px-4 py-3 text-right text-sm text-crema transition-colors hover:bg-bordo-claro"
+            className="rounded bg-bordo px-4 py-3 text-sm text-crema transition-colors hover:bg-bordo-claro sm:flex-1 sm:text-right"
           >
             {siguiente.titulo} →
           </Link>
         ) : (
           <Link
             href="/jugar"
-            className="flex-1 rounded bg-dorado px-4 py-3 text-right text-sm uppercase tracking-wide text-tinta transition-colors hover:bg-dorado-claro"
+            className="rounded bg-dorado px-4 py-3 text-sm uppercase tracking-wide text-tinta transition-colors hover:bg-dorado-claro sm:flex-1 sm:text-right"
           >
             Ahora andá a jugar →
           </Link>
         )}
       </nav>
 
-      <ApoyarProyecto className="mt-10" />
+      {/* Acá estaba el "¿Te sirvió? / Seguir en GitHub". Se fue el 4/9/2026, y
+          el hueco del anuncio NO viene a reemplazarlo: lo lleva el pie, que en
+          esta misma pantalla queda justo abajo. Ver `app/aprender/page.tsx`. */}
     </div>
   );
 }

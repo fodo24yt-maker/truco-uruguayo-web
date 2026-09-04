@@ -57,18 +57,13 @@ export default function Inicio() {
         </div>
       </div>
 
-      {/* Los legales. Vivían en el pie, y el pie acá no está: en la app esta
-          pantalla es el único camino para llegar a ellos, y Play Store los
-          pide. Van chicos y abajo, que es donde no molestan. */}
-      <nav className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom,0px))] left-1/2 flex -translate-x-1/2 items-center gap-3 font-[family-name:var(--font-ui)] text-[11px] uppercase tracking-[0.14em] text-crema/35">
-        <Link href="/legales/privacidad" className="hover:text-crema/70">
-          Privacidad
-        </Link>
-        <span aria-hidden="true">·</span>
-        <Link href="/legales/terminos" className="hover:text-crema/70">
-          Términos
-        </Link>
-      </nav>
+      {/* ACÁ ESTABAN LOS LEGALES, Y SE FUERON EL 4/9/2026.
+          Estaban porque la portada esconde el pie y eran el único camino para
+          llegar a ellos. Ahora el camino existe igual —portada → Aprender, y
+          ahí sí está el pie con los dos enlaces—, y Santiago los quiere en un
+          solo lugar y no repartidos por todas las pantallas. Play Store pide
+          que existan y se encuentren, no que estén en cada pantalla.
+          Ver `components/PieLegales.tsx`. */}
     </section>
   );
 }

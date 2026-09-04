@@ -164,6 +164,61 @@ console.log("el armazón de app:");
   }
 }
 
+/* ══ 1bis. APRENDER EN UN CELULAR, Y EL HUECO DEL ANUNCIO ══════════════════
+   Aprender es la mitad de lo que la app promete, y estaba medida para una
+   computadora: títulos de 30px, párrafos de 17 y 48px de aire arriba y abajo.
+   A 320 de ancho eso hacía renglones de siete palabras y una lección de casi
+   nueve pantallas.
+
+   Lo que se comprueba acá NO es que sea corta —una lección larga está bien, es
+   texto— sino las dos cosas que sí son bugs:
+
+   · **QUE NO DESBORDE A LO ANCHO.** Es el defecto que hace que una página se
+     sienta rota en un teléfono y el que menos se ve leyendo el código: alcanza
+     una palabra larga o una tabla para que aparezca la barra horizontal.
+   · **QUE EL HUECO DEL ANUNCIO ESTÉ Y MIDA LO QUE DICE.** El día que se
+     encienda el banner tiene que caber exactamente ahí. Si alguien le saca el
+     alto al componente, o lo saca de una pantalla, esto falla ahora y no
+     cuando ya haya un anuncio de por medio.
+   · **Y QUE HAYA UNO SOLO.** Dos banners pegados, sin contenido en el medio,
+     además de verse mal están prohibidos por las políticas de AdMob. Ya pasó
+     una vez el 4/9/2026: quedaron el del cuerpo y el del pie uno arriba del
+     otro. */
+console.log("\naprender, en un celular:");
+{
+  const RUTAS = ["/aprender", "/aprender/la-flor", "/legales/privacidad"];
+  for (const [ancho, alto] of TAMANOS) {
+    const ctx = await nav.newContext({ viewport: { width: ancho, height: alto } });
+    const pag = await ctx.newPage();
+    for (const ruta of RUTAS) {
+      await abrir(pag, ruta);
+      await pag.waitForTimeout(500);
+      const m = await pag.evaluate(() => {
+        const d = document.documentElement;
+        const huecos = [...document.querySelectorAll("[data-anuncio]")].map((el) => {
+          const r = el.getBoundingClientRect();
+          return { alto: Math.round(r.height), ancho: Math.round(r.width) };
+        });
+        return { anchoDoc: d.scrollWidth, anchoVis: d.clientWidth, alto: d.scrollHeight, huecos };
+      });
+      const donde = `${ancho}x${alto} ${ruta}`;
+      if (m.anchoDoc > m.anchoVis + 1) {
+        falla(donde, `desborda a lo ancho: el documento mide ${m.anchoDoc} y la ventana ${m.anchoVis}`);
+      }
+      if (m.huecos.length === 0) {
+        falla(donde, "no hay hueco de anuncio: ¿se le sacó el <EspacioAnuncio> al pie?");
+      } else if (m.huecos.length > 1) {
+        falla(donde, `hay ${m.huecos.length} huecos de anuncio en la misma pantalla, y va uno solo`);
+      } else if (m.huecos[0].alto < 32) {
+        falla(donde, `el hueco del anuncio mide ${m.huecos[0].alto}px y el banner más chico son 32`);
+      } else {
+        console.log(`  ${donde.padEnd(34)} OK  ${m.alto}px de largo, hueco de ${m.huecos[0].alto}px`);
+      }
+    }
+    await ctx.close();
+  }
+}
+
 /* ══ 2. LA VITRINA DE TROFEOS ══════════════════════════════════════════════
    Se abre desde el mapa de la gira y muestra los diecinueve objetos: los
    ganados con su marcador, los que faltan apagados.
@@ -450,9 +505,41 @@ for (const [ancho, alto] of [
         cartel: caja(cartel),
         libreta: caja(document.querySelector('[data-mesa="libreta"]')),
         escena: caja(escena),
-        // el texto adentro del cartel: si no entra, el navegador lo dice acá
-        cortadoAncho: cartel.scrollWidth > cartel.clientWidth + 1,
-        cortadoAlto: cartel.scrollHeight > cartel.clientHeight + 1,
+        /* ¿El TEXTO entra en el papel?
+           ── OJO: NO SE MIDE CON `scrollHeight`, Y ESO COSTÓ UNA FALLA ─────
+           Así estaba, y daba positivo siempre que la puntita del papel miraba
+           hacia ABAJO —o sea en TU cartel y no en el de él—. La puntita es un
+           `<span>` `absolute` girado 45° que SALE de la caja a propósito: es la
+           punta que apunta a quien está enseñando. Medido: se pasa 7,3px, que
+           son exactamente los que separaban `scroll=66` de `client=59`.
+
+           Un adorno que se sale por diseño no es un texto cortado. Es la misma
+           lección que ya dejó `mirar-rivales.mjs` tres veces —medía el
+           medallón, medía la libreta, medía una franja demasiado gruesa—: una
+           herramienta que mide de más da falsos positivos, y un falso positivo
+           tapa el defecto de verdad.
+
+           Ahora se miran LOS HIJOS EN FLUJO, que son el título y la fila de
+           números: si alguno se pasa del borde interior del papel, ahí sí el
+           texto está cortado. */
+        cortadoAncho: (() => {
+          const r = cartel.getBoundingClientRect();
+          return [...cartel.children]
+            .filter((el) => getComputedStyle(el).position !== "absolute")
+            .some((el) => {
+              const h = el.getBoundingClientRect();
+              return h.right > r.right + 1 || h.left < r.left - 1;
+            });
+        })(),
+        cortadoAlto: (() => {
+          const r = cartel.getBoundingClientRect();
+          return [...cartel.children]
+            .filter((el) => getComputedStyle(el).position !== "absolute")
+            .some((el) => {
+              const h = el.getBoundingClientRect();
+              return h.bottom > r.bottom + 1 || h.top < r.top - 1;
+            });
+        })(),
         texto: cartel.textContent.trim().replace(/\s+/g, " "),
       };
     });

@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 
 import { Carta } from "@/components/Carta";
+import { EspacioAnuncio } from "@/components/EspacioAnuncio";
 import { DialogoMio, DialogoRival } from "@/components/mesa/Dialogo";
 import {
   FondoAmbiente,
@@ -294,6 +295,10 @@ const PC: DisenoDeMesa = {
   fondo: 22,
   /* Acá no había nada que arreglar: la escena es tres veces más ancha y tres
      cartas de 126 se llevan el 29% del ancho. Es el número de siempre. */
+  /* La mano y la libreta también bajaron el 4/9/2026, por lo mismo que el
+     objeto de más abajo: la escena perdió alto y ellas no. A 1280x620 la
+     libreta cruzaba el canto lejano por 4,3px y la baza de abajo se le montaba
+     a tu mano por 3,3px. Los dos números salieron de medir, no de calcular. */
   mano: { ancho: "clamp(72px, 15.6vh, 126px)" },
   mazo: { u: 0.2, v: 0.5, ancho: "clamp(120px, 26vh, 230px)" },
   mate: { u: 0.8, v: 0.66, alto: "clamp(80px, 19vh, 170px)" },
@@ -306,7 +311,22 @@ const PC: DisenoDeMesa = {
     paso: 0.135,
   },
   reparto: { v: 0.22, ancho: "clamp(38px, 8vh, 72px)" },
-  objeto: { u: 0.22, v: 0.72, alto: "clamp(58px, 13vh, 112px)" },
+  /* BAJÓ DE 13vh A 11,6vh EL 4/9/2026, y no por gusto: el hueco del anuncio se
+     lleva ~38px de una ventana de 620, o sea el 6% de la escena. Los objetos
+     miden en `vh` DEL VIEWPORT y la escena ya no es el viewport entero, así que
+     al achicarse ella los objetos se quedan del mismo tamaño y se acercan entre
+     sí. `mirar-mesa-nueva.mjs` lo agarró en el acto: a 1280x620 la botella
+     —la más alta de los diecinueve— se le montaba al mazo.
+
+     ── SI ALGÚN DÍA HAY QUE BAJARLO OTRA VEZ, NO LO BAJES ─────────────────
+     Es un parche, y ya se usó dos veces. La causa de fondo es la de arriba: los
+     objetos miden contra la VENTANA y viven adentro de la ESCENA, que es lo que
+     queda después de la barra de arriba, la de cantos y el anuncio. Lo correcto
+     es `container-type: size` en el contenedor de la escena y `cqh` en vez de
+     `vh` acá y en CELULAR —Chromium lo soporta desde el 105, que es el mínimo
+     que la app ya exige por `:has()`—. Obliga a recalibrar las dos tablas, así
+     que es un cambio visual grande y va con captura y permiso antes. */
+  objeto: { u: 0.22, v: 0.72, alto: "clamp(52px, 11.6vh, 100px)" },
 };
 
 /**
@@ -686,6 +706,14 @@ function Mesa() {
     if (p.historial.some((h) => h.tipo === "envido")) return "El envido ya se jugó en esta mano";
     return null;
   })();
+
+  /* Los dos grupos que flotan sobre tus cartas. Se nombran acá porque el JSX
+     los pregunta dos veces —para decidir si dibuja el envoltorio y para
+     decidir qué mete adentro— y repetir la condición es la forma más barata de
+     que un día digan cosas distintas. */
+  const hayFlor = b.flor || b.florCantos.length > 0;
+  const haySubida =
+    (menuEnvido && b.envidos.length > 0) || (b.contestando && (b.envidos.length > 0 || b.truco));
 
   /**
    * QUE LA BARRA NUNCA CORTE TU MANO.
@@ -1150,7 +1178,11 @@ function Mesa() {
                     className={barrida ? "anim-al-mazo" : undefined}
                     style={alMazo(0.5 + lugarDeBaza(i), d.baza.ganador, i * 2)}
                   >
-                    <span className="block whitespace-nowrap font-[family-name:var(--font-ui)] text-[9px] uppercase tracking-wide text-crema/70 drop-shadow-[0_1px_3px_rgba(0,0,0,1)]">
+                    <span /* `text-shadow` y no `drop-shadow`: el segundo es un `filter` y
+                          sobre texto chico dentro de un contenedor que la
+                          perspectiva escala por un factor fraccionario deja
+                          basura con forma de letras. Ver `Mazo.tsx`. */
+                      className="block whitespace-nowrap font-[family-name:var(--font-ui)] text-[9px] uppercase tracking-wide text-crema/70 [text-shadow:0_1px_3px_rgba(0,0,0,1)]">
                       {baza.ganador === "parda" ? "parda" : baza.ganador === "vos" ? "tuya" : "suya"}
                     </span>
                   </div>
@@ -1191,6 +1223,74 @@ function Mesa() {
               lo que acabás de cantar. */}
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
             <DialogoMio eventos={p.eventos} tantos={tantosEnseñados} />
+
+            {/* ─── LO QUE PODÉS CANTAR, FLOTANDO SOBRE TUS CARTAS ────────
+                Esto vivía adentro de la barra de abajo, y por eso la barra
+                crecía y la mesa entera saltaba 43 px cada vez que abrías el
+                envido. Acá está fuera del flujo: aparece y desaparece sin
+                mover un solo píxel de la escena.
+
+                Y sin la franja marrón atrás: son botones sueltos sobre la
+                madera, con su propio color y su propia sombra. El fondo de la
+                fila era lo que los hacía parecer parte de un cajón.
+
+                Va ARRIBA de tu mano y no encima: es la última cosa antes de
+                las cartas, en el mismo apilado que tu diálogo. */}
+            {(hayFlor || haySubida) && (
+              <div className="pointer-events-auto mx-auto mb-1.5 flex max-w-[760px] flex-wrap items-center justify-center gap-1.5 px-2">
+                {b.flor && (
+                  <BotonCanto canto="flor" onClick={() => hacer({ tipo: "flor" })} tono="dorado" suelto>
+                    {meCantaronFlor ? "Yo también" : "¡Flor!"}
+                  </BotonCanto>
+                )}
+                {b.florCantos.map((canto) => (
+                  <BotonCanto
+                    key={canto}
+                    canto={canto}
+                    onClick={() => hacer({ tipo: "flor-canto", canto })}
+                    tono="bordo"
+                    suelto
+                  >
+                    {canto === "con-flor-envido" ? "Con flor envido" : "Contraflor al resto"}
+                  </BotonCanto>
+                ))}
+                {haySubida && b.contestando && (
+                  <span className="rounded bg-black/55 px-2 py-1 font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-[0.14em] text-crema/70">
+                    o subí
+                  </span>
+                )}
+                {haySubida &&
+                  b.envidos.map((canto) => (
+                    <BotonCanto
+                      key={canto}
+                      canto={canto}
+                      onClick={() => hacer({ tipo: "envido", canto })}
+                      tono="dorado"
+                      suelto
+                    >
+                      {canto === "falta-envido"
+                        ? `Falta (${laFalta(p.puntos)})`
+                        : canto === "real-envido"
+                          ? "Real envido"
+                          : "Envido"}
+                    </BotonCanto>
+                  ))}
+                {haySubida && b.contestando && b.truco && (
+                  <BotonCanto canto="truco" onClick={() => hacer({ tipo: "truco" })} tono="bordo" suelto>
+                    {["Truco", "Retruco", "Vale cuatro"][p.truco.nivel] ?? "Truco"}
+                  </BotonCanto>
+                )}
+              </div>
+            )}
+
+            {/* Cuando "el envido va primero" no se puede, se dice por qué.
+                Antes el botón desaparecía y nada más, y parecía que el juego
+                estaba roto. También flota: es un renglón que aparece y se va. */}
+            {motivoSinEnvido && (
+              <p className="mx-auto mb-1 max-w-[760px] px-2 text-center font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-wide text-dorado/90 [text-shadow:0_1px_3px_rgba(0,0,0,1)]">
+                {motivoSinEnvido}
+              </p>
+            )}
 
             {/* Cuando no es tu turno la mano se apaga TODA junta —dedos, cartas
                 y pulgar— y no carta por carta. Cada carta con su `opacity`
@@ -1314,68 +1414,24 @@ function Mesa() {
       </div>
 
       {/* ─── La barra de cantos ────────────────────────────────────────
-          Está EN EL FLUJO, como última hermana: cuando le aparece una fila, la
-          escena de arriba se achica sola y tu mano nunca queda debajo. */}
+          Está EN EL FLUJO, como última hermana, y **no cambia de alto**: es
+          siempre una sola fila. Lo que antes le crecía arriba —la flor y lo que
+          podés subir— ahora flota sobre tus cartas, en `CantosFlotantes`.
+
+          ── POR QUÉ, MEDIDO EL 4/9/2026 ─────────────────────────────────
+          Al abrir el envido la barra pasaba de 48 a 103 px y la mesa entera
+          saltaba 43 px: el mate, el mazo y las cartas se corrían de golpe justo
+          cuando estás decidiendo si querés. A 320x568 eso es el 12% de la mesa
+          yéndose y volviendo.
+
+          El primer intento fue reservarle a la barra el alto de un renglón. Se
+          hizo, se midió (el salto pasó a 0) y **Santiago lo rechazó con razón**:
+          una franja marrón de 103 px abajo de todo, casi siempre vacía, para
+          evitar un movimiento. La cura era peor.
+
+          Lo que quedó no paga alto ninguno: los botones que aparecen y
+          desaparecen se sacaron del flujo. */}
       <div className="relative z-30 shrink-0 border-t-2 filo-dorado bg-[#160f0a]">
-        {/* Cuando "el envido va primero" no se puede, se dice por qué. Antes el
-            botón desaparecía y nada más, y parecía que el juego estaba roto. */}
-        {motivoSinEnvido && (
-          <p className="mx-auto max-w-[760px] px-2 pt-1 text-center font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-wide text-dorado/80">
-            {motivoSinEnvido}
-          </p>
-        )}
-
-        {/* La flor la cantás vos. El botón sólo aparece cuando de verdad se
-            puede: con flor, en la primera baza y sin haber hablado todavía.
-            Si se va la ventana, se pierde (salvo con las ayudas prendidas). */}
-        {(b.flor || b.florCantos.length > 0) && (
-          <div className="mx-auto flex max-w-[760px] flex-wrap gap-1 border-b border-crema/10 p-1">
-            {b.flor && (
-              <BotonCanto canto="flor" onClick={() => hacer({ tipo: "flor" })} tono="dorado">
-                {meCantaronFlor ? "Yo también" : "¡Flor!"}
-              </BotonCanto>
-            )}
-            {b.florCantos.map((canto) => (
-              <BotonCanto key={canto} canto={canto} onClick={() => hacer({ tipo: "flor-canto", canto })} tono="bordo">
-                {canto === "con-flor-envido" ? "Con flor envido" : "Contraflor al resto"}
-              </BotonCanto>
-            ))}
-          </div>
-        )}
-
-        {/* ── LO QUE PODÉS SUBIR ──────────────────────────────────────────
-            Cuando NO hay nada que contestar, esta fila la abre y la cierra el
-            botón "Envido" de abajo, como siempre.
-
-            Cuando SÍ hay algo que contestar, se muestra sola y sin botón que la
-            esconda, porque ahí es donde estaba el bug: te cantaban real envido y
-            la única salida era querer o no querer. Subir es una jugada del
-            truco, no una opción avanzada: si está disponible, se ve. */}
-        {((menuEnvido && b.envidos.length > 0) ||
-          (b.contestando && (b.envidos.length > 0 || b.truco))) && (
-          <div className="mx-auto flex max-w-[760px] flex-wrap items-center gap-1 border-b border-crema/10 p-1">
-            {b.contestando && (
-              <span className="px-1 font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-[0.14em] text-crema/50">
-                o subí
-              </span>
-            )}
-            {b.envidos.map((canto) => (
-              <BotonCanto key={canto} canto={canto} onClick={() => hacer({ tipo: "envido", canto })} tono="dorado">
-                {canto === "falta-envido"
-                  ? `Falta (${laFalta(p.puntos)})`
-                  : canto === "real-envido"
-                    ? "Real envido"
-                    : "Envido"}
-              </BotonCanto>
-            ))}
-            {b.contestando && b.truco && (
-              <BotonCanto canto="truco" onClick={() => hacer({ tipo: "truco" })} tono="bordo">
-                {["Truco", "Retruco", "Vale cuatro"][p.truco.nivel] ?? "Truco"}
-              </BotonCanto>
-            )}
-          </div>
-        )}
-
         {/* HAY DOS BARRAS, Y A PROPÓSITO.
             Cuando hay algo que contestar, la fila entera pasa a ser dos botones
             sólidos, verde y rojo. "Quiero" y "no quiero" se contestan bajo
@@ -1384,7 +1440,12 @@ function Mesa() {
             referencias —texto grande con separadores finos—, que no le compite
             a las cartas. */}
         {b.contestando ? (
-          <div className="mx-auto flex max-w-[760px] gap-1.5 p-1.5">
+          /* `py-0` y no `p-1.5`: con relleno vertical esta fila medía 58px y la
+             de las referencias 48, o sea que la barra —y con ella la mesa
+             entera— daba un saltito de 10px cada vez que el rival te cantaba
+             algo. Ahora los dos botones ocupan el alto entero de la barra, que
+             además es lo que ese momento pide: son la respuesta. */
+          <div className="mx-auto flex max-w-[760px] gap-1.5 px-1.5 py-0">
             {b.quiero && (
               <BotonCanto canto="quiero" onClick={() => hacer({ tipo: "quiero" })} tono="quiero">
                 Quiero
@@ -1412,6 +1473,16 @@ function Mesa() {
           </div>
         )}
       </div>
+
+      {/* ─── El hueco del anuncio ──────────────────────────────────────
+          Abajo del todo, después de los cantos, que es donde va en todos los
+          juegos. Es la cuarta hermana `shrink-0` de la columna: la escena es
+          `flex-1 min-h-0` y cede sola, igual que ya cede cuando a la barra de
+          cantos le aparece una fila.
+
+          Hoy no carga nada de nadie: es un hueco medido. El porqué completo
+          está en el propio componente. */}
+      <EspacioAnuncio donde="mesa" className="relative z-30 border-t border-crema/10 bg-[#0d0906]" />
 
       {p.fase !== "jugando" && carteleada && !eligiendo && (
         <Cartel
@@ -1487,9 +1558,23 @@ function CartaApoyada({ carta, de, ancho }: { carta: CartaType; de: Jugador; anc
         } as React.CSSProperties
       }
     >
-      {/* la sombra proyectada sobre la mesa, que se cierra al aterrizar */}
+      {/* La sombra proyectada sobre la mesa, que se cierra al aterrizar.
+
+          ── ERA UN `blur-[3px]`, Y ADEMÁS ANIMADO ────────────────────────
+          `blur-[3px]` es `filter: blur(3px)` de Tailwind, y el `@keyframes`
+          que lo acompañaba le cambiaba el radio en cada cuadro. Por cada
+          carta jugada —hasta seis en la mesa— eso era una superficie de
+          composición que se rehacía sola. Es de donde salían los píxeles
+          blancos alrededor de las cartas del 4/9/2026.
+
+          Ahora el borde suave lo da un `box-shadow`, que sigue la misma
+          silueta redondeada del `rounded` y NO crea superficie: es
+          exactamente el cambio que ya se le hizo a las cartas de la mano el
+          2/9 (ver `SOMBRA_EN_MANO`). NO VOLVER A PONER UN FILTRO ACÁ:
+          `mirar-mesa.mjs` falla si aparece uno en la escena. */}
       <div
-        className="anim-sombra absolute inset-x-0 bottom-[-3px] top-3 rounded bg-black/70 blur-[3px]"
+        className="anim-sombra absolute inset-x-0 bottom-[-3px] top-3 rounded bg-black/70"
+        style={{ boxShadow: "0 0 7px 2px rgba(0,0,0,0.55)" }}
         aria-hidden="true"
       />
       <Carta
@@ -1650,12 +1735,22 @@ function BotonCanto({
   onClick,
   deshabilitada = false,
   tono = "neutro",
+  suelto = false,
   canto,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   deshabilitada?: boolean;
   tono?: "neutro" | "bordo" | "dorado" | "quiero" | "no";
+  /**
+   * Suelto = flotando sobre la madera, sin la barra atrás.
+   *
+   * Los de la barra ocupan su fila entera (`flex-1`) porque comparten un fondo
+   * y se leen como una fila. Los sueltos miden lo que dice su texto y llevan
+   * sombra propia: sin ella, un botón dorado sobre madera oscura se ve pegado
+   * al fondo y no apoyado encima.
+   */
+  suelto?: boolean;
   /**
    * Agarre para las herramientas.
    *
@@ -1679,7 +1774,14 @@ function BotonCanto({
       data-canto={canto}
       onClick={onClick}
       disabled={deshabilitada}
-      className={`min-h-[46px] flex-1 rounded px-2 font-[family-name:var(--font-ui)] text-[15px] uppercase tracking-wide transition-colors disabled:cursor-default disabled:bg-black/30 disabled:text-crema/25 ${tonos[tono]}`}
+      className={`min-h-[46px] rounded font-[family-name:var(--font-ui)] text-[15px] uppercase tracking-wide transition-colors disabled:cursor-default disabled:bg-black/30 disabled:text-crema/25 ${
+        suelto
+          ? /* Suelto sobre la madera: mide lo que dice, con aire a los costados
+               y una sombra dura que lo despega del fondo. El filo claro de
+               arriba es lo que lo hace parecer una ficha y no una mancha. */
+            "px-3.5 shadow-[0_3px_10px_-1px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.28)]"
+          : "flex-1 px-2"
+      } ${tonos[tono]}`}
     >
       {children}
     </button>

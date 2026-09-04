@@ -1,6 +1,6 @@
 /**
  * Mira la mesa de verdad y verifica LA regla: no scrollea nunca, la barra de
- * cantos nunca tapa tu mano, y adentro de la mano no hay ni un filtro.
+ * cantos nunca tapa tu mano, y en la escena no hay ni un filtro.
  *
  *     npm run dev                       (en otra terminal)
  *     node herramientas/mirar-mesa.mjs
@@ -64,7 +64,7 @@ for (const [w, h] of TAMANOS) {
             d.className.includes?.("filo-dorado") && d.className.includes?.("shrink-0"));
           return b ? b.getBoundingClientRect().top : null;
         })(),
-        /* ── NINGÚN FILTRO ADENTRO DE LA MANO ──────────────────────────────
+        /* ── NINGÚN FILTRO EN LA ESCENA ────────────────────────────────────
            Cuando no es tu turno la mano se apaga con `opacity`, y eso obliga al
            navegador a componer todo ese subárbol en una superficie aparte. Un
            `filter` adentro es una segunda superficie anidada, y ahí es donde
@@ -72,21 +72,56 @@ for (const [w, h] of TAMANOS) {
            banda de rayas del tamaño exacto de la mano, siempre con una sola
            carta —que es cuando el dibujo queda destapado y se ve—.
 
+           ── ESTO MIRABA SÓLO LA MANO, Y POR ESO EL BUG VOLVIÓ ────────────
+           El 4/9/2026 Santiago fotografió píxeles blancos alrededor del mate,
+           del vaso y del mazo. Era el mismo defecto una zona más afuera: el
+           guard cuidaba la mano y en el resto de la escena habían quedado NUEVE
+           filtros, incluido un `@keyframes` que animaba `filter: blur()` cuadro
+           a cuadro. Ahora se mira la escena entera —lo apoyado en la mesa, el
+           medallón con su diálogo y la mano—, que es lo que se ve moverse.
+
+           `backdrop-filter` cuenta igual, y de hecho es peor: obliga a leer de
+           vuelta todo lo que ya está dibujado detrás.
+
            Esto NO reproduce el glitch: Chromium acá usa SwiftShader y dibuja
            todo bien. Lo que hace es cuidar la condición que lo causaba, que es
            lo único comprobable desde una computadora. Un `drop-shadow` o un
-           `feGaussianBlur` que vuelva a colarse en la mano falla acá y no en el
-           teléfono de alguien. */
+           `feGaussianBlur` que vuelva a colarse falla acá y no en el teléfono de
+           alguien.
+
+           ── EL ÚNICO QUE QUEDA EN TODA LA MESA, Y POR QUÉ ────────────────
+           `rival-foco`: un `feGaussianBlur` de σ=1,5 sobre el cuerpo del rival,
+           que es lo que lo pone a un metro y fuera de foco. Ése no se puede
+           cambiar por un degradé —un degradé sabe dibujar una elipse borrosa,
+           no un cuerpo entero borroso— y no está en esta lista: cuelga del
+           cajón del rival, debajo de la tabla, fuera de todo lo que se apaga o
+           se anima, así que se rasteriza una vez y no se vuelve a tocar.
+
+           Su hermano `rival-sombra-sola` (σ=9, con región al 180%, o sea que
+           se metía 80px DENTRO de la mesa) SÍ se fue el 4/9/2026: eran dos
+           elipses, y desenfocar una elipse da un degradé radial. La cuenta está
+           en `Sombra.tsx` y la comparte `Escenario.tsx`.
+
+           Si algún día sale basura ARRIBA, `rival-foco` es lo siguiente a
+           mirar, y la salida sería hornear al rival como se hornea la mesa. */
         filtros: (() => {
-          const zona = document.querySelector('[data-mano="apagable"]');
-          if (!zona) return null;
+          const ZONAS = ['[data-mesa="tabla"]', "[data-encima]", '[data-mano="apagable"]'];
           const con = [];
-          for (const el of [zona, ...zona.querySelectorAll("*")]) {
-            const f = getComputedStyle(el).filter;
-            if (f && f !== "none") con.push(`${el.tagName.toLowerCase()}: ${f}`);
+          let alguna = false;
+          for (const sel of ZONAS) {
+            const zona = document.querySelector(sel);
+            if (!zona) continue;
+            alguna = true;
+            for (const el of [zona, ...zona.querySelectorAll("*")]) {
+              const cs = getComputedStyle(el);
+              if (cs.filter && cs.filter !== "none")
+                con.push(`${sel} ${el.tagName.toLowerCase()}: ${cs.filter}`);
+              if (cs.backdropFilter && cs.backdropFilter !== "none")
+                con.push(`${sel} ${el.tagName.toLowerCase()}: backdrop ${cs.backdropFilter}`);
+            }
+            if (zona.querySelector("filter")) con.push(`${sel}: hay un <filter> declarado`);
           }
-          if (zona.querySelector("filter")) con.push("hay un <filter> declarado");
-          return con;
+          return alguna ? con : null;
         })(),
       }));
       const scroll = m.doc > m.vis || m.body > m.vis;
@@ -95,7 +130,7 @@ for (const [w, h] of TAMANOS) {
       if (scroll || tapada || conFiltro) {
         fallos++;
         console.log(`FALLA ${w}x${h} [${etiqueta}] scroll=${scroll} manoTapada=${tapada} ` +
-          `filtroEnLaMano=${conFiltro} ` +
+          `filtroEnLaEscena=${conFiltro} ` +
           `doc=${m.doc} vis=${m.vis} manoAbajo=${m.mano?.abajo?.toFixed(0)} barraArriba=${m.barra?.toFixed(0)}`);
         if (conFiltro) console.log(`  filtros: ${m.filtros.join(" | ")}`);
         await pag.screenshot({ path: `${SALIDA}/falla-${w}x${h}-${etiqueta}.png` });
@@ -128,7 +163,7 @@ for (const [w, h] of TAMANOS) {
 await nav.close();
 console.log(
   fallos === 0
-    ? "\nTODO OK: la mesa no scrollea, la barra nunca tapa la mano y no hay filtros adentro de la mano."
+    ? "\nTODO OK: la mesa no scrollea, la barra nunca tapa la mano y no hay ni un filtro en la escena."
     : `\n${fallos} FALLAS`,
 );
 process.exit(fallos === 0 ? 0 : 1);

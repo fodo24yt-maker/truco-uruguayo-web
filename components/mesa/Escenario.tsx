@@ -25,6 +25,7 @@
 import type { Ambiente } from "@/lib/ambientes";
 import type { Cara, Contextura, Detalle, Prenda } from "@/lib/caras";
 import { ESCENAS } from "@/lib/escenas";
+import { ALCANCE, PARADAS_CAIDA, erf } from "@/components/mesa/Sombra";
 
 /**
  * El ambiente detrás de la mesa: el boliche, la feria, la rambla.
@@ -435,6 +436,29 @@ export function RivalSentado({
  *
  * Es una sola elipse ancha y baja, pegada al canto lejano.
  */
+/* ── ACÁ HABÍA UN `feGaussianBlur` DE σ=9, Y SE FUE EL 4/9/2026 ─────────────
+   La región del filtro era `-40% -40% 180% 180%`: una superficie intermedia
+   del 180% del cuerpo del rival, o sea que se metía casi 80 px DENTRO de la
+   mesa. Justo la franja donde Santiago viene viendo manchitas en el celular.
+
+   Es la misma jugada que ya se le hizo a `Sombra.tsx` este mismo día: dos
+   elipses desenfocadas no necesitan un desenfoque de verdad, porque el
+   resultado de desenfocar una elipse ES un degradé radial. La caja crece
+   2,5σ por lado —hasta donde llega la gaussiana antes de apagarse— y la
+   opacidad del centro se corrige por `erf(b/(σ√2))`, que es la parte que el
+   desenfoque repartía hacia afuera.
+
+   Las paradas del degradé y la corrección salen importadas de `Sombra.tsx`:
+   la cuenta vive en un solo lugar a propósito. */
+const SIGMA_RIVAL = 9;
+const CRECE = ALCANCE * SIGMA_RIVAL;
+/** Las dos opacidades de antes, corregidas por lo que el desenfoque repartía.
+ *  `b` es el semieje corto de cada elipse, que es por donde el borrón manda. */
+const PARADAS = [
+  ["rival-sombra-lejos", 0.55 * erf(15 / (SIGMA_RIVAL * Math.SQRT2))],
+  ["rival-sombra-cerca", 0.55 * 0.8 * erf(7 / (SIGMA_RIVAL * Math.SQRT2))],
+] as const;
+
 export function SombraRival({ ficha }: { ficha: Cara }) {
   const H = MEDIA_ESPALDA[ficha.contextura];
   return (
@@ -444,15 +468,19 @@ export function SombraRival({ ficha }: { ficha: Cara }) {
       aria-hidden="true"
     >
       <defs>
-        <filter id="rival-sombra-sola" x="-40%" y="-40%" width="180%" height="180%">
-          <feGaussianBlur stdDeviation="9" />
-        </filter>
+        {PARADAS.map(([nombre, alfa]) => (
+          <radialGradient key={nombre} id={nombre}>
+            {PARADAS_CAIDA.map(([donde, cuanto]) => (
+              <stop key={donde} offset={`${donde * 100}%`} stopColor="#000" stopOpacity={alfa * cuanto} />
+            ))}
+          </radialGradient>
+        ))}
       </defs>
-      <g fill="rgba(0,0,0,0.55)" filter="url(#rival-sombra-sola)">
-        <ellipse cx={EJE} cy={214} rx={1.12 * H} ry={15} />
+      <g>
+        <ellipse cx={EJE} cy={214} rx={1.12 * H + CRECE} ry={15 + CRECE} fill="url(#rival-sombra-lejos)" />
         {/* y una segunda, más chica y más oscura, pegada al cuerpo: es la de
             contacto, la que dice dónde termina él y empieza la mesa */}
-        <ellipse cx={EJE} cy={206} rx={1.0 * H} ry={7} opacity="0.8" />
+        <ellipse cx={EJE} cy={206} rx={1.0 * H + CRECE} ry={7 + CRECE} fill="url(#rival-sombra-cerca)" />
       </g>
     </svg>
   );

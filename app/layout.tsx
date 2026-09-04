@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Oswald, Source_Sans_3, Yeseva_One } from "next/font/google";
 import Link from "next/link";
 import { BarraApp } from "@/components/BarraApp";
+import { EspacioAnuncio } from "@/components/EspacioAnuncio";
+import { PieLegales } from "@/components/PieLegales";
 import { BotonAtrasAndroid } from "@/components/BotonAtrasAndroid";
 import { NOMBRE_SITIO, URL_SITIO } from "@/lib/sitio";
 import "./globals.css";
@@ -141,28 +143,26 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         <main className="flex min-h-0 flex-1 flex-col">{children}</main>
 
-        <footer className="madera mt-16 border-t-2 filo-dorado px-4 py-8 text-center text-sm text-crema/60">
-          <p className="mx-auto max-w-lg">
-            El único lugar donde aprendés truco uruguayo y lo practicás al mismo
-            tiempo. Gratis.
-          </p>
-          <nav className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 font-[family-name:var(--font-ui)] text-xs uppercase tracking-wide">
-            <Link href="/aprender" className="hover:text-crema">
-              Aprender
-            </Link>
-            <span aria-hidden="true" className="text-crema/25">
-              ·
-            </span>
-            <Link href="/legales/privacidad" className="hover:text-crema">
-              Privacidad
-            </Link>
-            <span aria-hidden="true" className="text-crema/25">
-              ·
-            </span>
-            <Link href="/legales/terminos" className="hover:text-crema">
-              Términos
-            </Link>
-          </nav>
+        {/* ── EL PIE ────────────────────────────────────────────────────
+            Achicado el 4/9/2026. Medía 106px y arrancaba con `mt-16`, o sea
+            que al final de cada lección había 170px de pie: en un celular eso
+            es un tercio de pantalla para repetir un eslogan.
+
+            Y SE FUE EL ENLACE A "APRENDER". Es navegación duplicada: la barra
+            de arriba tiene ese atajo en todas las pantallas, así que el pie
+            ofrecía ir a Aprender estando en Aprender.
+
+            Y LOS LEGALES SE FUERON DE CASI TODAS LAS PANTALLAS. Quedan en la
+            parte de aprender y adentro de las propias páginas legales: Play
+            Store pide que existan y se encuentren, no que estén repetidos en
+            cada pantalla. El detalle está en `PieLegales.tsx`.
+
+            En el resto del sitio el pie es sólo el hueco del anuncio. */}
+        <footer className="madera mt-[clamp(1.5rem,5vh,4rem)] border-t-2 filo-dorado px-4 pb-[clamp(0.75rem,2vh,1.5rem)] pt-[clamp(0.75rem,2vh,1.5rem)] text-center text-sm text-crema/60">
+          {/* El hueco del anuncio, arriba de los legales: es el pie de la app y
+              es uno de los tres lugares donde va. Ver `EspacioAnuncio.tsx`. */}
+          <EspacioAnuncio donde="sitio" className="mb-[clamp(0.75rem,2vh,1.25rem)]" />
+          <PieLegales />
         </footer>
       </body>
     </html>

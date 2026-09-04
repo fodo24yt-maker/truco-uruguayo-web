@@ -4,6 +4,8 @@
  *     node herramientas/celular-usb.mjs            → vista previa EN VIVO en el celular
  *     node herramientas/celular-usb.mjs --apk      → compila el APK, lo instala y lo abre
  *     node herramientas/celular-usb.mjs --compilar → sólo deja el .apk, sin instalar
+ *     node herramientas/celular-usb.mjs --foto     → una foto del celular, sin pérdida
+ *     node herramientas/celular-usb.mjs --vigilar  → 5 fotos seguidas y las compara
  *
  * ── El problema que resuelve ──────────────────────────────────────────────
  *
@@ -37,6 +39,24 @@
  * **`--apk`** compila la app de verdad y te la instala. Tarda minutos, no
  * segundos, y es lo único que prueba lo que sólo existe adentro de un APK.
  *
+ * **`--foto` y `--vigilar`** son para MEDIR, y nacieron de un error caro.
+ *
+ * El 4/9/2026 se diagnosticaron dos veces seguidas unas manchitas de la mesa
+ * mirando capturas que habían pasado por el espejo de pantalla de Windows. La
+ * segunda vez se midió: en el recorte del mapa, el 100% de los píxeles de
+ * color imposible estaba pegado a un borde de mucho contraste, que es la firma
+ * de un compresor de imagen y no la de un fallo de dibujo. O sea que parte de
+ * lo que se estaba arreglando **lo había inventado el espejo**.
+ *
+ * `adb exec-out screencap -p` saca la imagen del framebuffer del teléfono, sin
+ * pérdida y a resolución real: no pasa por ningún códec ni por ningún
+ * reescalado. Es la única foto sobre la que vale la pena decidir algo.
+ *
+ * `--vigilar` saca varias seguidas de una pantalla quieta y las compara con
+ * `herramientas/motas.mjs`. En una pantalla quieta, todo píxel que cambia es
+ * basura: es un detector que no necesita saber nada del diseño, y por eso no
+ * se puede engañar solo.
+ *
  * ── Qué hace falta tener ──────────────────────────────────────────────────
  *
  * En el celular: Opciones de desarrollador → Depuración por USB. Y aceptar el
@@ -46,7 +66,7 @@
  * (fuera del repositorio, porque son 1,5 GB y no son código nuestro).
  */
 
-import { existsSync, copyFileSync, rmSync } from "node:fs";
+import { existsSync, copyFileSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -58,6 +78,12 @@ const APK = "android/app/build/outputs/apk/debug/app-debug.apk";
 const args = process.argv.slice(2);
 const soloCompilar = args.includes("--compilar");
 const desinstalar = args.includes("--desinstalar");
+const unaFoto = args.includes("--foto");
+const vigilar = args.includes("--vigilar");
+const j = args.indexOf("--vigilar");
+/* Cinco fotos alcanzan: con dos ya se ve si algo se mueve, y cinco dan cuatro
+   comparaciones sin que la espera se vuelva molesta. */
+const cuantasFotos = j === -1 ? 5 : Number(args[j + 1]) || 5;
 const conApk = args.includes("--apk") || soloCompilar;
 const i = args.indexOf("--puerto");
 const puerto = i === -1 ? 3000 : Number(args[i + 1]) || 3000;
@@ -259,6 +285,67 @@ function enVivo(celular) {
   console.log("  físico de atrás ni pantalla de arranque. Para eso, --apk.");
 }
 
+/* ── Fotos del framebuffer ─────────────────────────────────────────────────
+   `exec-out` y no `shell`: `adb shell` pasa la salida por una consola que en
+   Windows le cambia los saltos de línea, y un PNG con los bytes cambiados no
+   se abre. `exec-out` entrega los bytes crudos.
+
+   Y sin `encoding`, para que `spawnSync` devuelva un Buffer y no un texto: un
+   PNG interpretado como UTF-8 se corrompe sin avisar. */
+function sacarFoto(destino) {
+  const r = spawnSync(ADB, ["exec-out", "screencap", "-p"], { maxBuffer: 64 * 1024 * 1024 });
+  const png = r.stdout;
+  if (!png || png.length < 1000 || png[0] !== 0x89 || png[1] !== 0x50)
+    morir("El celular no devolvió una foto.", (r.stderr || "").toString().trim());
+  mkdirSync(path.dirname(destino), { recursive: true });
+  writeFileSync(destino, png);
+  return png.length;
+}
+
+async function fotos(celular, cuantas) {
+  const modelo = /model:(\S+)/.exec(celular.linea)?.[1] ?? celular.serie;
+  console.log(`✓ celular: ${modelo}`);
+  const carpeta = path.join("capturas/celular", new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-"));
+  const hechas = [];
+  for (let i = 1; i <= cuantas; i++) {
+    const destino = path.join(carpeta, `foto-${i}.png`);
+    const bytes = sacarFoto(destino);
+    hechas.push(destino);
+    console.log(`  ${i}/${cuantas}  ${destino}  (${(bytes / 1024).toFixed(0)} kB)`);
+    /* Un respiro entre foto y foto: sin él salen tan pegadas que ni las
+       animaciones de verdad alcanzan a moverse, y la comparación no dice nada. */
+    if (i < cuantas) spawnSync("sleep", ["0.7"]);
+  }
+  if (cuantas === 1) {
+    console.log(`\n  Para contarle las motas:  node herramientas/motas.mjs ${hechas[0]}\n`);
+    return;
+  }
+  console.log("\n── medido ────────────────────────────────────────────────────");
+  const { motasDe, movimiento, pintarCambios } = await import("./motas.mjs");
+  for (const f of hechas) {
+    const m = await motasDe(f);
+    console.log(`  ${path.basename(f)}  ${m.ancho}x${m.alto}  ${String(m.motas).padStart(4)} motas`);
+  }
+  let sospechosas = 0;
+  for (let i = 1; i < hechas.length; i++) {
+    const r = await movimiento(hechas[i - 1], hechas[i]);
+    sospechosas += r.motas;
+    const mapa = path.join(carpeta, `cambios-${i}.png`);
+    await pintarCambios(hechas[i], r.marca, mapa);
+    console.log(`  ${i}→${i + 1}: ${r.cambiados} px cambiados · ${r.motas} motas sueltas · ${r.grandes.length} manchas grandes → ${mapa}`);
+  }
+  console.log("");
+  if (sospechosas === 0) {
+    console.log("  ✓ Ningún puntito suelto cambió de lugar. Lo que dibuja el");
+    console.log("    teléfono es estable: si en una captura se veía sucio, la");
+    console.log("    suciedad la puso el espejo de pantalla, no la app.\n");
+  } else {
+    console.log(`  ⚠ ${sospechosas} motas sueltas cambiaron de lugar entre fotos.`);
+    console.log("    En una pantalla quieta eso es basura de dibujo: mirá los");
+    console.log("    mapas de cambios para ver alrededor de qué elemento cae.\n");
+  }
+}
+
 // ── Andar ───────────────────────────────────────────────────────────────────
 
 if (desinstalar) {
@@ -267,6 +354,8 @@ if (desinstalar) {
   console.log(`\n⚠ Esto borra la app Y el progreso de la gira guardado en ella.`);
   const r = adb("uninstall", PAQUETE);
   console.log((r.stdout || r.stderr || "").trim());
+} else if (unaFoto || vigilar) {
+  await fotos(elCelular(), vigilar ? cuantasFotos : 1);
 } else if (soloCompilar) {
   compilar();
   console.log(`\nPara instalarlo:  node herramientas/celular-usb.mjs --apk\n`);

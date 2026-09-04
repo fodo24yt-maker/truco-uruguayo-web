@@ -17,6 +17,15 @@
 # puede regenerar.
 *.jks
 *.keystore
+# La contraseña de esa clave. Gradle la lee de acá, así que el archivo tiene la
+# clave en texto plano: filtrarlo es filtrar la firma.
+keystore.properties
+# La configuración de los servicios de Google (AdMob, si algún día se prende).
+# Trae el id del proyecto y las claves de las APIs que estén habilitadas.
+google-services.json
+# Dónde está el SDK de Android en ESTA máquina. No es un secreto pero tiene la
+# ruta de casa adentro, y este repo es público.
+local.properties
 id_rsa*
 id_ed25519*
 .ssh/

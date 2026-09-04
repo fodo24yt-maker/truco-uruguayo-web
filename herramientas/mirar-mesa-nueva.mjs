@@ -120,6 +120,15 @@ const medir = (pag) =>
       objetos: [...document.querySelectorAll("[data-mesa]")]
         .filter((el) => el.dataset.mesa !== "tabla")
         .map((el) => ({ que: el.dataset.mesa, ...caja(el) })),
+      /* LAS CARTAS DE ADENTRO DEL MAZO, aparte.
+         No alcanza con el rectángulo de `[data-mesa="mazo"]`: el cartelito de
+         la muestra vive ADENTRO de él, así que compararlos siempre daría que se
+         cruzan. Lo que hay que mirar son las cartas de verdad —la pila y la
+         muestra torcida—, que no llevan `data-mesa` propio. */
+      cartasDelMazo: (() => {
+        const mazo = document.querySelector('[data-mesa="mazo"]');
+        return mazo ? [...mazo.querySelectorAll("svg")].map(caja) : [];
+      })(),
     };
   });
 
@@ -178,6 +187,31 @@ for (const [ancho, alto, esperado] of TAMANOS) {
     for (const o of m.objetos) {
       if (o !== mando && seCruzan(mando, o)) problemas.push(`${o.que} se le monta a ${conArticulo(mando.que)}`);
     }
+  }
+
+  /* 5. EL CARTELITO DE LA MUESTRA NO PUEDE QUEDAR DEBAJO DEL MAZO.
+     Es el bug del 4/9/2026: "MUESTRA / 10 DE ESPADA" pisado por el dorso rojo y
+     sin poder leerse, y encima en distinto lugar según de quién fuera el
+     reparto. Eran dos cosas: la caja del mazo tenía el alto escrito a mano y no
+     le entraba la pila —se salía 21px en un celular y 35px en una compu—, y la
+     pila era un div de alto cero, así que su `-translate-y-1/2` no la centraba.
+
+     Se comprueba contra las CARTAS y no contra `[data-mesa="mazo"]`, que
+     contiene al propio cartelito. Ver el porqué en `medir`. */
+  const cartel = m.objetos.find((o) => o.que === "muestra-cartel");
+  if (cartel) {
+    for (const c of m.cartasDelMazo) {
+      if (seCruzan(cartel, c)) {
+        problemas.push(
+          `el cartelito de la muestra queda debajo de una carta del mazo ` +
+            `(cartel ${cartel.arriba.toFixed(0)}..${cartel.abajo.toFixed(0)}, ` +
+            `carta ${c.arriba.toFixed(0)}..${c.abajo.toFixed(0)})`,
+        );
+        break;
+      }
+    }
+  } else {
+    problemas.push('no se encontró [data-mesa="muestra-cartel"]: ¿se le sacó el agarre al cartelito?');
   }
 
   const etiqueta = `${ancho}x${alto}`;
@@ -480,10 +514,63 @@ console.log("\nlos objetos extremos de la gira:");
   }
 }
 
+/* ══ LA MESA NO SE MUEVE CUANDO CANTÁS ══════════════════════════════════════
+   Medido el 4/9/2026: al abrir el envido la barra pasaba de 48 a 103 px y la
+   mesa entera saltaba 43 px —el 12% de la mesa a 320x568—. El mate, el mazo y
+   las cartas se corrían de golpe justo cuando estás decidiendo si querés.
+
+   El primer arreglo fue reservarle a la barra el alto de un renglón. Funcionó
+   —el salto dio 0— y se descartó igual: dejaba una franja marrón de 103px
+   abajo de todo, casi siempre vacía. La cura era peor que la enfermedad.
+
+   Lo que quedó es que los botones que aparecen y desaparecen —la flor, lo que
+   podés subir— **salieron del flujo**: flotan sobre tus cartas, con su propio
+   color y su propia sombra, y no le cambian el alto a nada. La barra de abajo
+   es siempre una sola fila de 48px.
+
+   Esta comprobación es la que avisa si alguien vuelve a meter algo que crezca
+   adentro de la barra.
+
+   Se comprueba sobre el envido porque es el único renglón que se abre sin
+   depender de lo que haga el rival. */
+console.log("\n── la mesa no se mueve al cantar ─────────────────────────────");
+for (const [ancho, alto] of TAMANOS) {
+  const ctx = await nav.newContext({ viewport: { width: ancho, height: alto } });
+  const pag = await ctx.newPage();
+  await abrir(pag);
+  const etiqueta = `${ancho}x${alto}`;
+  const altoDeLaMesa = () =>
+    pag.evaluate(() => {
+      const t = document.querySelector('[data-mesa="tabla"]');
+      return t ? Math.round(t.getBoundingClientRect().height) : null;
+    });
+  const antes = await altoDeLaMesa();
+  const abridor = pag.getByRole("button", { name: /^Envido$|^Subir$/ });
+  if (!(await abridor.count())) {
+    /* En esta mano no había envido para cantar. No es una falla: es que la
+       partida salió de otra manera. Se dice, para que no parezca que pasó. */
+    console.log(`  ${etiqueta.padEnd(12)} —  esta mano no tenía envido para abrir`);
+    await ctx.close();
+    continue;
+  }
+  await abridor.first().click().catch(() => {});
+  await pag.waitForTimeout(400);
+  const despues = await altoDeLaMesa();
+  const salto = Math.abs((antes ?? 0) - (despues ?? 0));
+  if (salto > 0) {
+    fallos++;
+    console.log(`FALLA ${etiqueta.padEnd(12)} la mesa saltó ${salto}px al abrir el envido (${antes} → ${despues})`);
+    await pag.screenshot({ path: path.join(SALIDA, `falla-salto-${etiqueta}.png`) });
+  } else {
+    console.log(`  ${etiqueta.padEnd(12)} OK  la mesa se queda en ${antes}px`);
+  }
+  await ctx.close();
+}
+
 await nav.close();
 console.log(
   fallos === 0
-    ? "\nTODO OK: nada se le monta al rival, nada se solapa."
+    ? "\nTODO OK: nada se le monta al rival, nada se solapa, y la mesa no se mueve."
     : `\n${fallos} PROBLEMAS`,
 );
 process.exit(fallos === 0 ? 0 : 1);

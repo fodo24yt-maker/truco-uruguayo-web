@@ -214,11 +214,18 @@ footer {
 }
 
 /* Cada departamento del mapa de la gira. Al pasar por encima se aclara apenas:
-   alcanza para saber cuál vas a tocar, sin que el mapa parpadee. */
-.depto {
-  transition: filter 140ms ease-out;
-}
+   alcanza para saber cuál vas a tocar, sin que el mapa parpadee.
+
+   ── LA TRANSICIÓN VA ADENTRO DEL `@media`, DESDE EL 4/9/2026 ─────────────
+   Estaba afuera, o sea que los 19 departamentos declaraban una transición de
+   `filter` incluso en un celular, donde el `:hover` que la usa NO PUEDE
+   dispararse nunca. Declarar una propiedad animable no es gratis: le avisa al
+   navegador que ese elemento puede necesitar su propia superficie.
+   Es la misma familia de problemas que la mancha de la mano del 1/9. */
 @media (hover: hover) {
+  .depto {
+    transition: filter 140ms ease-out;
+  }
   .depto:hover {
     filter: brightness(1.14);
   }
@@ -321,22 +328,32 @@ footer {
   animation: tirar-carta 380ms cubic-bezier(0.18, 0.9, 0.28, 1) both;
 }
 
-/* La sombra se agranda mientras la carta viaja y se cierra al aterrizar */
+/* La sombra se agranda mientras la carta viaja y se cierra al aterrizar.
+
+   ── ACÁ SE ANIMABA UN `filter: blur()`, Y ES LO PEOR QUE HABÍA ────────────
+   Iba de 9px a 4 a 3, o sea que el navegador tenía que REHACER el desenfoque
+   en cada cuadro, con un radio distinto cada vez, sobre un buffer aparte. Es
+   la misma familia del bug del 1/9 —filtro adentro de una superficie
+   compuesta— pero peor, porque el filtro cambiaba: la superficie no se podía
+   guardar ni una sola vez. Eso es lo que Santiago describió como "va variando
+   dependiendo de la animación" el 4/9/2026.
+
+   El desenfoque ahora es un `box-shadow` fijo en el propio elemento (ver
+   `CartaApoyada`), y la sensación de "sombra que se cierra al aterrizar" la
+   hace sola la ESCALA, que es lo que ya estaba: de 1,5 a 0,94. Escalar es una
+   propiedad de composición y no cuesta un repintado. */
 @keyframes sombra-aterriza {
   0% {
     opacity: 0;
     transform: scale(1.5);
-    filter: blur(9px);
   }
   62% {
     opacity: 0.5;
     transform: scale(1);
-    filter: blur(4px);
   }
   100% {
     opacity: 0.38;
     transform: scale(0.94);
-    filter: blur(3px);
   }
 }
 .anim-sombra {
@@ -485,35 +502,47 @@ footer {
   animation: pop 140ms ease-out both;
 }
 
-/* ─── Prosa de las lecciones. Sin plugin de typography: son ocho reglas ─────── */
+/* ─── Prosa de las lecciones. Sin plugin de typography: son ocho reglas ───────
+
+   ── ESTABA MEDIDA PARA UNA COMPUTADORA, Y SE ATÓ AL CELULAR EL 4/9/2026 ────
+   Los títulos iban a 1,5rem con 2,25rem de aire arriba y los párrafos a
+   1,0625rem: en una pantalla de 320 de ancho eso hace renglones de siete
+   palabras, y la lección de la flor medía casi NUEVE pantallas de largo. Los
+   números de la compu no cambian —el techo de cada `clamp` es el valor que
+   había—; lo que cambia es que en un celular chico bajan.
+
+   Va en `vw` y no en `vh` como el resto del proyecto, y es la única parte donde
+   corresponde: acá el problema SÍ es el ancho. Un párrafo no tiene que entrar
+   en la pantalla, tiene que tener un renglón legible, y el largo del renglón
+   depende de lo ancha que sea. */
 .prosa h2 {
   font-family: var(--font-display);
-  font-size: 1.5rem;
+  font-size: clamp(1.25rem, 5vw, 1.5rem);
   line-height: 1.25;
   color: var(--color-bordo);
-  margin-top: 2.25rem;
-  margin-bottom: 0.75rem;
+  margin-top: clamp(1.5rem, 5vw, 2.25rem);
+  margin-bottom: 0.6rem;
 }
 .prosa h3 {
   font-family: var(--font-ui);
-  font-size: 1.05rem;
+  font-size: clamp(0.95rem, 3.4vw, 1.05rem);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--color-tinta);
   opacity: 0.85;
-  margin-top: 1.75rem;
+  margin-top: clamp(1.25rem, 4vw, 1.75rem);
   margin-bottom: 0.5rem;
 }
 .prosa p {
-  margin-bottom: 1rem;
-  font-size: 1.0625rem;
-  line-height: 1.7;
+  margin-bottom: clamp(0.8rem, 2.6vw, 1rem);
+  font-size: clamp(0.95rem, 3.4vw, 1.0625rem);
+  line-height: 1.65;
 }
 .prosa ul,
 .prosa ol {
-  margin: 0 0 1.25rem 1.25rem;
-  font-size: 1.0625rem;
-  line-height: 1.7;
+  margin: 0 0 clamp(1rem, 3vw, 1.25rem) clamp(1rem, 3vw, 1.25rem);
+  font-size: clamp(0.95rem, 3.4vw, 1.0625rem);
+  line-height: 1.65;
 }
 .prosa ul {
   list-style: disc;
