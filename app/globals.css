@@ -121,6 +121,25 @@ body {
   );
 }
 
+/* ── LA ESCENA ES LA UNIDAD DE MEDIDA, DESDE EL 5/9/2026 ───────────────────
+   Todo lo apoyado en la mesa medía en `vh`, o sea contra la VENTANA, pero vive
+   adentro de la ESCENA, que es lo que queda después de la barra de arriba, la
+   de cantos y el hueco del anuncio. Por eso el mismo número se veía bien de un
+   lado y perdido del otro, y por eso hubo que escribir DOS tablas de medidas,
+   una para el celular y otra para la compu.
+
+   `container-type: size` convierte a la escena en la unidad: `cqw` es 1% de su
+   ancho y `cqh` 1% de su alto. Con eso las dos tablas se pudieron fusionar en
+   una sola, en `app/jugar/mesa/page.tsx`.
+
+   OJO: `container-type: size` implica `contain: size`, o sea que el alto de la
+   escena deja de depender de lo que tiene adentro. Acá eso ya era así —todo lo
+   de adentro es `absolute` y el alto se lo da el flex de afuera—, pero si algún
+   día algo tiene que empujarla desde adentro, va a dejar de funcionar. */
+.escena {
+  container-type: size;
+}
+
 /* La perspectiva de la mesa YA NO SE HACE ACÁ.
    Era un `rotateX(34deg)` sobre un div, con las cartas planas encima: por eso
    todo se veía del mismo tamaño y el mazo del fondo medía lo mismo que tu mano.

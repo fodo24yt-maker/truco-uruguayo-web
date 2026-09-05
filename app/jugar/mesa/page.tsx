@@ -18,7 +18,7 @@ import {
 import { DedosAtras, PulgarAdelante } from "@/components/mesa/Manos";
 import { SombraApoyada } from "@/components/mesa/Sombra";
 import { Medallon } from "@/components/mesa/Medallon";
-import { Marcador, MarcadorBarra } from "@/components/mesa/Marcador";
+import { MarcadorBarra } from "@/components/mesa/Marcador";
 import { Mazo } from "@/components/mesa/Mazo";
 import { type Carta as CartaType, esPieza } from "@/lib/motor/baraja";
 import { decidirJugada } from "@/lib/motor/bot";
@@ -43,11 +43,10 @@ import { fichaVacia, observarMano } from "@/lib/motor/lectura";
 import { explicarEnvido, valorEnvido } from "@/lib/motor/tantos";
 import { acentoDe, ambienteDe, objetoDe } from "@/lib/ambientes";
 import { ALTURA, APOYO, ObjetoDeMesa, PROPORCION } from "@/components/mesa/Objetos";
-import { escalaEnMesa, estiloEnMesa } from "@/lib/mesa-perspectiva";
+import { estiloEnMesa } from "@/lib/mesa-perspectiva";
 import { ESCENAS } from "@/lib/escenas";
 import { caraDe } from "@/lib/caras";
 import { porSlugDeDepartamento } from "@/lib/gira";
-import { usaPantallaAncha } from "@/lib/pantalla";
 import { botonera } from "@/lib/botonera";
 import { tantosAlCierre } from "@/lib/tantos-al-cierre";
 import { anotarPartida, guardarPreferencia, leerProgreso } from "@/lib/progreso";
@@ -116,18 +115,34 @@ const ESPERA_ANTES_DE_BARRER = 2000;
  */
 const DURA_BARRIDO = 760;
 
-/* ═══ LOS DOS DISEÑOS DE LA MESA ═══════════════════════════════════════════
-   Antes había un solo juego de números, medido todo en `vh`. Andaba en el
-   celular y en la compu se veía perdido: el mazo pasaba del 22% del ancho de la
-   escena al 7%, porque en `vh` mide los mismos píxeles pero la escena es tres
-   veces más ancha. Eso fue el "el mazo es muy chico" del feedback.
+/* ═══ EL DISEÑO DE LA MESA, QUE ES UNO SOLO ════════════════════════════════
+   Hasta el 5/9/2026 fueron DOS tablas de números con los mismos campos, una
+   para el celular y otra para la compu, y `usaPantallaAncha()` elegía. Es la
+   simplificación que pidió Santiago, y al hacerla apareció que las dos tablas
+   nunca fueron dos diseños: eran **el mismo objeto medido en dos ejes**.
 
-   Así que son dos, con los MISMOS campos, uno al lado del otro. Que tengan la
-   misma forma no es prolijidad: es lo que obliga a que agregar un objeto sea
-   decidir dónde va en las dos, en vez de agregarlo en una y olvidarse.
+   ── Por qué había dos, y por qué ya no ────────────────────────────────────
+   Los objetos medían en `vh`, o sea contra la VENTANA, pero viven adentro de
+   la ESCENA. Por eso el mazo pasaba del 22% del ancho de la escena al 7% con
+   el mismo número —el "el mazo es muy chico" del feedback— y hubo que escribir
+   una segunda tabla a mano.
 
-   Cuál se usa lo decide `usaPantallaAncha()`, por PROPORCIÓN de la ventana y no
-   por ancho: ver el porqué en `lib/pantalla.ts`.
+   Ahora la escena es la unidad (`container-type: size` en `.escena`, ver
+   `app/globals.css`) y cada medida es:
+
+       min(A cqw, B cqh)
+
+   o sea: **lo que entre por ancho, o lo que entre por alto, lo que sea menos**.
+   En un celular —alto y angosto— manda el ancho; en una compu —ancha y baja—
+   manda el alto. Es una sola regla, y da los dos tamaños que antes había que
+   escribir por separado.
+
+   NO ES UN PROMEDIO NI UN PUNTO MEDIO. Se derivó midiendo las dos tablas
+   viejas en los seis tamaños y quedó dentro del 5% de cada una:
+
+       mazo   celular 85,2 px → 86,4    ·  compu 161,2 px → 156,6
+       mate   celular 73,8    → 73,6    ·  compu 117,8    → 113,6
+       baza   celular 45,4    → 44,8    ·  compu  80,6    →  75,8
 
    ── Cómo se leen los números ──────────────────────────────────────────────
    · `u` va SIEMPRE del lado izquierdo; `ladoMazo` lo espeja cuando hace falta.
@@ -137,9 +152,9 @@ const DURA_BARRIDO = 760;
 
    NO SE MUEVEN A OJO. Los fija `herramientas/mirar-mesa-nueva.mjs`, que saca el
    rectángulo de verdad en el navegador, en las tres pantallas de celular y en
-   las tres de compu, y falla si algo cruza el canto o se le monta a la libreta.
-   En este proyecto ya se calculó dos veces en papel y las dos salió mal: el
-   `clamp` de cada objeto, el alto de la ventana y la escala en perspectiva se
+   las tres de compu, y falla si algo cruza el canto o se le monta a otra cosa.
+   En este proyecto ya se calculó dos veces en papel y las dos salió mal: la
+   medida de cada objeto, el tamaño de la escena y la escala en perspectiva se
    multiplican y no se pueden separar leyendo. */
 interface DisenoDeMesa {
   /**
@@ -154,44 +169,17 @@ interface DisenoDeMesa {
    * El ancho de UNA carta de tu mano. De acá cuelga toda la zona de abajo: el
    * abanico, el dibujo de la mano y el hueco que dejan.
    *
-   * Va atado al alto de la ventana y no a puntos de corte de ancho: el problema
-   * real nunca fue la pantalla angosta sino la BAJA —una ventana de 620px de
-   * alto dejaba tu propia mano cortada por la barra de cantos, que es lo único
-   * que no se puede permitir—.
-   *
-   * ── Por qué pasó a estar acá y no en una constante suelta ──────────────
-   * Porque en el celular era demasiado grande y en la compu estaba bien: con
-   * 126px las tres cartas se llevaban el 89% del ancho de un celular de 390.
-   * Una constante sola no podía decir eso, y el resto de los tamaños de la mesa
-   * ya se decidían acá.
+   * Sigue sin haber puntos de corte por ancho: el problema real nunca fue la
+   * pantalla angosta sino la BAJA —una ventana de 620px de alto dejaba tu
+   * propia mano cortada por la barra de cantos, que es lo único que no se
+   * puede permitir—. Lo que cambió es contra QUÉ se mide: contra la escena y
+   * no contra la ventana.
    */
   mano: { ancho: string };
   /** El mazo con la muestra, del lado del que reparte. */
   mazo: { u: number; v: number; ancho: string };
   /** El mate, siempre del lado contrario al mazo. */
   mate: { u: number; v: number; alto: string };
-  /**
-   * La libreta, que es la excepción y va con dos profundidades.
-   *
-   * Es lo más alto de la mesa, así que es la primera que se le monta al rival
-   * si sube de más. Y NO PUEDE ACHICARSE: se agrandó a propósito porque los
-   * puntos no se leían en el celular. Como subir ALEJA y alejar ACHICA, se
-   * dibuja del tamaño que tendría en `tamano`, que es de donde vino. Sí, eso le
-   * miente un poco a la perspectiva, en el único objeto de la mesa que hay que
-   * LEER y no sólo mirar. Vale la pena.
-   *
-   * ── `null` EN EL CELULAR, y por eso el campo es opcional ────────────────
-   * Ahí se comía el cuarto de arriba de la mesa: 169 de 390 px de ancho, con
-   * la birome llegando al borde. Los puntos ahora los dice `MarcadorBarra`,
-   * arriba, que no le saca ni un píxel a la mesa. En la compu se queda: hay
-   * lugar de sobra y es lo que hacen las referencias, que tienen los
-   * cuadraditos arriba Y el papelito sobre la madera.
-   *
-   * Es `null` y no un campo ausente a propósito: los dos diseños tienen que
-   * seguir teniendo la misma forma, así que sacar la libreta es DECIR que no
-   * va, no olvidarse de ponerla.
-   */
-  libreta: { u: number; v: number; tamano: number; ancho: string } | null;
   /**
    * Las cartas jugadas. `paso` es cuánto se separan las bazas entre sí.
    *
@@ -243,26 +231,26 @@ interface DisenoDeMesa {
   objeto: { u: number; v: number; alto: string };
 }
 
-/** Alto y angosta: el caso apretado, y el que manda si algo falla. */
-const CELULAR: DisenoDeMesa = {
+/**
+ * LA MESA, UNA SOLA.
+ *
+ * Cada medida es `min(A cqw, B cqh)`: lo que entre por el ancho de la escena o
+ * lo que entre por su alto, lo que sea menos. En el celular manda el ancho, en
+ * la compu el alto. El porqué está arriba.
+ *
+ * Las POSICIONES son las que tenía el celular. No es que se haya elegido una
+ * de las dos: la compu tenía el mate abajo (v = 0,66) sólo porque arriba estaba
+ * la libreta, y la libreta se fue el 5/9/2026. Sacado ese estorbo, las dos
+ * tablas querían el mismo lugar.
+ */
+const MESA: DisenoDeMesa = {
   fondo: 22,
-  /* ACHICADA el 2/9/2026, y bastante: eran los mismos 126px de la compu y las
-     tres cartas tapaban el 89% del ancho de la pantalla, o sea que la mano
-     tapaba la mesa que estás jugando.
-
-     Ojo con lo que gana y lo que no: la mano es `absolute`, así que achicarla
-     NO le devuelve alto a la escena, le devuelve mesa a la vista. El alto que
-     se lleva el marcador de arriba al apilarse sale de la escena y no de acá.
-
-     96 y no 104, que fue el primer intento: el `clamp` llegaba al techo en un
-     celular de 844 de alto y las tres cartas seguían de lado a lado. El giro
-     del abanico las ensancha ADEMÁS de lo que miden, así que el 72% calculado
-     se veía como un 80%. Se cerró mirando la captura, no la cuenta. */
-  mano: { ancho: "clamp(60px, 12vh, 96px)" },
-  mazo: { u: 0.24, v: 0.5, ancho: "clamp(74px, 15vh, 122px)" },
-  /* EL MATE SE MUDÓ AL HUECO DE LA LIBRETA. Estaba abajo (v = 0,66) porque
-     arriba estaba ocupado; ahora ese costado quedó libre entero. Y crece,
-     porque es lo único que queda de ese lado.
+  /* La mano de tres cartas es lo que más ancho se lleva, y en un celular de
+     390 llegó a taparlo el 89%. Por eso el coeficiente de ancho es bajo: es el
+     que manda ahí. */
+  mano: { ancho: "min(21cqw, 18cqh)" },
+  mazo: { u: 0.24, v: 0.5, ancho: "min(27cqw, 31cqh)" },
+  /* EL MATE VA EN EL HUECO QUE DEJÓ LA LIBRETA, del lado contrario al mazo.
 
      No va tan al fondo como estaba la libreta (v = 0,23): `estiloEnMesa` ancla
      por la BASE y todo crece HACIA ARRIBA, así que un mate apoyado allá se le
@@ -272,61 +260,33 @@ const CELULAR: DisenoDeMesa = {
      y `mirar-mesa-nueva.mjs` los rechazó: a 390x844 la TERCERA baza llegaba a
      x=284 y el mate empezaba en 282. Dos píxeles. Es la tercera vez que en
      este proyecto un número de la mesa se calcula en papel y sale mal, y las
-     tres veces por lo mismo: el `clamp` del objeto, el alto de la ventana y la
+     tres veces por lo mismo: la medida del objeto, el tamaño de la escena y la
      escala en perspectiva se multiplican y no se pueden separar leyendo. */
-  mate: { u: 0.78, v: 0.34, alto: "clamp(62px, 13vh, 118px)" },
-  libreta: null,
-  /* También bajaron, por lo mismo que la mano: con las dos bazas puestas y el
-     mate al costado, la mitad de la mesa quedaba ocupada y no se veía la
-     madera. El paso sube apenas para que sigan separándose igual. */
+  mate: { u: 0.78, v: 0.34, alto: "min(23cqw, 22.5cqh)" },
+  /* Las bazas bajaron el 2/9/2026: con las dos puestas y el mate al costado, la
+     mitad de la mesa quedaba ocupada y no se veía la madera. */
   baza: {
     suya: 0.46,
     tuya: 0.64,
     ganador: 0.31,
-    ancho: "clamp(40px, 8vh, 64px)",
+    ancho: "min(14cqw, 15cqh)",
     paso: 0.13,
   },
-  reparto: { v: 0.22, ancho: "clamp(28px, 5.6vh, 46px)" },
-  objeto: { u: 0.26, v: 0.65, alto: "clamp(32px, 7vh, 64px)" },
-};
+  reparto: { v: 0.22, ancho: "min(10cqw, 9.5cqh)" },
+  /* El objeto del departamento va del lado del mazo y hacia el borde cercano,
+     pero NO pegado al borde: la perspectiva abre el frente y en el canto de acá
+     sólo se ve de `u` 0,20 a 0,80. Puesto en 0,14 —que a ojo es "al costado,
+     cerca"— salía por la izquierda entero.
 
-/** Ancha y baja. Lo único que cambia de fondo es el TAMAÑO de las cosas. */
-const PC: DisenoDeMesa = {
-  fondo: 22,
-  /* Acá no había nada que arreglar: la escena es tres veces más ancha y tres
-     cartas de 126 se llevan el 29% del ancho. Es el número de siempre. */
-  /* La mano y la libreta también bajaron el 4/9/2026, por lo mismo que el
-     objeto de más abajo: la escena perdió alto y ellas no. A 1280x620 la
-     libreta cruzaba el canto lejano por 4,3px y la baza de abajo se le montaba
-     a tu mano por 3,3px. Los dos números salieron de medir, no de calcular. */
-  mano: { ancho: "clamp(72px, 15.6vh, 126px)" },
-  mazo: { u: 0.2, v: 0.5, ancho: "clamp(120px, 26vh, 230px)" },
-  mate: { u: 0.8, v: 0.66, alto: "clamp(80px, 19vh, 170px)" },
-  libreta: { u: 0.79, v: 0.32, tamano: 0.45, ancho: "clamp(180px, 38vh, 330px)" },
-  baza: {
-    suya: 0.46,
-    tuya: 0.64,
-    ganador: 0.31,
-    ancho: "clamp(60px, 13vh, 112px)",
-    paso: 0.135,
-  },
-  reparto: { v: 0.22, ancho: "clamp(38px, 8vh, 72px)" },
-  /* BAJÓ DE 13vh A 11,6vh EL 4/9/2026, y no por gusto: el hueco del anuncio se
-     lleva ~38px de una ventana de 620, o sea el 6% de la escena. Los objetos
-     miden en `vh` DEL VIEWPORT y la escena ya no es el viewport entero, así que
-     al achicarse ella los objetos se quedan del mismo tamaño y se acercan entre
-     sí. `mirar-mesa-nueva.mjs` lo agarró en el acto: a 1280x620 la botella
-     —la más alta de los diecinueve— se le montaba al mazo.
+     Y va en 0,65 y no más abajo porque ahí abajo está tu mano, con las TRES
+     cartas, que es cuando más sube. El margen tiene que ser margen: el alto de
+     la escena cambia con la mano que te tocó, porque la fila de la flor y la
+     línea del tanto aparecen o no.
 
-     ── SI ALGÚN DÍA HAY QUE BAJARLO OTRA VEZ, NO LO BAJES ─────────────────
-     Es un parche, y ya se usó dos veces. La causa de fondo es la de arriba: los
-     objetos miden contra la VENTANA y viven adentro de la ESCENA, que es lo que
-     queda después de la barra de arriba, la de cantos y el anuncio. Lo correcto
-     es `container-type: size` en el contenedor de la escena y `cqh` en vez de
-     `vh` acá y en CELULAR —Chromium lo soporta desde el 105, que es el mínimo
-     que la app ya exige por `:has()`—. Obliga a recalibrar las dos tablas, así
-     que es un cambio visual grande y va con captura y permiso antes. */
-  objeto: { u: 0.22, v: 0.72, alto: "clamp(52px, 11.6vh, 100px)" },
+     EL TAMAÑO SE MIDE CONTRA EL MATE: en una mesa un vaso y un mate son
+     parecidos de alto. Va en dos tercios del mate, que es la proporción de
+     verdad; a un tercio no se leía un vaso, se leía una miniatura. */
+  objeto: { u: 0.26, v: 0.72, alto: "min(12.3cqw, 13.5cqh)" },
 };
 
 /**
@@ -389,14 +349,9 @@ function Cargando() {
 }
 
 function Mesa() {
-  /* CUÁL DE LOS DOS DISEÑOS. Por proporción de la ventana, no por ancho: el
-     porqué está en `lib/pantalla.ts`. En el primer cuadro de una compu esto
-     todavía dice "celular" y cambia al hidratar, adentro de "REPARTIENDO…". */
-  const d = usaPantallaAncha() ? PC : CELULAR;
-  /* Pantalla de celular: alta y angosta. Lo usa la barra de arriba, que es lo
-     único de la mesa que NO se mide con (u, v) y necesita saberlo aparte. Sale
-     del mismo lugar que todo lo demás para que no haya dos formas de decidirlo. */
-  const estrecha = d === CELULAR;
+  /* Un solo diseño, desde el 5/9/2026. Queda con nombre corto porque se lee en
+     cada objeto de la escena; el porqué de cada número está arriba, en `MESA`. */
+  const d = MESA;
   const parametros = useSearchParams();
   // Partida Rápida: la dirección puede traer a quién enfrentás.
   const rivalPedido = parametros.get("rival");
@@ -807,9 +762,6 @@ function Mesa() {
   const espejo = (u: number) => (ladoMazo === "izquierda" ? u : 1 - u);
   const uMazo = espejo(d.mazo.u);
   const uOtro = espejo(d.mate.u);
-  // La libreta es lo más ancho de la mesa: va más adentro que el mate para que
-  // no se salga por el costado. En el celular no está y esto queda en null.
-  const uLibreta = d.libreta ? espejo(d.libreta.u) : null;
   /* El objeto del departamento va del lado del mazo, así que NO se espeja: el
      `u` de los diseños se guarda del lado izquierdo y `espejo` lo manda al lado
      del mazo, que es justo donde tiene que estar. */
@@ -896,14 +848,18 @@ function Mesa() {
             poder crecer. Dos veces la misma información, y la que se quedó es
             la que hace falta leer. */}
         <div className="flex min-w-0 items-center">
-          <MarcadorBarra vos={p.puntos.vos} rival={p.puntos.rival} apilado={estrecha} />
+          <MarcadorBarra vos={p.puntos.vos} rival={p.puntos.rival} />
         </div>
 
-        {/* En el celular va en dos renglones y no en uno: "Ayudas: no" seguido
-            se lleva 86px de los ~300 que tiene la barra, y ese ancho lo
-            necesita el marcador. Apilado ocupa 50 y encima se lee mejor, porque
-            el estado queda solo en su línea. El alto ya está: lo puso el
-            marcador al apilarse. */}
+        {/* VA EN DOS RENGLONES SIEMPRE, desde el 5/9/2026. Antes se apilaba
+            sólo en el celular, y quién era "el celular" lo decidía el diseño
+            elegido; con un solo diseño esa pregunta ya no existe.
+
+            Se quedó la forma apilada y no la seguida porque es la que entra en
+            el caso apretado: "Ayudas: no" en una línea se lleva 86px de los
+            ~300 que tiene la barra de un celular, y ese ancho lo necesita el
+            marcador. Apilado ocupa 50 y encima se lee mejor, porque el estado
+            queda solo en su línea. En la compu sobra lugar, así que no molesta. */}
         <button
           onClick={() => {
             const nuevo = !ayudas;
@@ -913,18 +869,12 @@ function Mesa() {
           aria-label={`Ayudas ${ayudas ? "encendidas" : "apagadas"}. Tocá para cambiar.`}
           className="shrink-0 whitespace-nowrap rounded border border-crema/20 px-2 py-0.5 text-center font-[family-name:var(--font-ui)] text-[10px] uppercase leading-tight transition-colors hover:border-crema/50"
         >
-          {estrecha ? (
-            <>
-              {/* Sin `tracking`: a 10px la de la interfaz ya viene separada y
-                  con un poco más se lee "AY UD AS". */}
-              <span className="block text-[10px] leading-tight text-crema/55">Ayudas</span>
-              <span className={`block text-[12px] leading-tight ${ayudas ? "text-dorado" : "text-crema/70"}`}>
-                {ayudas ? "sí" : "no"}
-              </span>
-            </>
-          ) : (
-            <span className="text-[10px] tracking-wide text-crema/70">Ayudas: {ayudas ? "sí" : "no"}</span>
-          )}
+          {/* Sin `tracking`: a 10px la de la interfaz ya viene separada y
+              con un poco más se lee "AY UD AS". */}
+          <span className="block text-[10px] leading-tight text-crema/55">Ayudas</span>
+          <span className={`block text-[12px] leading-tight ${ayudas ? "text-dorado" : "text-crema/70"}`}>
+            {ayudas ? "sí" : "no"}
+          </span>
         </button>
       </div>
 
@@ -943,7 +893,7 @@ function Mesa() {
           casi a los bordes sin que se achique lo que hay que mirar. */}
       <div className="relative flex min-h-0 flex-1 justify-center">
         <div
-          className="penumbra relative w-full overflow-hidden"
+          className="escena penumbra relative w-full overflow-hidden"
           style={{ maxWidth: "min(1180px, 158vh)" }}
         >
           {/* El telón: el color del lugar, detrás de todo. Se ve por las
@@ -987,11 +937,6 @@ function Mesa() {
               `.mano-abanico` para `mirar-mesa.mjs`. */}
           <div
             data-mesa="tabla"
-            /* Cuál de los dos diseños quedó activo. Es el agarre con el que
-               `mirar-mesa-nueva.mjs` verifica que en una compu se haya elegido
-               el de compu: sin esto, medir seis pantallas y que den 0 no prueba
-               nada, porque podrían estar todas usando el mismo. */
-            data-diseno={d === PC ? "pc" : "celular"}
             /* En qué anda la mano. Sin esto, una herramienta que mire "no puedo
                jugar y hay cartas en la mesa" confunde el turno del rival con el
                fin de la mano. */
@@ -1006,26 +951,18 @@ function Mesa() {
             className="absolute inset-x-0 bottom-0"
             style={{ top: `${d.fondo}%` }}
           >
-            {/* LA LIBRETA, al costado y cerca. Estaba en el centro del borde
-                lejano, o sea justo encima del pecho del rival, y encima salía
-                chica: allá la perspectiva achica todo. Ahora va al costado, a
-                la altura del mazo pero del lado libre, y bastante más grande.
+            {/* ── ACÁ ESTABA LA LIBRETA, Y SE FUE EL 5/9/2026 ─────────────
+                Era el papelito de puntos apoyado sobre la madera, y existía
+                SÓLO en la compu: en el celular se comía el cuarto de arriba de
+                la mesa —169 de 390 px de ancho— así que estaba en `null`.
 
-                SÓLO EN LA COMPU. En el celular se comía el cuarto de arriba de
-                la mesa y los puntos los dice `MarcadorBarra`, en la franja de
-                arriba, que no le saca alto a la mesa. */}
-            {d.libreta && uLibreta !== null && (
-              <div
-                data-mesa="libreta"
-                style={estiloEnMesa(
-                  uLibreta,
-                  d.libreta.v,
-                  escalaEnMesa(d.libreta.tamano) / escalaEnMesa(d.libreta.v),
-                )}
-              >
-                <Marcador vos={p.puntos.vos} rival={p.puntos.rival} ancho={d.libreta.ancho} />
-              </div>
-            )}
+                Con un solo diseño había que decidir si iba a las dos o a
+                ninguna, y Santiago eligió que se fuera. Los puntos los dice
+                `MarcadorBarra`, en la franja de arriba, que no le saca ni un
+                píxel de alto a la mesa y se lee igual en las dos.
+
+                De paso se llevó uno de los dos `clip-path` del proyecto, que
+                fuerzan una superficie de composición aparte. */}
 
             {/* ── LAS TRES QUE LE REPARTEN A ÉL ───────────────────────────
                 Existen SÓLO mientras dura el reparto. Él no tiene las cartas

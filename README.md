@@ -230,6 +230,7 @@ lib/
   mapa-colores.ts       El color de cada departamento. Eso sí se elige a mano.
   gira.ts               El desbloqueo en cadena, derivado del progreso
   gira-camino.ts        La geometría del camino punteado, con sus pruebas
+  mesa-perspectiva.ts   Dónde y de qué tamaño va cada cosa apoyada en la mesa
 herramientas/
   generar-mapa.mjs      Rehace mapa-uruguay.ts desde datos cartográficos
   generar-escena.mjs    Hornea la madera y el fondo de cada ambiente a WebP
@@ -241,11 +242,23 @@ herramientas/
                         Historial.md: es el bug más caro que tuvo el proyecto)
   mirar-mesa-nueva.mjs  Mide el rectángulo real de cada objeto de la mesa y
                         falla si algo se solapa o se le monta al rival
+  motas.mjs             Cuenta manchitas claras sueltas en una captura. Su
+                        límite está escrito adentro: no distingue basura de un
+                        detalle chico del diseño
+  bloques.mjs           El que sí distingue. Cuenta bloques de 4x4 de color
+                        plano, que es la firma de la compresión de la GPU del
+                        teléfono (ver 5/9/2026 en Historial.md)
+  laboratorio.mjs       Compara tres formas de dibujar en la grilla de píxeles
+                        del celular, a DPR 2, sin tocar un solo archivo
   mirar-web.mjs         El armazón de app: la barra, el volver y las pantallas
   mirar-rivales.mjs     Los bordes de las siete escenas horneadas
   mirar-app-compilada.mjs  Prueba el build de la app, no el de desarrollo
   celular.mjs           Una ventana con forma de celular
-  celular-usb.mjs       Compila, instala y abre la app en un teléfono por USB
+  celular-usb.mjs       Compila, instala y abre la app en un teléfono por USB.
+                        `--foto` y `--vigilar` sacan la imagen del framebuffer
+                        SIN PÉRDIDA: es la única captura sobre la que vale la
+                        pena decidir algo, porque el espejo de pantalla de
+                        Windows inventa manchitas que no existen
   medir-bots.mjs        Enfrenta a los 19 rivales y mide si la gira sube
 android/                El proyecto de Android (Capacitor). Los dibujos de
                         `app/src/main/res` los hornea generar-icono.mjs
@@ -277,11 +290,28 @@ ideas/
   final en las rutas y el zoom bloqueado). Todo lo que se arregla, se arregla
   para las dos.
 - **Nada de la escena de la mesa puede llevar un `filter`.** Suena a detalle y
-  es el bug más caro que tuvo el proyecto, dos veces: un desenfoque adentro de
-  un subárbol que el navegador compone aparte hace que las GPU de teléfono
-  devuelvan basura —píxeles blancos sueltos, bandas de rayas—. Las sombras se
-  dibujan con degradés y `box-shadow`, que hacen lo mismo sin crear una
-  superficie de composición. `mirar-mesa.mjs` falla si vuelve a aparecer uno.
+  es el bug más caro que tuvo el proyecto: las manchitas del celular. Las
+  sombras se dibujan con degradés y `box-shadow`, que hacen lo mismo sin crear
+  una superficie de composición aparte. `mirar-mesa.mjs` falla si vuelve a
+  aparecer un filtro en la escena.
+
+  **Qué son esas manchitas, medido el 5/9/2026.** Con la primera foto del
+  framebuffer sin pérdida —por USB, no por el espejo de Windows— se midieron y
+  tienen una firma que no deja lugar a dudas: 29 de 29 caen en una grilla de
+  4×4 píxeles y 28 de 29 son de un color plano. Eso es la **compresión de
+  bloques de la GPU del teléfono**, no nuestro dibujo. No se puede arreglar
+  desde acá; lo que sí controlamos es **cuántas superficies compuestas le damos
+  a comprimir**, y por eso sacar los filtros bajó el bug 7 veces sin tocar una
+  sola forma. Se mide con
+  [`herramientas/bloques.mjs`](herramientas/bloques.mjs).
+
+- **Un solo diseño de mesa, y se adapta.** Hasta el 5/9/2026 había dos tablas
+  de medidas, una para el celular y otra para la compu, y un `matchMedia`
+  elegía. Eran el mismo objeto medido en dos ejes: los objetos median en `vh`
+  —contra la VENTANA— pero viven adentro de la ESCENA. Ahora la escena es la
+  unidad (`container-type: size`) y cada medida es `min(A cqw, B cqh)`: en un
+  celular manda el ancho y en una compu el alto. Una sola regla da los dos
+  tamaños que antes había que escribir por separado.
 - **La partida corre entera en tu navegador.** Eso significa que las cartas del
   bot están en la memoria del cliente: no salen en el HTML, pero alguien
   decidido puede espiarlas con las herramientas de desarrollo. Hoy da igual —no

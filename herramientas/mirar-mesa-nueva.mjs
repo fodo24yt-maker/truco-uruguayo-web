@@ -33,25 +33,28 @@ import { chromium } from "playwright";
 
 const SALIDA = path.join("capturas", "mesa-nueva");
 /**
- * Las seis, con el diseño que le TIENE que tocar a cada una.
+ * Las seis. Medir sólo los celulares no alcanza: el feedback de la compu —el
+ * mazo perdido, las esquinas de la mesa— no se veía en ninguna de las tres
+ * pantallas de celular que se probaban.
  *
- * Desde que hay dos diseños, medir sólo los celulares no alcanza: el feedback
- * de la compu —el mazo perdido, las esquinas de la mesa— no se veía en ninguna
- * de las tres pantallas que se probaban. Y el diseño esperado va escrito acá
- * porque si las seis dieran 0 usando todas el mismo, el 0 no probaría nada.
+ * ── YA NO SE ESPERA UN DISEÑO POR TAMAÑO ─────────────────────────────────
+ * Hasta el 5/9/2026 cada tamaño traía escrito cuál de los dos diseños le tenía
+ * que tocar, porque si las seis daban 0 usando todas el mismo, el 0 no probaba
+ * nada. Ahora hay UN diseño y las medidas se adaptan solas
+ * (`min(A cqw, B cqh)`), así que esa comprobación perdió sentido: lo que estas
+ * seis pantallas verifican es que la misma tabla de números entre en las seis.
  *
- * 1280×620 es el caso duro de la compu: baja y ancha. Entra por apaisada.
+ * 1280×620 es el caso duro de la compu: baja y ancha.
  */
 const TAMANOS = [
-  [320, 568, "celular"],
-  [360, 600, "celular"],
-  [390, 844, "celular"],
-  [1100, 800, "pc"],
-  [1280, 620, "pc"],
-  [1440, 900, "pc"],
+  [320, 568],
+  [360, 600],
+  [390, 844],
+  [1100, 800],
+  [1280, 620],
+  [1440, 900],
 ];
-/** "la libreta" / "el mate": el objeto del costado libre cambia con el diseño. */
-const conArticulo = (que) => (que === "libreta" ? "la libreta" : `el ${que}`);
+const conArticulo = (que) => `el ${que}`;
 
 /** Cuánto puede asomar un objeto por encima del canto antes de ser un problema. */
 const TOLERANCIA = 2;
@@ -112,7 +115,6 @@ const medir = (pag) =>
     const tabla = document.querySelector('[data-mesa="tabla"]');
     const mano = document.querySelector(".mano-abanico");
     return {
-      diseno: tabla ? tabla.dataset.diseno : null,
       // el canto lejano: el borde de arriba de la zona de mesa
       canto: tabla ? caja(tabla).arriba : null,
       escena: tabla ? caja(tabla) : null,
@@ -135,7 +137,7 @@ const medir = (pag) =>
 const seCruzan = (a, b) =>
   a.izq < b.der && b.izq < a.der && a.arriba < b.abajo && b.arriba < a.abajo;
 
-for (const [ancho, alto, esperado] of TAMANOS) {
+for (const [ancho, alto] of TAMANOS) {
   const ctx = await nav.newContext({ viewport: { width: ancho, height: alto } });
   const pag = await ctx.newPage();
   // con la mesa usada, que es cuando hay algo que solapar
@@ -148,11 +150,6 @@ for (const [ancho, alto, esperado] of TAMANOS) {
 
   const m = await medir(pag);
   const problemas = [];
-
-  // 0. que se haya elegido el diseño que corresponde
-  if (m.diseno !== esperado) {
-    problemas.push(`quedó el diseño "${m.diseno}" y tenía que quedar "${esperado}"`);
-  }
 
   for (const o of m.objetos) {
     // 1. nada se le monta al rival
@@ -177,9 +174,10 @@ for (const [ancho, alto, esperado] of TAMANOS) {
      que está apretado entre el canto y las bazas, y en el caso de la libreta
      además es lo único de la mesa que hay que LEER.
 
-     CUÁL ES DEPENDE DEL DISEÑO, y por eso no está clavado en "libreta": en la
-     compu ese lugar lo ocupa la libreta y en el celular el mate, porque la
-     libreta se sacó de ahí. Si esto dijera sólo "libreta", las tres pantallas
+     ES EL MATE, desde que la libreta se fue (5/9/2026). Antes ese lugar lo
+     ocupaba la libreta en la compu y el mate en el celular, y este `??` elegía
+     entre los dos. Se deja el `??` por si vuelve a haberlas dos: si dijera
+     sólo "libreta", las tres pantallas
      de celular pasarían a no comprobar NADA de ese costado y seguirían dando
      0, que es la peor forma de romper una herramienta: la que no se nota. */
   const mando = m.objetos.find((o) => o.que === "libreta") ?? m.objetos.find((o) => o.que === "mate");
@@ -232,8 +230,7 @@ for (const [ancho, alto, esperado] of TAMANOS) {
     await pag.screenshot({ path: path.join(SALIDA, `falla-${etiqueta}.png`) });
   } else {
     console.log(
-      `  ${etiqueta.padEnd(9)} OK  diseño ${String(m.diseno).padEnd(7)}` +
-        ` (${m.objetos.length} objetos, ${puestas} baza(s) puesta(s))`,
+      `  ${etiqueta.padEnd(9)} OK  (${m.objetos.length} objetos, ${puestas} baza(s) puesta(s))`,
     );
   }
   /* LOS DOS MÁRGENES DEL QUE MANDA, que son los que deciden su altura.

@@ -12,6 +12,136 @@
 
 ---
 
+## 2026-09-05 — Las manchitas: medidas de verdad, y son de la GPU del teléfono
+
+Cuarta sesión con el mismo pendiente, y esta vez se hizo lo que faltaba desde
+el 1/9: **enchufar el celular y mirar el framebuffer**. Las tres hipótesis
+anteriores —los filtros, el trazo sub-píxel y el toque— se habían caído al
+medirlas. Esta no se cayó, y trae número.
+
+### Qué son las manchitas
+
+Se sacó la foto con `celular-usb.mjs --vigilar` (`adb exec-out screencap -p`:
+el framebuffer crudo, sin WhatsApp, sin espejo, sin reescalado) sobre una mesa
+con el envido cantado. De las 29 manchitas:
+
+    29 de 29 terminan en un múltiplo de 4
+    28 de 29 empiezan en un múltiplo de 4
+    29 de 29 arrancan en y ≡ 2 (mod 4)   ← la misma grilla, corrida por la
+                                           barra de estado
+    anchos: 4px (25), 8px (3)  ·  altos: 4px (26), 8px (2)
+    28 de 29 son de UN SOLO COLOR PLANO
+
+**Un dibujo no cae en una grilla de 4.** Eso es la compresión de bloques de la
+GPU —la Mali‑G52 del Redmi comprime las superficies compuestas de a 4×4 px— y
+un bloque cuyo dato vuelve mal se dibuja como un rectángulo liso.
+
+O sea: **no lo dibuja nuestro código**. Lo que sí está en nuestras manos es
+cuántas superficies compuestas le damos a comprimir, y eso ya se demostró:
+sacar los filtros el 1/9 y el 4/9 bajó la densidad de manchitas de 20.064 a
+2.870 por Mpx —**7 veces**— sin tocar una sola forma. La regla de "ni un
+filtro en la escena" se queda, y ahora se sabe POR QUÉ funciona.
+
+### Las otras cuatro cosas que se descartaron con número
+
+1. **Las texturas horneadas están limpias.** `public/escenas/*-mesa.webp`:
+   luminancia máxima 106–129 y cero motas, contra 150–250 de las manchitas. No
+   hay nada que arreglar en `generar-escena.mjs`.
+2. **No es basura de JPEG.** Las capturas de WhatsApp son 720×1600 —el
+   framebuffer real— y sus tablas de cuantización son todo unos (calidad ~100):
+   el brillo se preserva entero, y no hay alineación con la grilla de 8 (chi² =
+   4,5 en x).
+3. **Pero el COLOR de las manchitas no sirve como pista**: el JPEG es 4:2:0, o
+   sea que la crominancia va a la mitad de resolución. Los puntitos cian y
+   magenta del borde de las cartas los puede haber fabricado el transporte.
+   **Sólo el brillo es dato.**
+4. **`/aprender` no está sano: es una página plana.** No tiene "una tecnología
+   más suave"; tiene una sola superficie, fondo de papel claro y ni un `<text>`
+   de SVG. Una manchita clara ahí sería casi invisible.
+
+### El espejo de Windows exagera, y mucho
+
+Los recortes de 337px que se venían mirando dan **157 motas**; el framebuffer
+real de la misma pantalla da **27**. Una imagen con 5 veces menos píxeles no
+puede tener más detalle real que el original. Ojo con esto, que ya llevó a dos
+diagnósticos equivocados el 4/9 y estuvo por llevar a un tercero hoy: **el
+achicado por sí solo fabrica 160 motas sobre una imagen limpia**.
+
+**Desde ahora se decide sólo sobre fotos por USB.**
+
+### `herramientas/bloques.mjs`, el detector que sí sirve
+
+`motas.mjs` no distingue basura de un detalle chico del diseño, y él mismo lo
+dice; tres sesiones se diagnosticó mirando ese número y las tres se diagnosticó
+mal. El nuevo cuenta **bloques de 4×4 de color plano y neutro**, que es la
+firma de la GPU: la paleta del proyecto es toda cálida (r > g > b), así que un
+neutro no lo puede haber puesto la escena. Lleva las dos polaridades —claro
+sobre la madera, gris sobre el pergamino— y una banda configurable.
+
+Medido con él: mesa quieta **1 bloque**, mesa jugando **0,79 por cuadro**,
+mapa **7** (todos pegados al `<text>` del cartel y de la rosa).
+
+### Un solo diseño de mesa
+
+Lo pidió Santiago, y al hacerlo apareció que las dos tablas nunca fueron dos
+diseños: eran **el mismo objeto medido en dos ejes**. Los objetos median en
+`vh` —contra la VENTANA— pero viven adentro de la ESCENA. Ahora la escena es la
+unidad (`container-type: size` en `.escena`) y cada medida es `min(A cqw, B cqh)`:
+lo que entre por ancho o lo que entre por alto, lo que sea menos. En un celular
+manda el ancho, en una compu el alto.
+
+No es un promedio. Se derivó midiendo las dos tablas viejas en los seis tamaños
+y queda dentro del 5% de cada una:
+
+    mazo   celular 85,2 px → 86,4    ·  compu 161,2 px → 156,6
+    mate   celular 73,8    → 73,6    ·  compu 117,8    → 113,6
+    baza   celular 45,4    → 44,8    ·  compu  80,6    →  75,8
+
+Con eso se fueron `lib/pantalla.ts`, `usaPantallaAncha()`, el atributo
+`data-diseno` y el render de hidratación en el que la compu dibujaba un cuadro
+con el diseño de celular. **La libreta se fue del todo** (lo decidió Santiago):
+existía sólo en la compu, y con un solo diseño había que decidir si iba a las
+dos o a ninguna. Los puntos los dice `MarcadorBarra`, que ahora va siempre
+apilado. De paso se llevó uno de los dos `clip-path` del proyecto.
+
+El único número que hubo que recalibrar fue el objeto del departamento: pasó de
+`v = 0,65` a `0,72`, porque a 1280×620 la botella se le montaba al mazo. Lo
+agarró `mirar-mesa-nueva.mjs`, no la cuenta: **quinta vez** que un número de la
+mesa se calcula en papel y sale mal.
+
+### Un experimento que salió mal, y por qué se cuenta igual
+
+Se probó sacar el `mix-blend-mode: color` y midió PEOR (1,97 contra 0,79
+bloques por cuadro). **Ese número no vale**: el banco de pruebas recargaba la
+mesa con `am start`, y cada recarga abre una PESTAÑA NUEVA en Chrome. La
+corrida "sin blend" midió con más pestañas encima que la línea base, y se nota
+en que la propia línea base subía sola: 11 → 17 → 24.
+
+De ahí salió, eso sí, un dato bueno: **el celular tenía 29 pestañas abiertas y
+187 MB libres de 3,7 GB**. Bajo presión de memoria Chrome baja la calidad de
+sus mosaicos, y eso explica por qué Santiago ve la web PEOR que la app.
+
+### Estado al cerrar
+
+`npm test` 167/167 · `tsc --noEmit` limpio · `mirar-mesa`, `mirar-mesa-nueva` y
+`mirar-web` **TODO OK** · los dos builds OK.
+
+### Pendiente
+
+1. **No se puede mostrar el envido ni la flor del rival antes de que cierre la
+   mano.** Lo vio Santiago hoy: se lee "ÉL: 28" en pantalla, y con eso se le
+   pueden deducir las cartas. Es un bug de juego, no de dibujo, y es el más
+   importante de esta lista.
+2. **Medir la falta envido y el real envido en la APP.** Santiago dice que ahí
+   se bugea distinto que con el envido, la flor y el truco normales. Quedó sin
+   medir porque el banco de pruebas lo había pasado al navegador.
+3. Rehacer el A/B del `mix-blend-mode` con un banco que NO abra pestañas
+   nuevas, ahora que hay con qué medirlo (`bloques.mjs`).
+4. `deviceScaleFactor: 2` en las herramientas que todavía miran a DPR 1.
+5. Prender AdMob (explicado en el README, sin código).
+
+---
+
 ## 2026-09-04 (tercera pasada) — Entra C, y la teoría del toque también da negativa
 
 Santiago eligió **C** mirando las capturas del laboratorio: descartó B porque
