@@ -94,7 +94,53 @@ export async function bloquesDe(ruta, banda = [0.27, 0.72]) {
   const enGrilla = chicas.filter(
     (m) => (m.x1 - m.x0 + 1) % REJILLA === 0 && (m.y1 - m.y0 + 1) % REJILLA === 0,
   );
-  return { ancho, alto, bloques: enGrilla.length, chicas: chicas.length, cajas: enGrilla };
+  const color = (x, y) => {
+    const i = (y * ancho + x) * canales;
+    return [data[i], data[i + 1], data[i + 2]];
+  };
+  const bloques = enGrilla.filter((m) => esBloque(m, color, ancho, alto));
+  return { ancho, alto, bloques: bloques.length, chicas: chicas.length, cajas: bloques };
+}
+
+/**
+ * Las dos pruebas físicas que separan un bloque de compresión del antialias.
+ *
+ * Sin esto el detector agarraba el texto: la crema al 65% sobre el fondo oscuro
+ * da un gris casi neutro, y trece pedacitos de letra de la pantalla de elegir
+ * modo pasaban por bloques. Se comprobó uno por uno y no lo eran.
+ *
+ * 1. **Plano.** Un bloque que vuelve mal se dibuja de un solo color. El
+ *    antialias, por definición, tiene degradado adentro.
+ * 2. **Fuera del rango de lo que lo rodea.** Y ésta es la que de verdad
+ *    decide: un píxel de antialias SIEMPRE es un valor intermedio entre la
+ *    tinta y el fondo, así que cae adentro del rango del vecindario. La basura
+ *    de la GPU es un color cualquiera, y casi siempre cae afuera.
+ */
+function esBloque(m, color, ancho, alto) {
+  const c0 = color(m.x0, m.y0);
+  for (let y = m.y0; y <= m.y1; y++) {
+    for (let x = m.x0; x <= m.x1; x++) {
+      const q = color(x, y);
+      if (Math.abs(q[0] - c0[0]) > 10 || Math.abs(q[1] - c0[1]) > 10 || Math.abs(q[2] - c0[2]) > 10) {
+        return false;
+      }
+    }
+  }
+  /* El anillo de alrededor, a dos píxeles: el rango de lo que hay al lado. */
+  const bajo = [255, 255, 255], alt = [0, 0, 0];
+  for (let y = m.y0 - 2; y <= m.y1 + 2; y++) {
+    for (let x = m.x0 - 2; x <= m.x1 + 2; x++) {
+      if (x < 0 || y < 0 || x >= ancho || y >= alto) continue;
+      if (x >= m.x0 && x <= m.x1 && y >= m.y0 && y <= m.y1) continue;
+      const q = color(x, y);
+      for (let k = 0; k < 3; k++) {
+        if (q[k] < bajo[k]) bajo[k] = q[k];
+        if (q[k] > alt[k]) alt[k] = q[k];
+      }
+    }
+  }
+  /* Afuera del rango en algún canal, con margen para el ruido de captura. */
+  return [0, 1, 2].some((k) => c0[k] > alt[k] + 8 || c0[k] < bajo[k] - 8);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
