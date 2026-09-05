@@ -1,6 +1,7 @@
 /**
  * Mira la mesa de verdad y verifica LA regla: no scrollea nunca, la barra de
- * cantos nunca tapa tu mano, y en la escena no hay ni un filtro.
+ * cantos nunca tapa tu mano, la tira de cantos deja carta para tocar, y en la
+ * escena no hay ni un filtro.
  *
  *     npm run dev                       (en otra terminal)
  *     node herramientas/mirar-mesa.mjs
@@ -123,19 +124,54 @@ for (const [w, h] of TAMANOS) {
           }
           return alguna ? con : null;
         })(),
+        /* ── LA TIRA DE CANTOS NO PUEDE TAPAR UNA CARTA ────────────────────
+           Desde el 4/9/2026 los botones de canto se apoyan SOBRE las cartas,
+           a 8 px de la barra: es lo que pidió Santiago para que no floten en
+           el aire arriba de la mano. Eso está bien mientras siga quedando
+           carta para tocar.
+
+           El riesgo real es la flor: "¡Flor!", "Con flor envido" y "Contraflor
+           al resto" son mucho más largos que "Envido", y en 320 px de ancho la
+           tira se parte en dos o tres filas. Cada fila que crece se come otro
+           pedazo de las cartas desde abajo, y hay un punto en el que la carta
+           deja de ser tocable sin que nada más se rompa: no scrollea, no se
+           solapa nada, y sin embargo no podés jugar.
+
+           Se piden 44 px, que es el mínimo que se puede tocar con el dedo. */
+        cartas: (() => {
+          const tira = document.querySelector(".pointer-events-auto.absolute.bottom-2");
+          const mazo = [...document.querySelectorAll(".mano-abanico > *")];
+          if (!tira || !mazo.length) return null;
+          const t = tira.getBoundingClientRect();
+          if (!t.height) return null;
+          return {
+            filas: new Set([...tira.children].map((c) => Math.round(c.getBoundingClientRect().top))).size,
+            alto: Math.round(t.height),
+            /* Cuánto de cada carta queda libre por encima de la tira. */
+            libre: mazo.map((c) => {
+              const r = c.getBoundingClientRect();
+              return Math.round(Math.max(0, Math.min(t.top, r.bottom) - r.top));
+            }),
+          };
+        })(),
       }));
       const scroll = m.doc > m.vis || m.body > m.vis;
       const tapada = m.mano && m.barra !== null && m.mano.abajo > m.barra + 1;
       const conFiltro = m.filtros !== null && m.filtros.length > 0;
-      if (scroll || tapada || conFiltro) {
+      const TOCABLE = 44;
+      const cartaTapada = m.cartas !== null && m.cartas.libre.some((v) => v < TOCABLE);
+      if (scroll || tapada || conFiltro || cartaTapada) {
         fallos++;
         console.log(`FALLA ${w}x${h} [${etiqueta}] scroll=${scroll} manoTapada=${tapada} ` +
-          `filtroEnLaEscena=${conFiltro} ` +
+          `filtroEnLaEscena=${conFiltro} cartaTapadaPorLosCantos=${cartaTapada} ` +
           `doc=${m.doc} vis=${m.vis} manoAbajo=${m.mano?.abajo?.toFixed(0)} barraArriba=${m.barra?.toFixed(0)}`);
         if (conFiltro) console.log(`  filtros: ${m.filtros.join(" | ")}`);
+        if (cartaTapada)
+          console.log(`  la tira de cantos ocupa ${m.cartas.filas} fila(s) de ${m.cartas.alto}px y deja ` +
+            `${m.cartas.libre.join("/")}px de carta libre; hacen falta ${TOCABLE}px para poder tocarla`);
         await pag.screenshot({ path: `${SALIDA}/falla-${w}x${h}-${etiqueta}.png` });
       }
-      return !scroll && !tapada && !conFiltro;
+      return !scroll && !tapada && !conFiltro && !cartaTapada;
     };
 
     await revisar("normal");
@@ -163,7 +199,7 @@ for (const [w, h] of TAMANOS) {
 await nav.close();
 console.log(
   fallos === 0
-    ? "\nTODO OK: la mesa no scrollea, la barra nunca tapa la mano y no hay ni un filtro en la escena."
+    ? "\nTODO OK: la mesa no scrollea, la barra nunca tapa la mano, los cantos dejan carta para tocar\ny no hay ni un filtro en la escena."
     : `\n${fallos} FALLAS`,
 );
 process.exit(fallos === 0 ? 0 : 1);

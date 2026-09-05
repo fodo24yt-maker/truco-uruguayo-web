@@ -1224,7 +1224,7 @@ function Mesa() {
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
             <DialogoMio eventos={p.eventos} tantos={tantosEnseñados} />
 
-            {/* ─── LO QUE PODÉS CANTAR, FLOTANDO SOBRE TUS CARTAS ────────
+            {/* ─── LO QUE PODÉS CANTAR, APOYADO SOBRE TUS CARTAS ─────────
                 Esto vivía adentro de la barra de abajo, y por eso la barra
                 crecía y la mesa entera saltaba 43 px cada vez que abrías el
                 envido. Acá está fuera del flujo: aparece y desaparece sin
@@ -1234,10 +1234,28 @@ function Mesa() {
                 madera, con su propio color y su propia sombra. El fondo de la
                 fila era lo que los hacía parecer parte de un cajón.
 
-                Va ARRIBA de tu mano y no encima: es la última cosa antes de
-                las cartas, en el mismo apilado que tu diálogo. */}
+                ── POR QUÉ VA `absolute bottom-2` Y NO UN `translate-y` ───────
+                El 4/9/2026 Santiago los quiso más abajo: apoyados sobre las
+                cartas y a unos píxeles de la barra de Truco / Envido / Mazo,
+                no flotando en el aire arriba de la mano.
+
+                "A unos píxeles de la barra" es una distancia al PIE de la
+                escena, no un desplazamiento desde donde caían antes. Y el pie
+                de la escena es justo el borde de abajo de este envoltorio
+                (`inset-x-0 bottom-0`), que termina donde empieza la barra. Así
+                que se ancla ahí y son 8 px, y no hay ningún número mágico que
+                mantener a mano cuando cambie el alto de la mano o de la barra.
+
+                Sigue estando fuera del flujo, que es lo que importa: no le
+                corre un píxel a la mano y la mesa no se mueve al cantar.
+
+                El `z-30` tampoco es al azar: apoyados sobre las cartas hay que
+                GANARLES a las cartas. El abanico es `z-10` y el pulgar `z-20`,
+                y los dos vienen DESPUÉS en el documento, así que con un empate
+                de z-index ganaban ellos y los botones quedaban tapados por la
+                mano: se veía una franja dorada asomando y nada más. */}
             {(hayFlor || haySubida) && (
-              <div className="pointer-events-auto mx-auto mb-1.5 flex max-w-[760px] flex-wrap items-center justify-center gap-1.5 px-2">
+              <div className="pointer-events-auto absolute inset-x-0 bottom-2 z-30 mx-auto flex max-w-[760px] flex-wrap items-center justify-center gap-1.5 px-2">
                 {b.flor && (
                   <BotonCanto canto="flor" onClick={() => hacer({ tipo: "flor" })} tono="dorado" suelto>
                     {meCantaronFlor ? "Yo también" : "¡Flor!"}

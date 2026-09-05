@@ -12,6 +12,244 @@
 
 ---
 
+## 2026-09-04 (tercera pasada) — Entra C, y la teoría del toque también da negativa
+
+Santiago eligió **C** mirando las capturas del laboratorio: descartó B porque
+"no tiene textura la mesa" —que es exactamente lo que se veía— y aprobó los
+botones de canto nuevos. Y pidió lo mismo para el menú y el mapa, con una
+teoría propia: *"pueden deberse a que se mueva cuando se hace click"*.
+
+### Se le dijo antes de implementarlo, y se repite acá
+
+**C no arregló las manchitas en ninguna medición.** Error contra la referencia
+sobremuestreada: A = 2,07 · C = 2,07 sobre 255. Es la misma imagen. Entró porque
+una línea más fina que un píxel es un riesgo de dibujo real y cuesta cero, **no
+porque se haya visto curar nada.** Si la próxima sesión lee "se arregló con C",
+está leyendo mal.
+
+### El piso de tinta, y por qué no es sólo la pantalla del menú
+
+Midiendo dónde se dibuja `<Carta>` apareció que el problema no era de una
+pantalla. Para que un `strokeWidth="0.8"` llegue a un píxel real a DPR 2 la
+carta tiene que medir **63 px o más**, y se dibuja más chica que eso en casi
+todos lados: los iconos del menú 32–44 px, la muestra de los ejercicios 52–62,
+las cartas en vuelo del reparto 28–46.
+
+Así que el piso va en el dibujo, una vez, en
+[`components/Carta.tsx`](components/Carta.tsx): `TINTA_MINIMA = 1.4` y un helper
+`tinta(peso)`. **Se escribe `tinta(0.8)` y no `1.4`** a propósito: el número
+original dice qué peso quería tener ese trazo respecto de los otros, y eso es lo
+que hay que mirar el día que se toque. Los nueve `strokeWidth="0"` quedan afuera
+—quieren decir "sin línea", no "línea finita"—.
+
+Verificado a los dos extremos con las MISMAS cartas: a 48 px los aros de los
+oros quedan definidos en vez de deshacerse, y a 148 px la línea no engordó.
+
+### La teoría del toque: medida, y negativa
+
+Se toca de verdad, con puntero táctil, cancelándole la navegación al click para
+poder mirar el estado que queda después. En el menú (la tarjeta de la gira) y en
+el mapa (seis departamentos): **no se movió ni cambió nada.** Ni caja, ni trazo,
+ni `filter`, ni `transform`, ni `opacity`, ni `will-change`.
+
+De paso quedó confirmado que el arreglo de la pasada anterior anda: con
+emulación táctil de verdad `(hover: hover)` da **false**, así que los 19
+departamentos no declaran ninguna transición. Duración 0s, medida.
+
+> **Ojo con esto al medir:** sin `hasTouch` + `isMobile`, Chromium dice
+> `(hover: hover) = true` y aplica reglas que en un celular no existen. La
+> primera corrida se hizo así y estaba mirando otra pantalla. El laboratorio ya
+> abre todos sus contextos en modo táctil.
+
+Lo que NO se hizo, y a propósito: hay 25 `transition-colors` en el proyecto que
+declaran transiciones para un `:hover` que en un celular no puede dispararse.
+Es la misma familia que el arreglo de `.depto` del 4/9, **pero `.depto` animaba
+`filter`, que fuerza una superficie, y `transition-colors` anima sólo pintura,
+que no.** Tocar 25 lugares para arreglar algo que se midió inerte es
+exactamente el error que ya se cometió dos veces esta semana. Queda anotado, sin
+tocar.
+
+### El laboratorio, tercera versión
+
+- Corre en contexto táctil, para medir la pantalla que es.
+- Comprueba qué hace el toque, y lo informa.
+- **B ya no "falla" en el menú y el mapa**: declara `soloEn: ["mesa"]`. Esas dos
+  pantallas nunca usaron las texturas horneadas, así que no hay herramientas de
+  antes a las que volver, y decir "falla" era gritar por nada. Un parche que sí
+  corresponde y no agarra nada sigue fallando.
+
+### El contador de motas no sirve en el menú ni en el mapa
+
+Queda escrito porque va a confundir a alguien: el mapa da **534 motas** y el
+menú pasó de 25 a 88 al poner el piso de tinta. No es basura que apareció, es el
+límite que el propio `motas.mjs` documenta —no distingue basura de un detalle
+chiquito del diseño— y esas dos pantallas son casi todas detalles chiquitos. El
+número que sirve ahí es el error contra la referencia sobremuestreada, que no
+se movió: 2,07.
+
+### Estado al cerrar
+
+`npm test` **167/167** · `tsc --noEmit` limpio · `mirar-mesa`, `mirar-mesa-nueva`,
+`mirar-web`, `mirar-rivales` y `mirar-app-compilada` sin fallas · los dos builds
+OK · diff sin patrones peligrosos ni datos personales · el laboratorio sólo
+habla con `localhost:3000`.
+
+### Pendiente
+
+1. **Correr `celular-usb.mjs --vigilar` con el teléfono enchufado.** Tercera
+   sesión que queda pendiente y **tercera hipótesis que se cae al medirla**
+   —los `filter`, el trazo sub-píxel, y ahora el toque—. Ya no hay nada
+   sensato que adivinar: hace falta la foto del framebuffer.
+2. `deviceScaleFactor: 2` en las siete herramientas, para que el punto ciego no
+   vuelva. El laboratorio ya lo hace; las demás no.
+3. `container-type: size` + `cqh` en vez de `vh` en las dos tablas de la mesa
+   (necesita captura y permiso).
+4. Prender AdMob (explicado en el README, sin código).
+
+---
+
+## 2026-09-04 (segunda pasada) — Una segunda hipótesis descartada, y los botones sobre las cartas
+
+Santiago pidió tres cosas: buscar en el historial **qué cambio de herramienta**
+metió las manchitas, armar un diseño de nivel con las herramientas de antes
+**en un lugar aparte y sin tocar el código**, y bajar los botones de canto.
+
+### El cambio de herramienta existe, y está fechado
+
+Es del 30/8, la sesión que se llama **"Dibujar con línea en vez de manchar"**:
+ese día se pasó de manchas desenfocadas a dibujo con línea de tinta.
+
+| | Antes (≤29/8) | Hoy |
+|---|---|---|
+| La mesa | `radial-gradient` de CSS | WebP horneado |
+| La perspectiva | `rotateX(34deg)` vivo | horneada + `scale()` por objeto |
+| Los dibujos | manchas desenfocadas | líneas de tinta de 0,7 a 1,9 unidades |
+
+### La hipótesis que se armó con eso, y que NO sobrevivió
+
+El razonamiento era bueno y los números daban: una `<Carta>` de `viewBox` 100
+dibujada a 41,8 px CSS da 0,836 px reales por unidad, así que en el Redmi
+(DPR 2) un `strokeWidth="0.7"` sale a **0,59 píxeles de verdad**. Ninguna línea
+de esas cartas llega a un píxel. Y como los objetos se escalan con un `scale(k)`
+continuo, cualquier cambio de alto mueve `k` y reparte los píxeles distinto:
+explicaba la intermitencia y explicaba por qué justo al cantar.
+
+**Y está mal.** Se probó en el laboratorio y falló dos veces seguidas:
+
+1. Al ampliar los iconos a DPR 2 apareció el marco de la carta **cortado en
+   rayitas**, que parecía la prueba. **Era la pinta.** El marco de la baraja
+   española se corta un número distinto de veces según el palo, está escrito en
+   `components/Carta.tsx:389` y es el diseño andando bien.
+2. Con el piso de grosor puesto (87 de 140 trazos subidos), el error contra la
+   referencia sobremuestreada quedó **igual**: 2,07 → 2,08 sobre 255.
+
+> Segunda hipótesis en dos sesiones que se cae al medirla. La primera fueron los
+> `filter` de CSS. Las dos eran razonables, las dos tenían un mecanismo
+> plausible, y ninguna era la causa. **La única medición que falta es la única
+> que decide, y es la del teléfono.**
+
+### Lo que sí quedó probado
+
+- **RGB565 descartado.** Si el WebView compusiera a 16 bits, los canales de la
+  captura tendrían 32/64/32 valores distintos. Tienen **239/236/230**: 8 bits
+  enteros. No hay cuantización.
+- **Las texturas horneadas están limpias.** Son WebP con pérdida (q82/q80), así
+  que se abrieron con `sharp` y se contaron los píxeles de croma imposible sobre
+  madera sepia: **0 de 1.260.000** en `bar-ciudad-mesa.webp`, 0 en
+  `campo-mesa.webp`, 0 en el fondo.
+- **De dónde viene el APK no cambia nada.** El de Actions y el de casa se
+  diferencian sólo en la clave de firma; el que dibuja es el WebView del
+  teléfono. Y Cloudflare no toca la app: los archivos viajan adentro del APK.
+- **Las capturas siguen sin ser confiables, y ahora hay un número.** El teléfono
+  es de 720×1600 y las capturas llegan de **344×725 y 337×716**: el espejo de
+  Windows las achicó a **0,478×** y las volvió a comprimir. Todo lo que estamos
+  mirando pasó por ese remuestreo.
+
+### El punto ciego de verdad, que sí es nuestro
+
+    grep -rn "deviceScaleFactor" herramientas/*.mjs   →   0 resultados
+
+**Las siete herramientas miraban a DPR 1 y el celular dibuja a DPR 2.** Nunca
+miramos la grilla de píxeles donde aparece el bug. Eso no explica las motas por
+sí solo, pero explica por qué todo daba limpio acá.
+
+### `herramientas/laboratorio.mjs` (nuevo)
+
+Abre el sitio con Playwright a **360×760 con DPR 2** —el Redmi 13C de verdad— y
+**parchea la página en el navegador**: no toca un archivo del proyecto y no crea
+ninguna ruta en `app/`. Compara A (hoy), B (herramientas de antes) y C (trazo
+con piso), y de cada una saca captura y número.
+
+Dos cosas aprendidas armándolo, las dos por equivocarse primero:
+
+- **Un parche que no agarra nada miente.** La primera corrida dio B idéntica a A
+  **hasta el byte**, porque los selectores no existían. Ahora cada variante
+  cuenta a cuántos elementos le pegó y la herramienta sale con código 1 si a
+  alguna le pegó a cero.
+- **B sólo tiene sentido en la mesa.** El menú de "¿Cómo querés jugar?" y el
+  mapa **nunca usaron las texturas horneadas**: siempre fueron SVG de tinta. En
+  esas dos pantallas "volver a las herramientas de antes" no es una opción que
+  exista, porque no hubo herramientas de antes.
+
+Y mirando la comparación, **B se lleva puesto el diseño**: sin veta, sin nudos y
+sin los objetos de la gira. Es la interfaz apoyada sobre un fondo que ya se
+había descartado el 29/8.
+
+### Los botones de canto, apoyados sobre las cartas
+
+Santiago los quiso más abajo: sobre las cartas, misma fila y misma separación, a
+unos píxeles de la barra de Truco / Envido / Mazo.
+
+Va con `absolute inset-x-0 bottom-2 z-30` en
+[`app/jugar/mesa/page.tsx`](app/jugar/mesa/page.tsx). Dos decisiones que conviene
+no deshacer:
+
+- **`bottom-2` y no un `translate-y`.** "A unos píxeles de la barra" es una
+  distancia al pie de la escena, no un corrimiento desde donde caían antes. El
+  envoltorio ya termina donde empieza la barra, así que anclando ahí no queda
+  ningún número mágico que mantener cuando cambie el alto de la mano.
+- **`z-30` y no `z-10`.** El abanico es `z-10` y el pulgar `z-20`, y los dos
+  vienen DESPUÉS en el documento: con empate ganaban ellos. La primera captura
+  mostró una franja dorada asomando por detrás de las cartas y nada más.
+
+Sigue fuera del flujo, que es lo que importa: **la mesa se queda en 484,36 px
+abras el envido o no.**
+
+### El guard nuevo, y su sabotaje
+
+`mirar-mesa.mjs` ahora comprueba que **la tira de cantos deje al menos 44 px de
+carta libre** —el mínimo que se puede tocar con el dedo—. Es una falla que no
+rompe ninguna otra regla: no scrollea, no se solapa nada, y sin embargo no
+podés jugar. El riesgo real es la flor, cuyos botones son largos y en 320 px se
+parten en varias filas.
+
+Saboteado con un `py-16` en la tira: falló en todos los tamaños diciendo
+`1 fila(s) de 174px y deja 0/0/0px de carta libre`, y con
+`scroll=false manoTapada=false` al lado, o sea que **ninguna otra comprobación
+lo habría visto**. Sabotaje quitado y verificado en 0.
+
+### Estado al cerrar
+
+`npm test` **167/167** · `tsc --noEmit` limpio · `mirar-mesa`, `mirar-mesa-nueva`,
+`mirar-web`, `mirar-rivales` y `mirar-app-compilada` sin fallas · los dos builds
+OK · sin patrones peligrosos ni datos personales en el diff · `capturas/` sigue
+ignorado.
+
+### Pendiente
+
+1. **Correr `celular-usb.mjs --vigilar` con el teléfono enchufado.** Sigue sin
+   correr —no había celular— y sigue siendo lo único que decide si la mota
+   existe o la inventó el espejo. **Dos hipótesis ya se cayeron por adivinar en
+   vez de medir; no vale la pena una tercera.**
+2. Que Santiago elija entre A, B y C sobre las capturas del laboratorio.
+3. `deviceScaleFactor: 2` en las siete herramientas, para que el punto ciego no
+   vuelva.
+4. `container-type: size` + `cqh` en vez de `vh` en las dos tablas de la mesa
+   (viene de la pasada anterior; necesita captura y permiso).
+5. Prender AdMob (explicado en el README, sin código).
+
+---
+
 ## 2026-09-04 — Las manchitas del celular, el hueco del anuncio, y una hipótesis descartada con números
 
 Sesión larga y en dos pasadas. Lo más importante que deja no es un arreglo: es

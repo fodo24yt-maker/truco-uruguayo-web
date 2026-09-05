@@ -63,6 +63,39 @@ const TELA = "var(--color-tela)";
 const CABALLO = "var(--color-caballo)";
 const PAPEL = "var(--color-carta)";
 
+/**
+ * ── EL PISO DE TINTA ───────────────────────────────────────────────────────
+ *
+ * `viewBox` es 100 de ancho, así que un `strokeWidth` de 0,8 mide 0,8 CENTÉSIMOS
+ * del ancho con que se dibuje la carta. Eso está bien mientras la carta sea
+ * grande y se rompe cuando es chica, porque la línea termina midiendo menos que
+ * un píxel del aparato y el rasterizador no puede dibujarla entera: la reparte
+ * en cobertura parcial y la raya sale despareja.
+ *
+ * La cuenta, con el Redmi 13C (360×760 CSS a DPR 2, o sea 2 píxeles reales por
+ * píxel CSS): para que un trazo de 0,8 llegue a UN píxel real, la carta tiene
+ * que medir 0,8 × ancho / 100 × 2 ≥ 1, o sea **ancho ≥ 63 px**. Y las
+ * dibujamos más chicas que eso en todos lados: los iconos de "¿Cómo querés
+ * jugar?" miden 32–44 px, la muestra de los ejercicios 52–62, y las cartas en
+ * vuelo del reparto 28–46.
+ *
+ * Así que ninguna línea baja de acá. El número original queda escrito —`tinta(0.8)`
+ * y no `1.4`— porque dice qué peso quería tener ese trazo respecto de los otros,
+ * y eso es lo que hay que mirar el día que se toque.
+ *
+ * 1,4 sale de la carta más chica que dibujamos de verdad, la de 44 px:
+ * 1,4 × 44 / 100 × 2 = 1,23 píxeles reales.
+ *
+ * ── OJO ───────────────────────────────────────────────────────────────────
+ * Esto NO está demostrado que arregle las manchitas del celular. Se midió en
+ * `herramientas/laboratorio.mjs` contra una referencia sobremuestreada y dio
+ * 2,07 → 2,08 sobre 255: la misma imagen. Entró porque una línea más fina que
+ * un píxel es un riesgo real de dibujo, no porque se haya visto curar el bug.
+ * El `strokeWidth="0"` es otra cosa —quiere decir "sin línea"— y no pasa por acá.
+ */
+const TINTA_MINIMA = 1.4;
+const tinta = (peso: number) => Math.max(peso, TINTA_MINIMA);
+
 /** Espadas y bastos se dibujan largas y se cruzan; oros y copas van en grilla. */
 const esCruzado = (palo: Palo) => palo === "espada" || palo === "basto";
 
@@ -73,7 +106,7 @@ const esCruzado = (palo: Palo) => palo === "espada" || palo === "basto";
 function PipOro({ t }: { t: Tinta }) {
   return (
     <g>
-      <circle cx="12" cy="12" r="11.2" fill={t.luz} stroke={t.hondo} strokeWidth="1" />
+      <circle cx="12" cy="12" r="11.2" fill={t.luz} stroke={t.hondo} strokeWidth={tinta(1)} />
       <circle
         cx="12"
         cy="12"
@@ -84,8 +117,8 @@ function PipOro({ t }: { t: Tinta }) {
         strokeDasharray="1.4 1.7"
         opacity="0.8"
       />
-      <circle cx="12" cy="12" r="8.4" fill={t.base} stroke={t.hondo} strokeWidth="0.9" />
-      <circle cx="12" cy="12" r="5.4" fill={t.luz} stroke={t.hondo} strokeWidth="0.7" />
+      <circle cx="12" cy="12" r="8.4" fill={t.base} stroke={t.hondo} strokeWidth={tinta(0.9)} />
+      <circle cx="12" cy="12" r="5.4" fill={t.luz} stroke={t.hondo} strokeWidth={tinta(0.7)} />
       {/* la roseta del centro, que es lo que la hace moneda y no círculo */}
       <path
         d="M12 6.9 L13.4 10.6 L17.1 12 L13.4 13.4 L12 17.1 L10.6 13.4 L6.9 12 L10.6 10.6 Z"
@@ -112,24 +145,24 @@ function PipCopa({ t }: { t: Tinta }) {
         d="M4.2 2.6 H19.8 C19.8 5 18.8 6.1 17.2 6.5 C16.7 11 14.6 13.6 12 13.6 C9.4 13.6 7.3 11 6.8 6.5 C5.2 6.1 4.2 5 4.2 2.6 Z"
         fill={t.base}
         stroke={t.hondo}
-        strokeWidth="1"
+        strokeWidth={tinta(1)}
       />
       {/* el labio, que es por donde le pega la luz */}
       <path
         d="M4.2 2.6 H19.8 C19.8 4.4 16.4 5.4 12 5.4 C7.6 5.4 4.2 4.4 4.2 2.6 Z"
         fill={t.luz}
         stroke={t.hondo}
-        strokeWidth="0.9"
+        strokeWidth={tinta(0.9)}
       />
       {/* el vástago y su nudo */}
-      <path d="M10.6 13.4 H13.4 L14 17.8 H10 Z" fill={t.base} stroke={t.hondo} strokeWidth="0.9" />
-      <ellipse cx="12" cy="15.6" rx="2.9" ry="1.5" fill={t.luz} stroke={t.hondo} strokeWidth="0.8" />
+      <path d="M10.6 13.4 H13.4 L14 17.8 H10 Z" fill={t.base} stroke={t.hondo} strokeWidth={tinta(0.9)} />
+      <ellipse cx="12" cy="15.6" rx="2.9" ry="1.5" fill={t.luz} stroke={t.hondo} strokeWidth={tinta(0.8)} />
       {/* el pie */}
       <path
         d="M5.8 21.6 C7 18.9 9.2 17.8 12 17.8 C14.8 17.8 17 18.9 18.2 21.6 Z"
         fill={t.base}
         stroke={t.hondo}
-        strokeWidth="1"
+        strokeWidth={tinta(1)}
       />
       <path d="M5.2 21.6 H18.8" stroke={t.hondo} strokeWidth="1.5" strokeLinecap="round" />
     </g>
@@ -144,7 +177,7 @@ function PipEspada({ t }: { t: Tinta }) {
         d="M8 1 L10.8 8.2 L10.8 30 L5.2 30 L5.2 8.2 Z"
         fill={t.base}
         stroke={t.hondo}
-        strokeWidth="1"
+        strokeWidth={tinta(1)}
       />
       {/* el filo, más claro: da el metal */}
       <path d="M8 3.4 L9.5 8.6 L9.5 29 L8 29 Z" fill={t.luz} opacity="0.95" />
@@ -153,18 +186,18 @@ function PipEspada({ t }: { t: Tinta }) {
         d="M1.4 30 H14.6 C14.6 32.9 12 33.8 8 33.8 C4 33.8 1.4 32.9 1.4 30 Z"
         fill={t.base}
         stroke={t.hondo}
-        strokeWidth="1"
+        strokeWidth={tinta(1)}
       />
       {/* la empuñadura, con sus vueltas de cuero */}
       <path d="M6.1 33.6 H9.9 V44.2 H6.1 Z" fill={t.hondo} />
       <path
         d="M6.1 35.8 H9.9 M6.1 38.4 H9.9 M6.1 41 H9.9"
         stroke={t.luz}
-        strokeWidth="0.8"
+        strokeWidth={tinta(0.8)}
         opacity="0.55"
       />
       {/* el pomo */}
-      <circle cx="8" cy="46.8" r="3.1" fill={t.base} stroke={t.hondo} strokeWidth="1" />
+      <circle cx="8" cy="46.8" r="3.1" fill={t.base} stroke={t.hondo} strokeWidth={tinta(1)} />
       <circle cx="7.1" cy="45.8" r="1.1" fill={t.luz} />
     </g>
   );
@@ -178,7 +211,7 @@ function PipBasto({ t }: { t: Tinta }) {
         d="M6.7 2.6 C6 12 5.2 24 4.9 33 C4.6 41 4.8 46.6 5.3 49.4 L11.1 49.4 C11.4 46.6 11.5 41 11.3 33 C11 24 10.4 12 9.8 2.6 Z"
         fill={t.base}
         stroke={t.hondo}
-        strokeWidth="1"
+        strokeWidth={tinta(1)}
       />
       {/* la luz corriendo por un costado */}
       <path
@@ -187,12 +220,12 @@ function PipBasto({ t }: { t: Tinta }) {
         opacity="0.8"
       />
       {/* los nudos: las ramitas cortadas, que es lo que lo hace basto y no palo */}
-      <path d="M10.5 12.6 L15.3 9.9 L14.8 15.4 Z" fill={t.base} stroke={t.hondo} strokeWidth="0.9" />
-      <path d="M5.2 22.4 L0.6 19.7 L1.3 25.2 Z" fill={t.base} stroke={t.hondo} strokeWidth="0.9" />
-      <path d="M10.9 32.6 L15.5 30.4 L15 35.6 Z" fill={t.base} stroke={t.hondo} strokeWidth="0.9" />
-      <path d="M5 41.4 L0.9 39.6 L1.5 44.2 Z" fill={t.base} stroke={t.hondo} strokeWidth="0.9" />
+      <path d="M10.5 12.6 L15.3 9.9 L14.8 15.4 Z" fill={t.base} stroke={t.hondo} strokeWidth={tinta(0.9)} />
+      <path d="M5.2 22.4 L0.6 19.7 L1.3 25.2 Z" fill={t.base} stroke={t.hondo} strokeWidth={tinta(0.9)} />
+      <path d="M10.9 32.6 L15.5 30.4 L15 35.6 Z" fill={t.base} stroke={t.hondo} strokeWidth={tinta(0.9)} />
+      <path d="M5 41.4 L0.9 39.6 L1.5 44.2 Z" fill={t.base} stroke={t.hondo} strokeWidth={tinta(0.9)} />
       {/* la punta de arriba, redondeada */}
-      <ellipse cx="8.2" cy="2.8" rx="1.7" ry="1.1" fill={t.luz} stroke={t.hondo} strokeWidth="0.8" />
+      <ellipse cx="8.2" cy="2.8" rx="1.7" ry="1.1" fill={t.luz} stroke={t.hondo} strokeWidth={tinta(0.8)} />
     </g>
   );
 }
@@ -259,7 +292,7 @@ const anguloDeCruce = (pares: number) => (pares > 1 ? 38 : 27);
 
 function Sota({ t }: { t: Tinta }) {
   return (
-    <g strokeLinejoin="round" strokeWidth="1" stroke={t.hondo}>
+    <g strokeLinejoin="round" strokeWidth={tinta(1)} stroke={t.hondo}>
       {/* las piernas */}
       <path d="M13.5 50 L12.5 68 L19 68 L21.5 55 L24 68 L30.5 68 L29.5 50 Z" fill={t.luz} />
       {/* los zapatos */}
@@ -268,38 +301,38 @@ function Sota({ t }: { t: Tinta }) {
       {/* el jubón */}
       <path d="M9 32 C9 26 14 22.5 21.5 22.5 C29 22.5 34 26 34 32 L35.5 51 L7.5 51 Z" fill={t.base} />
       {/* el panel claro del pecho */}
-      <path d="M17 23.5 H26 L28 51 H15 Z" fill={TELA} strokeWidth="0.8" />
+      <path d="M17 23.5 H26 L28 51 H15 Z" fill={TELA} strokeWidth={tinta(0.8)} />
       {/* los brazos */}
       <path d="M9.2 33 L4 46 L8.6 48 L13 34.5 Z" fill={t.base} />
       <path d="M33.8 33 L39 46 L34.4 48 L31 34.5 Z" fill={t.base} />
-      <circle cx="6" cy="48.6" r="2.7" fill={PIEL} strokeWidth="0.8" />
-      <circle cx="37" cy="48.6" r="2.7" fill={PIEL} strokeWidth="0.8" />
+      <circle cx="6" cy="48.6" r="2.7" fill={PIEL} strokeWidth={tinta(0.8)} />
+      <circle cx="37" cy="48.6" r="2.7" fill={PIEL} strokeWidth={tinta(0.8)} />
       {/* el cinto */}
-      <path d="M7.8 44.5 H35.2 L35.6 49.5 H7.5 Z" fill={REALCE} strokeWidth="0.9" />
-      <path d="M18.5 44.5 H25 V49.5 H18.5 Z" fill={REALCE_HONDO} strokeWidth="0.7" />
+      <path d="M7.8 44.5 H35.2 L35.6 49.5 H7.5 Z" fill={REALCE} strokeWidth={tinta(0.9)} />
+      <path d="M18.5 44.5 H25 V49.5 H18.5 Z" fill={REALCE_HONDO} strokeWidth={tinta(0.7)} />
       {/* el cuello */}
-      <path d="M15.5 23 L21.5 29.5 L27.5 23 Z" fill={TELA} strokeWidth="0.8" />
+      <path d="M15.5 23 L21.5 29.5 L27.5 23 Z" fill={TELA} strokeWidth={tinta(0.8)} />
       {/* la cabeza */}
       <ellipse cx="21.5" cy="14.5" rx="7.6" ry="8.6" fill={PIEL} />
       <path d="M21.5 6 C25.5 6 29 9 29.1 14 C27 11.5 24.5 10.5 21.5 10.5 Z" fill={PIEL_SOMBRA} strokeWidth="0" />
       {/* el pelo, largo como el de la sota de la baraja */}
-      <path d="M13.9 14 C13.9 7.5 17 4.5 21.5 4.5 C26 4.5 29.1 7.5 29.1 14 C29.1 11 26.5 9.5 21.5 9.5 C16.5 9.5 13.9 11 13.9 14 Z" fill={PELO} strokeWidth="0.8" />
-      <path d="M14 13 C12.8 17.5 13.2 21 14.2 23 L16.6 21 C15.6 19 15.3 16.4 15.6 13.6 Z" fill={PELO} strokeWidth="0.8" />
-      <path d="M29 13 C30.2 17.5 29.8 21 28.8 23 L26.4 21 C27.4 19 27.7 16.4 27.4 13.6 Z" fill={PELO} strokeWidth="0.8" />
+      <path d="M13.9 14 C13.9 7.5 17 4.5 21.5 4.5 C26 4.5 29.1 7.5 29.1 14 C29.1 11 26.5 9.5 21.5 9.5 C16.5 9.5 13.9 11 13.9 14 Z" fill={PELO} strokeWidth={tinta(0.8)} />
+      <path d="M14 13 C12.8 17.5 13.2 21 14.2 23 L16.6 21 C15.6 19 15.3 16.4 15.6 13.6 Z" fill={PELO} strokeWidth={tinta(0.8)} />
+      <path d="M29 13 C30.2 17.5 29.8 21 28.8 23 L26.4 21 C27.4 19 27.7 16.4 27.4 13.6 Z" fill={PELO} strokeWidth={tinta(0.8)} />
       {/* la cara */}
       <ellipse cx="18.4" cy="14.6" rx="1.2" ry="1.4" fill={t.hondo} strokeWidth="0" />
       <ellipse cx="24.6" cy="14.6" rx="1.2" ry="1.4" fill={t.hondo} strokeWidth="0" />
-      <path d="M19.3 19 Q21.5 20.6 23.7 19" fill="none" strokeWidth="1" strokeLinecap="round" />
+      <path d="M19.3 19 Q21.5 20.6 23.7 19" fill="none" strokeWidth={tinta(1)} strokeLinecap="round" />
       {/* el gorro con su pluma */}
       <path d="M12.8 8.5 C13.6 3 17 0.5 21.5 0.5 C26 0.5 29.4 3 30.2 8.5 C26.5 6 24 5 21.5 5 C19 5 16.5 6 12.8 8.5 Z" fill={t.base} />
-      <path d="M30 6.5 C33.5 4 36.5 4.5 38 6.5 C35.5 6.5 33 7.5 31 9.5 Z" fill={REALCE} strokeWidth="0.8" />
+      <path d="M30 6.5 C33.5 4 36.5 4.5 38 6.5 C35.5 6.5 33 7.5 31 9.5 Z" fill={REALCE} strokeWidth={tinta(0.8)} />
     </g>
   );
 }
 
 function Caballo({ t }: { t: Tinta }) {
   return (
-    <g strokeLinejoin="round" strokeWidth="1" stroke={t.hondo}>
+    <g strokeLinejoin="round" strokeWidth={tinta(1)} stroke={t.hondo}>
       {/* la cola */}
       <path d="M8 42 C3 43 1 48 2 55 C4 50 6 47.5 9.5 46.5 Z" fill={PELO} />
       {/* el cuerpo del caballo */}
@@ -318,22 +351,22 @@ function Caballo({ t }: { t: Tinta }) {
       <path d="M31 40 C32 34 34.5 29 38 26 L43 29.5 C40.5 33 38.5 37.5 37.5 42 Z" fill={CABALLO} />
       <path d="M36.5 27.5 C38.5 24 41 22.5 43.5 23.5 L43.8 30 C41.5 30 39.5 30.8 38.2 32 Z" fill={CABALLO} />
       {/* la crin */}
-      <path d="M30.5 39 C31.5 33 34 28 37.5 25 L39.5 26.5 C36.5 29.5 34 34 33 39.5 Z" fill={PELO} strokeWidth="0.8" />
+      <path d="M30.5 39 C31.5 33 34 28 37.5 25 L39.5 26.5 C36.5 29.5 34 34 33 39.5 Z" fill={PELO} strokeWidth={tinta(0.8)} />
       {/* el ojo y la brida */}
       <circle cx="40.5" cy="26.8" r="1.1" fill={t.hondo} strokeWidth="0" />
-      <path d="M37.4 27.5 L41.5 30" strokeWidth="1" strokeLinecap="round" />
+      <path d="M37.4 27.5 L41.5 30" strokeWidth={tinta(1)} strokeLinecap="round" />
       {/* el jinete: torso */}
       <path d="M14.5 22 C14.5 17.5 17.5 15 21.5 15 C25.5 15 28.5 17.5 28.5 22 L30.5 37 C27 38.5 16 38.5 12.5 37 Z" fill={t.base} />
-      <path d="M18 16 H25 L26.5 37 H16.5 Z" fill={TELA} strokeWidth="0.8" />
+      <path d="M18 16 H25 L26.5 37 H16.5 Z" fill={TELA} strokeWidth={tinta(0.8)} />
       {/* el brazo que lleva la rienda */}
       <path d="M27.5 22.5 L36 28 L34 31 L26 26.5 Z" fill={t.base} />
-      <circle cx="36" cy="29" r="2.5" fill={PIEL} strokeWidth="0.8" />
+      <circle cx="36" cy="29" r="2.5" fill={PIEL} strokeWidth={tinta(0.8)} />
       {/* la cabeza del jinete */}
       <ellipse cx="21.5" cy="9.5" rx="6.4" ry="7.2" fill={PIEL} />
-      <path d="M15.4 8.5 C15.4 3.5 18 1 21.5 1 C25 1 27.6 3.5 27.6 8.5 C25.5 6.5 23.5 5.8 21.5 5.8 C19.5 5.8 17.5 6.5 15.4 8.5 Z" fill={PELO} strokeWidth="0.8" />
+      <path d="M15.4 8.5 C15.4 3.5 18 1 21.5 1 C25 1 27.6 3.5 27.6 8.5 C25.5 6.5 23.5 5.8 21.5 5.8 C19.5 5.8 17.5 6.5 15.4 8.5 Z" fill={PELO} strokeWidth={tinta(0.8)} />
       <ellipse cx="19" cy="9.6" rx="1.1" ry="1.3" fill={t.hondo} strokeWidth="0" />
       <ellipse cx="24" cy="9.6" rx="1.1" ry="1.3" fill={t.hondo} strokeWidth="0" />
-      <path d="M19.6 13.4 Q21.5 14.8 23.4 13.4" fill="none" strokeWidth="0.9" strokeLinecap="round" />
+      <path d="M19.6 13.4 Q21.5 14.8 23.4 13.4" fill="none" strokeWidth={tinta(0.9)} strokeLinecap="round" />
       {/* el sombrero */}
       <path d="M13 5 C13 1 16.5 -1.5 21.5 -1.5 C26.5 -1.5 30 1 30 5 Z" fill={t.base} />
       <path d="M11 4.5 H32 V6.5 H11 Z" fill={t.base} />
@@ -343,39 +376,39 @@ function Caballo({ t }: { t: Tinta }) {
 
 function Rey({ t }: { t: Tinta }) {
   return (
-    <g strokeLinejoin="round" strokeWidth="1" stroke={t.hondo}>
+    <g strokeLinejoin="round" strokeWidth={tinta(1)} stroke={t.hondo}>
       {/* el manto */}
       <path d="M7 40 C7 32 13 27.5 21.5 27.5 C30 27.5 36 32 36 40 L38.5 70 H4.5 Z" fill={t.base} />
       {/* la abertura del manto, con su forro claro */}
-      <path d="M17.5 29 L21.5 36 L25.5 29 L28.5 70 H14.5 Z" fill={TELA} strokeWidth="0.8" />
+      <path d="M17.5 29 L21.5 36 L25.5 29 L28.5 70 H14.5 Z" fill={TELA} strokeWidth={tinta(0.8)} />
       {/* el armiño del cuello */}
-      <path d="M12.5 30.5 C15.5 27.5 18 26.5 21.5 26.5 C25 26.5 27.5 27.5 30.5 30.5 L27 34 C25 32 23.5 31.4 21.5 31.4 C19.5 31.4 18 32 16 34 Z" fill={TELA} strokeWidth="0.8" />
+      <path d="M12.5 30.5 C15.5 27.5 18 26.5 21.5 26.5 C25 26.5 27.5 27.5 30.5 30.5 L27 34 C25 32 23.5 31.4 21.5 31.4 C19.5 31.4 18 32 16 34 Z" fill={TELA} strokeWidth={tinta(0.8)} />
       {/* las mangas */}
       <path d="M7.4 41 L2.5 55 L8 57 L11.5 43 Z" fill={t.base} />
       <path d="M35.6 41 L40.5 55 L35 57 L31.5 43 Z" fill={t.base} />
-      <circle cx="5.3" cy="57.5" r="2.8" fill={PIEL} strokeWidth="0.8" />
+      <circle cx="5.3" cy="57.5" r="2.8" fill={PIEL} strokeWidth={tinta(0.8)} />
       {/* el cetro */}
       <path d="M37 33 L36 58" strokeWidth="2.4" stroke={REALCE_HONDO} strokeLinecap="round" />
-      <circle cx="37.2" cy="30.5" r="3.4" fill={REALCE} strokeWidth="0.9" />
+      <circle cx="37.2" cy="30.5" r="3.4" fill={REALCE} strokeWidth={tinta(0.9)} />
       <circle cx="36.3" cy="29.6" r="1.2" fill={REALCE_HONDO} strokeWidth="0" />
-      <circle cx="37.8" cy="57.5" r="2.8" fill={PIEL} strokeWidth="0.8" />
+      <circle cx="37.8" cy="57.5" r="2.8" fill={PIEL} strokeWidth={tinta(0.8)} />
       {/* el cinto */}
-      <path d="M8.6 52 H34.4 L34.8 57 H8.2 Z" fill={REALCE} strokeWidth="0.9" />
-      <path d="M18.5 52 H25 V57 H18.5 Z" fill={REALCE_HONDO} strokeWidth="0.7" />
+      <path d="M8.6 52 H34.4 L34.8 57 H8.2 Z" fill={REALCE} strokeWidth={tinta(0.9)} />
+      <path d="M18.5 52 H25 V57 H18.5 Z" fill={REALCE_HONDO} strokeWidth={tinta(0.7)} />
       {/* la barba, que es lo que lo hace rey de un vistazo */}
-      <path d="M14 17 C14 26 17 31 21.5 31 C26 31 29 26 29 17 Z" fill={TELA} strokeWidth="0.9" />
+      <path d="M14 17 C14 26 17 31 21.5 31 C26 31 29 26 29 17 Z" fill={TELA} strokeWidth={tinta(0.9)} />
       {/* la cabeza */}
       <ellipse cx="21.5" cy="15" rx="7.6" ry="8.4" fill={PIEL} />
-      <path d="M14.2 18 C15.5 24 18 28 21.5 28 C25 28 27.5 24 28.8 18 C26 20 24 20.8 21.5 20.8 C19 20.8 17 20 14.2 18 Z" fill={TELA} strokeWidth="0.9" />
+      <path d="M14.2 18 C15.5 24 18 28 21.5 28 C25 28 27.5 24 28.8 18 C26 20 24 20.8 21.5 20.8 C19 20.8 17 20 14.2 18 Z" fill={TELA} strokeWidth={tinta(0.9)} />
       <ellipse cx="18.4" cy="14.4" rx="1.2" ry="1.4" fill={t.hondo} strokeWidth="0" />
       <ellipse cx="24.6" cy="14.4" rx="1.2" ry="1.4" fill={t.hondo} strokeWidth="0" />
-      <path d="M15.6 10.6 L19.2 11.6 M27.4 10.6 L23.8 11.6" strokeWidth="1.1" strokeLinecap="round" fill="none" />
+      <path d="M15.6 10.6 L19.2 11.6 M27.4 10.6 L23.8 11.6" strokeWidth={tinta(1.1)} strokeLinecap="round" fill="none" />
       {/* la corona */}
       <path d="M12.6 8.5 L12.6 0.5 L16.5 4.5 L21.5 -1 L26.5 4.5 L30.4 0.5 L30.4 8.5 Z" fill={REALCE} />
-      <path d="M12.6 8.5 H30.4 V11 H12.6 Z" fill={REALCE_HONDO} strokeWidth="0.9" />
-      <circle cx="16.5" cy="4.6" r="1.2" fill={t.base} strokeWidth="0.6" />
-      <circle cx="21.5" cy="0.4" r="1.3" fill={t.base} strokeWidth="0.6" />
-      <circle cx="26.5" cy="4.6" r="1.2" fill={t.base} strokeWidth="0.6" />
+      <path d="M12.6 8.5 H30.4 V11 H12.6 Z" fill={REALCE_HONDO} strokeWidth={tinta(0.9)} />
+      <circle cx="16.5" cy="4.6" r="1.2" fill={t.base} strokeWidth={tinta(0.6)} />
+      <circle cx="21.5" cy="0.4" r="1.3" fill={t.base} strokeWidth={tinta(0.6)} />
+      <circle cx="26.5" cy="4.6" r="1.2" fill={t.base} strokeWidth={tinta(0.6)} />
     </g>
   );
 }
@@ -452,7 +485,7 @@ export function Carta({
           rx="4"
           fill="none"
           stroke="var(--color-dorado)"
-          strokeWidth="1.2"
+          strokeWidth={tinta(1.2)}
           opacity="0.7"
         />
         {[28, 55, 82, 109, 136].map((y) =>
@@ -462,7 +495,7 @@ export function Carta({
               d={`M${x} ${y - 7} L${x + 7} ${y} L${x} ${y + 7} L${x - 7} ${y} Z`}
               fill="none"
               stroke="var(--color-dorado)"
-              strokeWidth="0.9"
+              strokeWidth={tinta(0.9)}
               opacity="0.45"
             />
           )),
