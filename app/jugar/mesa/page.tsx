@@ -79,9 +79,11 @@ const FIN_REPARTO = MOMENTO_VOLTEO + 2 * ENTRE_VOLTEOS + VOLTEO;
  * ── Es un `box-shadow` y NO un `drop-shadow`, a propósito ─────────────────
  *
  * Era `filter: drop-shadow(...)` en el envoltorio de cada carta, y ahí está la
- * mitad del bug del glitch del 1/9/2026: cuando no es tu turno la mano entera
- * se apaga con `opacity`, el navegador compone TODO el subárbol en una
- * superficie aparte, y un filtro adentro es una segunda superficie anidada.
+ * mitad del bug del glitch del 1/9/2026: la mano entera se apagaba con
+ * `opacity`, el navegador componía TODO el subárbol en una superficie aparte,
+ * y un filtro adentro era una segunda superficie anidada. (El apagado se fue
+ * el 7/9/2026 —era la OTRA mitad del mismo bug, ver el comentario del `<div>`
+ * de la mano—; el filtro no vuelve igual.)
  * Eso es lo que en el celular devolvía una banda de rayas del tamaño exacto
  * de la mano. El detalle largo está en `components/mesa/Manos.tsx`.
  *
@@ -1250,25 +1252,44 @@ function Mesa() {
               </p>
             )}
 
-            {/* Cuando no es tu turno la mano se apaga TODA junta —dedos, cartas
-                y pulgar— y no carta por carta. Cada carta con su `opacity`
-                propia se volvía translúcida y dejaba ver el dorso de tu propia
-                mano a través del papel: las cartas se veían grises y con un
-                bulto adentro. Una mano es un objeto solo y se apaga como uno
-                solo.
+            {/* ── ACÁ LA MANO SE APAGABA CUANDO NO ERA TU TURNO ────────────
+                Era `opacity-75` sobre todo el grupo —dedos, cartas y pulgar—
+                con una transición de 200 ms, y **se fue el 7/9/2026**.
 
-                OJO: este `opacity` es lo que obliga al navegador a componer
-                todo lo de adentro en una superficie aparte, y de ahí salió el
-                glitch del 1/9/2026. Adentro de acá NO puede haber ni un
-                `filter` (ver `SOMBRA_EN_MANO` y `components/mesa/Manos.tsx`).
-                `mirar-mesa.mjs` falla si aparece uno. */}
+                ── Por qué, y esta vez con la foto ──────────────────────────
+                El 1/9/2026 se vio en el celular "una banda de rayas del tamaño
+                exacto de la mano". Ese día se le sacó el `filter` de adentro,
+                bajó siete veces y se dio por cerrado. **No estaba cerrado.** El
+                7/9, mirando el teléfono en vivo, apareció otra vez y se midió:
+
+                    caja de este <div>              y=1109 de pantalla, alto 310
+                    banda de ruido en la foto       y=1105,              alto 295
+
+                Es el mismo rectángulo. Y el `opacity` era lo único que quedaba
+                acá forzando una superficie de ese tamaño: un grupo translúcido
+                obliga al navegador a dibujar todo lo de adentro en una textura
+                aparte para después mezclarla, y una textura que vuelve mal se
+                ve así. Se repitió idéntica en doce cuadros a lo largo de 24 s:
+                cuando vuelve mal, queda mal.
+
+                ── Qué se pierde, y por qué se aceptó ───────────────────────
+                Que la mano ya no se atenúa cuando no te toca. La señal de "no
+                es tu turno" sigue estando y es más fuerte: la barra de abajo
+                pasa a ser QUIERO / NO QUIERO, y las cartas no responden al
+                toque. Lo decidió Santiago con la foto de la banda delante.
+
+                ── Lo que NO cambia ─────────────────────────────────────────
+                Adentro de acá sigue sin poder haber un `filter` (ver
+                `SOMBRA_EN_MANO` y `components/mesa/Manos.tsx`), y
+                `mirar-mesa.mjs` sigue fallando si aparece uno. El agarre de
+                abajo es el que usa para mirar. Se llamaba `apagable` y ahora
+                se llama `tuya`: ya no apaga nada, y un nombre que miente
+                cuesta una sesión. */}
             <div
               /* El agarre con el que `mirar-mesa.mjs` comprueba que acá adentro
                  no haya ni un `filter`. Ver el comentario de arriba. */
-              data-mano="apagable"
-              className={`pointer-events-auto transition-opacity duration-200 ${
-                miTurno && b.jugar ? "" : "opacity-75"
-              }`}
+              data-mano="tuya"
+              className="pointer-events-auto"
             >
               {florSalvada && (
                 <p className="mb-0.5 text-center font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-wide text-dorado/90 [text-shadow:0_1px_3px_rgba(0,0,0,1)]">

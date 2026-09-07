@@ -12,6 +12,195 @@
 
 ---
 
+## 2026-09-07 — El instrumento era ciego, y la banda de la mano seguía viva
+
+Quinta sesión con las manchitas. Las cuatro anteriores diagnosticaron mirando un
+número; ésta empezó preguntándole al número si servía, y no servía.
+
+### Lo primero que se midió, y cambió todo lo demás
+
+`bloques.mjs` —el detector del 5/9— da **0 en las seis capturas** que Santiago
+dejó en `Bugs a arreglar/bugs 0709/`. No estaban limpias: **el detector era
+ciego**. Exige que la manchita sea neutra y caiga en la grilla de 4, y las de
+hoy no son ni una cosa ni la otra.
+
+Medidas sobre el framebuffer: cuadraditos de **2×2 px**, en colores saturados y
+fuera de la paleta —`rgb(33,13,123)`, `rgb(48,171,250)`, `rgb(227,10,10)`—. Y
+`adb shell wm density` da 320, o sea **DPR 2**: 2 px de pantalla son **1 px CSS
+exacto**. Otro tamaño y otro color que las del 5/9. **Dos poblaciones
+distintas**, y por eso ahora se cuentan por separado y no se suman nunca.
+
+### El instrumento nuevo, y las dos calibraciones que se cayeron
+
+La población cromática se busca comparando contra **el vecindario, no contra la
+paleta**: decir "el proyecto es cálido, un azul no es nuestro" marcaría media
+carta de espadas apoyada en la mesa.
+
+Se probaron dos afinaciones más y **las dos se cayeron con número**, así que
+quedan escritas adentro del archivo para que nadie las reintente:
+
+1. **Un piso de tamaño de 2×2** ("a DPR 2 nada del compositor puede medir
+   menos"). Suena bien y está mal: el ruido denso se fragmenta, porque sus
+   vecinos también son ruido y sólo algunos píxeles se salen del rango. Con el
+   piso puesto la banda de la mano pasaba de **319 a 2**.
+2. **Apretar el umbral de ángulo** para sacar un falso positivo. Los cosenos
+   dicen que no se puede: el dorso bordo del mazo (dibujo) da **0,906** y la
+   basura de la banda tiene **mediana 0,955**. La basura se parece MÁS a su
+   vecindario que el dibujo. Se solapan, y apretar se lleva la que importa.
+
+Así que **el detector tiene un piso conocido de hasta 9 por cuadro en la mesa**
+—el dorso del mazo asomando junto a la muestra— y se lee sabiendo eso. Alcanza
+de sobra: la banda daba 213 y 319 sobre la misma pantalla.
+
+Validado en cuatro tandas: **319** en la foto con banda · máximo **9** en 45
+fotos de una partida limpia · **0** en las 38 texturas horneadas · **2 a 8** en
+las seis capturas de Santiago.
+
+### `herramientas/capas.mjs`: contar la CAUSA, que sí se puede sin el teléfono
+
+El laboratorio ya avisaba que en la compu el glitch no se reproduce (SwiftShader
+dibuja limpio), o sea que medir el EFECTO acá es imposible —y sin embargo se
+intentó cuatro veces—. Pero la CAUSA sí: la única palanca demostrada es cuántas
+superficies compuestas le damos a comprimir a la GPU. Se cuentan por CDP con
+`LayerTree.compositingReasons`, que además dice POR QUÉ cada capa es una capa, y
+`DOM.describeNode`, que dice cuál.
+
+Tres trampas que costaron una corrida cada una y quedan documentadas adentro:
+navegar TIRA el árbol de capas; una pantalla quieta **no confirma ningún
+cuadro** y entonces el árbol no llega nunca (hay que forzarlo con una captura de
+8×8); y `node.attributes` viene PLANO, así que leerlo con `indexOf` reporta
+clases que no existen.
+
+### Lo que se arregló, con el número al lado
+
+    ANTES              menú 3 · mapa 9 · mesa quieta 3 · envido 9 · flor 6
+    DESPUÉS            todas 3          (el piso: raíz, scroll y viewport)
+    total 45 → 21
+
+**1. `.anim-pop`: `both` → `backwards`.** Medido 1,4 s después de cantar —diez
+veces lo que dura la animación de 140 ms— la capa seguía puesta, porque `both`
+deja el último fotograma pegado y mantiene la animación activa. Y no costaba una
+capa: costaba **tres**, porque todo lo que pisa a una capa se promueve también
+(`Overlap`), y esos `Overlap` medían 360×251 y 360×179 —media mesa cada uno—
+justo donde Santiago fotografía manchitas al cantar. Cambio de una palabra, y es
+el mismo criterio que ya estaba escrito para `.anim-reparte`. **Invisible**: el
+fotograma del 100% es `opacity:1` y `scale(1)`, o sea el estado natural;
+comprobado que al terminar el elemento queda con `transform: none` y cero
+animaciones registradas.
+
+**2. El rebote del sombrero del mapa, `.ficha-gaucho`.** A/B en el navegador,
+sin tocar código: sin la marcha de hormigas, 6 capas; sin el `feTurbulence`, 6;
+**sin el sombrero, 0**. Las seis las provocaba él solo, y en bucle infinito, o
+sea recomponiéndose en cada cuadro mientras el mapa estuviera en pantalla. El
+plan de esta sesión apostaba a las hormigas: **la medición dijo que no.** Lo
+aprobó Santiago con las dos capturas al lado.
+
+**3. El apagado de la mano.** Es el hallazgo grande, y está fotografiado.
+
+### La banda: el bug del 1/9 nunca se había ido
+
+Mirando el celular en vivo apareció **un rectángulo entero de ruido RGB**, con
+las cartas dibujadas limpias encima. No es una manchita: es una superficie que
+volvió mal.
+
+    caja de [data-mano]              arranca en y=1109 de pantalla, alto 310
+    banda de ruido medida en la foto arranca en y=1105,             alto 295
+
+Es el **mismo bug del 1/9/2026** que el código daba por cerrado —"una banda de
+rayas del tamaño exacto de la mano"—. Ese día se le sacó el `filter` de adentro
+y bajó siete veces, pero el disparador que quedaba era el **`opacity` del
+grupo**: un grupo translúcido obliga a dibujar todo lo de adentro en una textura
+aparte para después mezclarla. Se repitió idéntica en doce cuadros a lo largo de
+24 s: cuando vuelve mal, queda mal.
+
+Se sacó el apagado, con permiso de Santiago y con la foto delante. Se pierde que
+la mano se atenúe cuando no te toca; la señal sigue estando y es más fuerte —la
+barra pasa a QUIERO / NO QUIERO y las cartas no responden—. De paso el agarre
+`data-mano="apagable"` pasó a llamarse **`data-mano="tuya"`**: ya no apaga nada,
+y un nombre que miente cuesta una sesión (`mirar-mesa.mjs` actualizado).
+
+**Después: 45 fotos de Santiago jugando de verdad** —cantando envido, falta
+envido y flor, con 165 MB libres y 31 pestañas, o sea en las mismas condiciones
+en que apareció— y **ni una banda**: 32 cuadros en 0, 10 en 1 y 3 en 2 dentro de
+la caja de la mano, contra 213-319 cuando estaba.
+
+### Lo que NO está probado, dicho para que nadie lo lea de más
+
+**45 cuadros limpios no prueban que la banda se fue**: es intermitente. Con
+`am force-stop` de Chrome entre cargas —que libera memoria— tampoco había
+aparecido en 8 cargas ANTES del arreglo. Apareció con 86 MB libres y 30
+pestañas. Lo que hay es la coincidencia al píxel de la caja, el mecanismo, y una
+partida entera limpia; no un A/B controlado.
+
+Y hubo un A/B que **salió inválido y se dice**: el guión no recargaba la página
+entre brazos, así que las dos corridas eran la misma pantalla. Se detectó al
+mirar la foto en vez de creerle al número.
+
+### Los límites del banco, medidos hoy
+
+- **`capas.mjs` no ve todo.** Con la mano apagada, en la compu no se promueve
+  ninguna capa en ninguno de los tres casos probados. Ve las promociones que
+  manda la especificación (una animación corriendo promueve en cualquier
+  plataforma) pero **no las que decide la GPU del teléfono**. No hay atajo.
+- **No se puede tocar la pantalla desde acá.** `adb shell input tap` lo rechaza
+  el teléfono: falta `INJECT_EVENTS`, que en Xiaomi se habilita con "Depuración
+  USB (ajustes de seguridad)". Santiago prefirió ir tocando él, y así se
+  hicieron las 45 fotos.
+- **El intent abre una PESTAÑA NUEVA siempre**, incluso con
+  `com.android.browser.application_id`. Probado. La salida es `am force-stop`
+  entre corridas, o interponer A y B para que la deriva de memoria les pegue
+  igual a los dos.
+- **El mapa midió LIMPIO en el celular** (0 en ocho fotos, 228 MB libres). Sus
+  seis capas eran un costo real, no algo que se estuviera viendo.
+
+### Un cambio que se midió inerte y NO se hizo
+
+La transición de `transform` del hover de la carta se iba a meter en
+`@media (hover: hover)` —el `:hover` no puede dispararse en un celular—. Se
+midió: la mesa quieta ya estaba en el piso de 3 capas. Se dejó como estaba. Es
+la regla del 4/9: tocar lugares para arreglar algo que se midió inerte es el
+error que ya se cometió dos veces.
+
+### El pendiente nº 1 del 5/9 estaba vencido
+
+El tanto del rival ya estaba arreglado ese mismo día, en `lib/motor/partida.ts`,
+con test propio en `lib/tantos-al-cierre.test.ts` (6/6) y confirmado por
+`mirar-web`, que enseña un solo número. Se corrigió la entrada del 5/9.
+**Al cerrar una sesión, releer la lista de pendientes.**
+
+### El repaso de seguridad encontró un guard que mentía
+
+El diff no toca ninguna superficie de ataque —es CSS, marcado y herramientas—,
+pero renombrar `data-mano` dejó a la vista un hueco viejo en `mirar-mesa.mjs`:
+el guard que prohíbe `filter` adentro de la escena busca por `data-*`, y si UNA
+de sus tres zonas dejaba de enganchar **la salteaba en silencio** y la prueba
+seguía dando OK. O sea que se podía volver a meter un `filter` adentro de la
+mano —el bug del 1/9— sin que nadie se enterara.
+
+Ahora, si hay mesa y falta un agarre, eso ES la falla. Probado rompiendo el
+selector a propósito: falla y dice cuál. `null` sigue queriendo decir "acá no
+hay mesa", que es el caso legítimo de la pantalla de menú.
+
+**Un control que pasa en vacío es peor que no tenerlo.**
+
+### Estado al cerrar
+
+`npm test` **168/168** · `tsc --noEmit` limpio · `mirar-mesa`, `mirar-mesa-nueva`,
+`mirar-web` y `mirar-rivales` **TODO OK** · los dos builds OK · diff sin datos
+personales ni rutas locales.
+
+### Pendiente
+
+1. **Cazar la banda de nuevo, con el arreglo puesto.** Es intermitente y depende
+   de la memoria: hace falta dejar el celular jugando un rato largo con pocas
+   pestañas libres y medir. Si no vuelve a aparecer nunca, ahí sí está cerrado.
+2. **Medir en el APK**, que es lo que Santiago juega: la vista previa es Chrome
+   con 31 pestañas encima y no es la misma máquina.
+3. **`deviceScaleFactor: 2`** en las herramientas que todavía miran a DPR 1.
+4. Prender AdMob (explicado en el README, sin código).
+
+---
+
 ## 2026-09-05 — Las manchitas: medidas de verdad, y son de la GPU del teléfono
 
 Cuarta sesión con el mismo pendiente, y esta vez se hizo lo que faltaba desde
@@ -128,10 +317,14 @@ sus mosaicos, y eso explica por qué Santiago ve la web PEOR que la app.
 
 ### Pendiente
 
-1. **No se puede mostrar el envido ni la flor del rival antes de que cierre la
-   mano.** Lo vio Santiago hoy: se lee "ÉL: 28" en pantalla, y con eso se le
-   pueden deducir las cartas. Es un bug de juego, no de dibujo, y es el más
-   importante de esta lista.
+1. ~~**No se puede mostrar el envido ni la flor del rival antes de que cierre
+   la mano.**~~ **YA ESTABA ARREGLADO CUANDO SE ESCRIBIÓ ESTO** —lo comprobó la
+   sesión del 7/9/2026—. El arreglo entró ese mismo 5/9, en
+   `lib/motor/partida.ts` (la regla de `reglas.txt` 9.4: empieza el mano y el
+   que no lo supera dice "son buenas" y no revela su tanto), y tiene test propio
+   en `lib/tantos-al-cierre.test.ts`. Quedó anotado como pendiente por error, y
+   ese error costó que la sesión siguiente lo pusiera de nuevo en el plan.
+   **Un pendiente vencido cuesta una sesión: al cerrar, releer la lista.**
 2. **Medir la falta envido y el real envido en la APP.** Santiago dice que ahí
    se bugea distinto que con el envido, la flor y el truco normales. Quedó sin
    medir porque el banco de pruebas lo había pasado al navegador.

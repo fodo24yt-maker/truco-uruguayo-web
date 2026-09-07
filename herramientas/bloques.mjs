@@ -143,6 +143,164 @@ function esBloque(m, color, ancho, alto) {
   return [0, 1, 2].some((k) => c0[k] > alt[k] + 8 || c0[k] < bajo[k] - 8);
 }
 
+/**
+ * ── LA SEGUNDA POBLACIÓN: LAS CROMÁTICAS ──────────────────────────────────
+ *
+ * El 7/9/2026 Santiago trajo seis capturas con manchitas bien visibles y este
+ * detector dio **0 en las seis**. No estaban limpias: el detector era ciego.
+ *
+ * Lo de arriba busca bloques de 4×4, grises y planos, que es lo que se midió
+ * el 5/9. Lo de hoy es otra cosa, y se midió sobre el framebuffer de 720×1600:
+ *
+ *     cuadraditos de 2×2 px, en colores SATURADOS y fuera de la paleta
+ *     rgb(33,13,123) · rgb(48,171,250) · rgb(227,10,10)
+ *
+ * Y `adb shell wm density` da 320, o sea DPR 2. Entonces **2 px de pantalla es
+ * 1 px CSS exacto**: estas manchitas miden UN PÍXEL CSS, no un bloque de
+ * compresión. Son dos mecanismos distintos y por eso se cuentan aparte y no se
+ * suman nunca. Sumarlos sería volver a tener un número que no dice nada, que
+ * es justo el problema que este archivo existe para no repetir.
+ *
+ * ── Cómo las encuentra, y por qué NO mira la paleta global ────────────────
+ *
+ * La tentación es decir "el proyecto es cálido, un azul no puede ser nuestro".
+ * Es mentira: `--color-espada` es #2f5480 y el basto es verde. Un detector así
+ * marcaría media carta de espadas apoyada en la mesa.
+ *
+ * Se compara contra EL VECINDARIO, no contra la paleta:
+ *
+ *   1. **Fuera del rango de lo que lo rodea**, en el anillo de 3 px. Es la
+ *      misma prueba que ya decide `esBloque`, y por el mismo motivo: un píxel
+ *      de antialias SIEMPRE es un valor intermedio entre la tinta y el fondo,
+ *      así que cae adentro del rango. Basura, no.
+ *   2. **De otro color que lo que lo rodea**: el ángulo entre el color del
+ *      píxel y el color medio del vecindario pasa de ~20°. Un puntito cian
+ *      sobre la madera lo cumple; un puntito azul adentro de una espada azul
+ *      no, y por eso la carta no se cuenta.
+ *   3. **Saturado**. Los grises ya los cuenta la otra población.
+ *   4. **Chico y plano**: hasta 3 px de lado (1 px CSS a DPR 2, con uno de
+ *      sobra) y de un solo color, como el bloque que vuelve mal.
+ */
+
+/** Cuánto se tiene que salir del rango del vecindario, en un canal. */
+const SALTO = 30;
+/**
+ * Coseno del ángulo entre el color del píxel y el del vecindario. 0,94 ≈ 20°.
+ *
+ * ── EL PISO CONOCIDO DE LA MESA, Y POR QUÉ NO SE PUEDE SACAR ──────────────
+ *
+ * En la mesa este detector cuenta hasta **9 manchitas por cuadro que son
+ * DIBUJO**: el dorso bordo del mazo asomando entre el filo dorado y la carta
+ * de la muestra, `rgb(100,22,31)`, que es `--color-bordo` en sombra. Aparecen
+ * en diagonal alrededor de x 138-182, y 721-790 a 720×1600.
+ *
+ * Se intentó separarlas apretando este umbral y **no se puede**, y el número
+ * dice por qué:
+ *
+ *     el bordo del mazo (dibujo)          coseno 0,906
+ *     la banda de basura de la mano       mediana 0,955  ·  p90 0,986
+ *
+ * O sea que la basura se parece MÁS a su vecindario que el dibujo, porque sus
+ * vecinos también son basura. Las dos poblaciones se solapan en este eje y
+ * apretar el umbral se lleva puesta la que importa. También se probó un piso
+ * de tamaño; está contado más abajo y tampoco sirve.
+ *
+ * Así que el piso se queda, y se lee sabiendo que está: en la mesa, **hasta 9
+ * es limpio**. La banda de la mano daba 213 y 302 sobre la misma pantalla, o
+ * sea treinta veces más. Para eso alcanza de sobra.
+ */
+const MISMO_COLOR = 0.94;
+/** Menos saturado que esto es un gris, y los grises los cuenta la otra prueba. */
+const SATURADO = 0.35;
+/** El lado máximo: 1 px CSS a DPR 2 son 2, y se deja uno de sobra. */
+const LADO = 3;
+/* ── SE PROBÓ UN PISO DE TAMAÑO Y NO SIRVE ────────────────────────────────
+   La idea era: a DPR 2 la página vive en una grilla de 2×2 px de pantalla, así
+   que nada del compositor puede medir menos. Suena bien y está mal: el ruido
+   denso de una superficie que volvió mal se FRAGMENTA —sólo algunos de sus
+   píxeles se salen del rango de sus vecinos, porque los vecinos también son
+   ruido— y queda como manchitas de 1×1. Con el piso puesto, la banda de la
+   mano pasaba de 319 a 2. Queda escrito para que no se vuelva a intentar. */
+
+/** El color como dirección, para poder preguntarle el ángulo a otro. */
+function rumbo(r, g, b) {
+  const n = Math.hypot(r, g, b);
+  return n === 0 ? [0, 0, 0] : [r / n, g / n, b / n];
+}
+
+export async function cromaticasDe(ruta, banda = [0.27, 0.72]) {
+  const { data, ancho, alto, canales } = await leer(ruta);
+  const marca = new Uint8Array(ancho * alto);
+  const y0 = Math.round(alto * banda[0]);
+  const y1 = Math.round(alto * banda[1]);
+  const R = 3;
+
+  const color = (x, y) => {
+    const i = (y * ancho + x) * canales;
+    return [data[i], data[i + 1], data[i + 2]];
+  };
+
+  for (let y = y0; y < y1; y++) {
+    for (let x = 0; x < ancho; x++) {
+      const c = color(x, y);
+      const mx = Math.max(...c);
+      if (mx === 0 || (mx - Math.min(...c)) / mx < SATURADO) continue;
+
+      /* El anillo: de 2 a 3 px de distancia. El vecino inmediato se saltea
+         porque una manchita de 2×2 lo tendría adentro y se taparía sola. */
+      let lo = [255, 255, 255];
+      let hi = [0, 0, 0];
+      const suma = [0, 0, 0];
+      let n = 0;
+      for (let dy = -R; dy <= R; dy++) {
+        for (let dx = -R; dx <= R; dx++) {
+          if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= ancho || ny >= alto) continue;
+          const q = color(nx, ny);
+          for (let k = 0; k < 3; k++) {
+            if (q[k] < lo[k]) lo[k] = q[k];
+            if (q[k] > hi[k]) hi[k] = q[k];
+            suma[k] += q[k];
+          }
+          n++;
+        }
+      }
+      if (!n) continue;
+
+      let fuera = 0;
+      for (let k = 0; k < 3; k++) fuera = Math.max(fuera, lo[k] - c[k], c[k] - hi[k]);
+      if (fuera < SALTO) continue;
+
+      const a = rumbo(c[0], c[1], c[2]);
+      const v = rumbo(suma[0] / n, suma[1] / n, suma[2] / n);
+      if (a[0] * v[0] + a[1] * v[1] + a[2] * v[2] > MISMO_COLOR) continue;
+
+      marca[y * ancho + x] = 1;
+    }
+  }
+
+  const cajas = manchas(marca, ancho, alto).filter(
+    (m) => m.x1 - m.x0 + 1 <= LADO && m.y1 - m.y0 + 1 <= LADO && esPlana(m, color),
+  );
+  return { ancho, alto, cromaticas: cajas.length, cajas };
+}
+
+/** De un solo color, como el bloque que vuelve mal. El antialias tiene degradé. */
+function esPlana(m, color) {
+  const c0 = color(m.x0, m.y0);
+  for (let y = m.y0; y <= m.y1; y++) {
+    for (let x = m.x0; x <= m.x1; x++) {
+      const q = color(x, y);
+      if (Math.abs(q[0] - c0[0]) > 14 || Math.abs(q[1] - c0[1]) > 14 || Math.abs(q[2] - c0[2]) > 14) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
   /* La banda importa y no es un detalle: la de la mesa (0,27–0,72) salta la
@@ -162,11 +320,18 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
   for (const f of fotos) {
     const r = await bloquesDe(f, banda);
+    const c = await cromaticasDe(f, banda);
     console.log(
       `${path.basename(f).padEnd(30)} ${r.ancho}x${r.alto}  ` +
-        `${String(r.bloques).padStart(4)} bloques  (de ${r.chicas} manchas chicas)`,
+        `${String(r.bloques).padStart(4)} bloques · ${String(c.cromaticas).padStart(4)} cromáticas` +
+        `  (de ${r.chicas} manchas chicas)`,
     );
   }
-  console.log("\nUn bloque es basura de la GPU, no del dibujo. El número sirve para");
-  console.log("comparar un antes con un después de la MISMA pantalla.\n");
+  /* LOS DOS NÚMEROS NO SE SUMAN, y por eso se imprimen separados: son dos
+     mecanismos distintos —un bloque de compresión que vuelve mal y un píxel
+     CSS de color imposible— y un total los taparía a los dos. */
+  console.log("\nLas dos son basura de la GPU, no del dibujo, y son DISTINTAS:");
+  console.log("  bloques    4×4 grises y planos, en la grilla de compresión (5/9/2026)");
+  console.log("  cromáticas 1 px CSS de un color que su vecindario no puede explicar (7/9/2026)");
+  console.log("Sirven para comparar un antes con un después de la MISMA pantalla.\n");
 }

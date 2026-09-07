@@ -146,10 +146,12 @@ export function ParadasGira({ paradas, elegido }: PropsParadas) {
 
         if (parada.esElProximo) {
           return (
+            /* El <g> de adentro se fue con el rebote el 7/9/2026: existía
+               sólo para llevar la animación, porque el de afuera tiene el
+               translate que posiciona la ficha y el CSS no le podía tocar el
+               transform sin mandarla a (0,0). Sin animación no hace falta. */
             <g key={parada.paso} transform={`translate(${x}, ${y})`}>
-              <g className="ficha-gaucho">
-                <Sombrero />
-              </g>
+              <Sombrero />
             </g>
           );
         }

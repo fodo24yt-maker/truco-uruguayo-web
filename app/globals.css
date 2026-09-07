@@ -304,22 +304,28 @@ footer {
     animation: marcha-hormigas 1.6s linear infinite;
   }
 
-  /* El sombrero de gaucho, esperando en el departamento que toca. La anima un
-     <g> de adentro: el de afuera lleva el translate que lo posiciona, y si el
-     CSS le tocara el transform a ese, le pisaría el atributo entero y la ficha
-     se iría a (0,0). */
-  @keyframes espera-gaucho {
-    0%,
-    100% {
-      transform: translateY(0);
-    }
-    50% {
-      transform: translateY(-7px);
-    }
-  }
-  .ficha-gaucho {
-    animation: espera-gaucho 2.4s ease-in-out infinite;
-  }
+  /* ── ACÁ REBOTABA EL SOMBRERO DE GAUCHO, Y SE FUE EL 7/9/2026 ────────────
+     `.ficha-gaucho` animaba `transform` en bucle INFINITO sobre un <g> del
+     mapa, y medido con `herramientas/capas.mjs` costaba mucho más de lo que
+     parecía. A/B en el navegador, sin tocar el código:
+
+         tal cual                    6 capas compuestas · 3,09 Mpx
+         sin la marcha de hormigas   6                  · 3,09
+         SIN EL SOMBRERO             0                  · 0,00
+         sin el feTurbulence         6                  · 3,09
+
+     O sea que las seis capas del mapa las provocaba ÉL SOLO: se promueve por
+     la animación y todo lo que lo pisa se tiene que promover también. Y como
+     el bucle no termina nunca, esas seis superficies se recomponían en cada
+     cuadro todo el tiempo que el mapa estuviera en pantalla.
+
+     Ojo con lo que este cambio NO es: el mapa midió LIMPIO en el celular ese
+     mismo día (0 manchitas en ocho fotos). Esto saca un costo, no cura algo
+     que se estuviera viendo. Lo decidió Santiago con las dos capturas al lado.
+
+     La marcha de hormigas se queda: se sospechaba de ella —anima
+     `stroke-dashoffset`, que no se puede componer— y la medición dijo que no
+     cuesta ni una capa. El `feTurbulence` de `MapaUruguay.tsx`, tampoco. */
 }
 
 /* ─── Animaciones. Cortas y con peso: nada flota ───────────────────────────── */
@@ -517,8 +523,30 @@ footer {
     transform: scale(1);
   }
 }
+/* ── VA CON `backwards` Y NO CON `both`, DESDE EL 7/9/2026 ─────────────────
+   Es el mismo criterio que ya está escrito para `.anim-reparte` unas líneas
+   más arriba, y acá costaba caro.
+
+   `both` deja pegado el último fotograma PARA SIEMPRE, y mientras esté pegado
+   la animación sigue "activa" para el navegador. Medido con
+   `herramientas/capas.mjs`, un segundo y medio después de cantar —diez veces
+   lo que dura la animación— la capa seguía ahí:
+
+       mesa quieta          3 capas   (la raíz y el scroll: inevitables)
+       mesa con la flor     6 capas
+       mesa con el envido   9 capas
+
+   Y no cuesta una capa: cuesta TRES. El globo se promueve por
+   `ActiveTransformAnimation`, y todo lo que se dibuja encima y lo pisa se
+   tiene que promover también (`Overlap`). Esos dos `Overlap` miden 360x251 y
+   360x179, o sea media mesa cada uno, que es justo la zona donde Santiago
+   viene fotografiando manchitas al cantar.
+
+   No se pierde nada al soltarlo: el fotograma del 100% es `opacity: 1` y
+   `scale(1)`, o sea EXACTAMENTE el estado natural del elemento. `backwards`
+   sigue cubriendo el arranque, que es lo que impide el parpadeo. */
 .anim-pop {
-  animation: pop 140ms ease-out both;
+  animation: pop 140ms ease-out backwards;
 }
 
 /* ─── Prosa de las lecciones. Sin plugin de typography: son ocho reglas ───────

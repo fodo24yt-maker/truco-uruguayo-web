@@ -105,13 +105,29 @@ for (const [w, h] of TAMANOS) {
 
            Si algún día sale basura ARRIBA, `rival-foco` es lo siguiente a
            mirar, y la salida sería hornear al rival como se hornea la mesa. */
+        /* ── UN AGARRE QUE NO ENGANCHA ES UN GUARD QUE MIENTE ───────────
+           Esta prueba busca por `data-*`, o sea que depende de nombres que
+           viven en otro archivo. El 7/9/2026 uno de los tres se renombró
+           —`data-mano` pasó de "apagable" a "tuya"— y quedó a la vista el
+           hueco: si UNA zona deja de aparecer y las otras dos siguen, el
+           bucle la salteaba en silencio y la prueba seguía dando OK. O sea
+           que se podía volver a meter un `filter` adentro de la mano y nadie
+           se enteraba, que es exactamente el bug del 1/9.
+
+           `null` sigue queriendo decir "acá no hay mesa" —la pantalla de menú
+           no la tiene, y ahí no hay nada que revisar—. Lo que ahora falla es
+           el caso mezclado: alguna zona está y otra no. */
         filtros: (() => {
-          const ZONAS = ['[data-mesa="tabla"]', "[data-encima]", '[data-mano="apagable"]'];
+          const ZONAS = ['[data-mesa="tabla"]', "[data-encima]", '[data-mano="tuya"]'];
           const con = [];
+          const faltan = [];
           let alguna = false;
           for (const sel of ZONAS) {
             const zona = document.querySelector(sel);
-            if (!zona) continue;
+            if (!zona) {
+              faltan.push(sel);
+              continue;
+            }
             alguna = true;
             for (const el of [zona, ...zona.querySelectorAll("*")]) {
               const cs = getComputedStyle(el);
@@ -122,7 +138,11 @@ for (const [w, h] of TAMANOS) {
             }
             if (zona.querySelector("filter")) con.push(`${sel}: hay un <filter> declarado`);
           }
-          return alguna ? con : null;
+          if (!alguna) return null;
+          /* Hay mesa pero falta un agarre: el guard se quedó ciego de ese
+             lado y eso ES la falla, no un detalle. */
+          for (const sel of faltan) con.push(`${sel}: EL AGARRE NO ENGANCHA — esta zona quedó sin revisar`);
+          return con;
         })(),
         /* ── LA TIRA DE CANTOS NO PUEDE TAPAR UNA CARTA ────────────────────
            Desde el 4/9/2026 los botones de canto se apoyan SOBRE las cartas,
