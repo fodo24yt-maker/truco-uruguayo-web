@@ -22,9 +22,14 @@
  *     que se achicó sin enseñarla: es la misma regla que ya cumple
  *     `revelarFlores` en el motor, y está ahí porque saber que el otro tenía 41
  *     te dice que le quedan tres cartas buenas.
- *   · los dos tantos del ENVIDO, y sólo si se quiso. Al quererse, los dos
- *     cantan su número: son públicos. Un envido cantado y no querido no deja
- *     ningún número dicho, y por eso `envidoJugado` se queda en `null`.
+ *   · el tanto del ENVIDO **de quien lo haya dicho**, y sólo si se quiso. Ojo
+ *     con esto, que estuvo mal hasta el 5/9/2026: al quererse NO cantan los
+ *     dos. `reglas.txt` 9.4 dice que empieza el mano y que el que no puede
+ *     superarlo dice "son buenas" y **no revela su tanto**. Así que casi
+ *     siempre se enseña uno solo. Quién llegó a decirlo está en
+ *     `envidoJugado.dicho`, y es lo único que se puede leer de acá.
+ *     Un envido cantado y no querido no deja ningún número dicho, y por eso
+ *     `envidoJugado` se queda en `null`.
  *
  * Fuera de esas dos, acá no se puede agregar nada sin soplarle cartas a
  * alguien. Si algún día hay que mostrar más, primero hay que poder decir en qué
@@ -76,10 +81,21 @@ export function tantosAlCierre(p: Partida): TantoMostrado[] {
     }
   }
 
+  /* SÓLO EL QUE LLEGÓ A DECIR SU NÚMERO, desde el 5/9/2026.
+     El que no podía superar dijo "son buenas" y no reveló nada (reglas.txt
+     9.4): enseñar su tanto acá sería decir en la pantalla lo que en la mesa
+     nadie dijo. Casi siempre es uno solo, el que ganó. */
   if (p.envidoJugado) {
-    const { vos, rival, ganador } = p.envidoJugado;
-    mostrados.push({ quien: "vos", clase: "envido", valor: vos, gano: ganador === "vos" });
-    mostrados.push({ quien: "rival", clase: "envido", valor: rival, gano: ganador === "rival" });
+    const { ganador, dicho } = p.envidoJugado;
+    for (const quien of ["vos", "rival"] as Jugador[]) {
+      if (!dicho[quien]) continue;
+      mostrados.push({
+        quien,
+        clase: "envido",
+        valor: p.envidoJugado[quien],
+        gano: ganador === quien,
+      });
+    }
   }
 
   return mostrados;

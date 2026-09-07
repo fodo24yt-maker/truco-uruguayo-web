@@ -20,6 +20,7 @@
 
 import type { ClaveObjeto } from "./objetos.ts";
 import { COLOR_DEPARTAMENTO } from "./mapa-colores.ts";
+import { ESCENAS, type Escena } from "./escenas.ts";
 
 export type ClaveAmbiente =
   | "bar-ciudad"
@@ -210,9 +211,29 @@ export const objetoDe = (departamento: string): ClaveObjeto | null =>
     ? OBJETO_DEPARTAMENTO[departamento]
     : null;
 
-/** El acento del departamento, el mismo tono con el que se pinta en el mapa. */
+/**
+ * El acento del departamento, el mismo tono con el que se pinta en el mapa.
+ *
+ * DESDE EL 5/9/2026 YA NO SE PINTA EN VIVO: viene horneado en la textura, y
+ * esto queda porque lo usan el mapa y el medallón. Ver `escenaDe`.
+ */
 export const acentoDe = (departamento: string): string =>
   COLOR_DEPARTAMENTO[departamento] ?? "#c9a868";
+
+/**
+ * La textura del departamento, con su acento ya horneado adentro.
+ *
+ * Un departamento que no está en la lista cae en Montevideo, y no es un
+ * "cualquiera sirve": el acento de reserva de `acentoDe` es `#c9a868` y el
+ * ambiente de reserva de `ambienteDe` es `bar-ciudad`, que son exactamente los
+ * de Montevideo. O sea que la escena de reserva ya estaba horneada.
+ *
+ * `Object.hasOwn` y no `?? null` a secas, por lo mismo que abajo: indexar un
+ * objeto plano con un string que vino de la dirección puede devolver algo de
+ * la cadena de prototipos.
+ */
+export const escenaDe = (departamento: string): Escena =>
+  Object.hasOwn(ESCENAS, departamento) ? ESCENAS[departamento] : ESCENAS["Montevideo"];
 
 /**
  * El ambiente de un departamento. Un nombre que no está en la lista cae en el

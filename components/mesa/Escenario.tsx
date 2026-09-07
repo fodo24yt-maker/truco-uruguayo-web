@@ -24,7 +24,7 @@
 
 import type { Ambiente } from "@/lib/ambientes";
 import type { Cara, Contextura, Detalle, Prenda } from "@/lib/caras";
-import { ESCENAS } from "@/lib/escenas";
+import type { Escena } from "@/lib/escenas";
 import { ALCANCE, PARADAS_CAIDA, erf } from "@/components/mesa/Sombra";
 
 /**
@@ -35,8 +35,7 @@ import { ALCANCE, PARADAS_CAIDA, erf } from "@/components/mesa/Sombra";
  * que se ve el instante que tarda en decodificarse, así nunca aparece un
  * rectángulo negro.
  */
-export function FondoAmbiente({ ambiente, acento }: { ambiente: Ambiente; acento: string }) {
-  const escena = ESCENAS[ambiente.clave];
+export function FondoAmbiente({ escena }: { escena: Escena }) {
   return (
     <div
       className="pointer-events-none absolute inset-0 overflow-hidden"
@@ -51,45 +50,37 @@ export function FondoAmbiente({ ambiente, acento }: { ambiente: Ambiente; acento
         fetchPriority="high"
         decoding="async"
       />
-      <CapaDeAcento color={acento} fuerza={0.22} />
     </div>
   );
 }
 
-/**
- * El color del departamento, encima de la textura horneada.
- *
- * ── Por qué hace falta ────────────────────────────────────────────────────
- *
- * Hay 7 ambientes para 19 departamentos, y eso es a propósito: diecinueve
- * escenas dibujadas aparte serían diecinueve cosas que mantener. Pero el precio
- * es que SEIS departamentos comparten "el galpón" y CINCO "el litoral", y
- * dentro de un grupo la pantalla queda idéntica. Salto y Paysandú eran la misma
- * imagen.
- *
- * El color ya estaba resuelto: `acentoDe()` en `lib/ambientes.ts` devuelve el
- * mismo tono con el que el departamento se pinta en el mapa de la gira, para
- * que el mapa y la mesa hablen del mismo lugar. Estaba escrito y NO LO LLAMABA
- * NADIE.
- *
- * ── Por qué `color` y no `overlay` ────────────────────────────────────────
- *
- * `color` cambia el tono y deja la LUMINANCIA intacta: la madera sigue teniendo
- * sus nudos, sus rayones y su charco de luz, y sólo vira de tono. Con `overlay`
- * o `multiply` se aplasta el contraste y la textura horneada —que es lo caro de
- * toda la escena— se pierde justo donde se la quiere ver.
- *
- * Y va SUAVE. No es pintar la mesa de verde: es que dos paradas seguidas no
- * sean la misma foto.
- */
-function CapaDeAcento({ color, fuerza }: { color: string; fuerza: number }) {
-  return (
-    <div
-      className="pointer-events-none absolute inset-0"
-      style={{ backgroundColor: color, opacity: fuerza, mixBlendMode: "color" }}
-    />
-  );
-}
+/* ── ACÁ ESTABA `CapaDeAcento`, Y SE FUE EL 5/9/2026 ─────────────────────────
+   Era un `<div>` a pantalla completa con `mix-blend-mode: color`, uno sobre el
+   fondo (fuerza 0,22) y otro sobre la madera (0,10). Le ponía a cada
+   departamento el mismo tono con el que se pinta en el mapa, para que Salto y
+   Paysandú no fueran la misma foto. Eso sigue estando: lo que cambió es CUÁNDO
+   se calcula.
+
+   ── Por qué se fue ────────────────────────────────────────────────────────
+   Era el único blend mode del proyecto, y un blend no es pintura: obliga al
+   navegador a LEER DE VUELTA todo lo que dibujó debajo, cada vez que algo de
+   abajo repinta —o sea, todo el tiempo, porque abajo están las cartas y los
+   globos—. Eso es una superficie compuesta más, y en la GPU del teléfono cada
+   superficie se comprime de a bloques de 4×4: de ahí salen las manchitas que
+   Santiago viene fotografiando desde el 1/9. Eran DOS capas así, a pantalla
+   completa.
+
+   ── Y por qué no se perdió nada ───────────────────────────────────────────
+   La misma cuenta se hace ahora una sola vez, al hornear, en
+   `herramientas/generar-escena.mjs`. Está implementada la fórmula de la
+   especificación —`SetLum(Cs, Lum(Cb))`, la misma que usa el navegador— y se
+   comprobó contra Chromium sobre 1,26 Mpx: **diferencia media 0,000 niveles
+   sobre 255 y peor caso 1**, que es el redondeo. Son las mismas imágenes.
+
+   El precio está del otro lado: `public/escenas/` pasó de 14 archivos a 38, de
+   640 KB a 1,2 MB. Pero el navegador baja SÓLO los dos del departamento que
+   estás jugando, así que por partida pesa igual que antes. */
+
 
 /**
  * La tabla de la mesa, ya en perspectiva.
@@ -112,8 +103,7 @@ function CapaDeAcento({ color, fuerza }: { color: string; fuerza: number }) {
  * ocupa `cierraElBorde` en `herramientas/escena/madera.mjs`, y
  * `mirar-rivales.mjs` falla si algún ambiente deja de hacerlo.
  */
-export function TablaMesa({ ambiente, acento }: { ambiente: Ambiente; acento: string }) {
-  const escena = ESCENAS[ambiente.clave];
+export function TablaMesa({ escena }: { escena: Escena }) {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
       <img
@@ -124,10 +114,6 @@ export function TablaMesa({ ambiente, acento }: { ambiente: Ambiente; acento: st
         fetchPriority="high"
         decoding="async"
       />
-      {/* La madera lleva MENOS acento que el fondo: es lo que uno mira todo el
-          rato y tiene que seguir siendo madera. El fondo puede virar más porque
-          está lejos y desenfocado. */}
-      <CapaDeAcento color={acento} fuerza={0.1} />
     </div>
   );
 }

@@ -38,7 +38,9 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import sharp from "sharp";
 
-import { AMBIENTES } from "../lib/ambientes.ts";
+import { AMBIENTES, acentoDe, ambienteDe } from "../lib/ambientes.ts";
+import { slugDepartamento } from "../lib/gira.ts";
+import { COLOR_DEPARTAMENTO } from "../lib/mapa-colores.ts";
 import { maderaPlana } from "./escena/madera.mjs";
 import { fondoPlano } from "./escena/fondo.mjs";
 
@@ -139,6 +141,90 @@ async function inclinar(navegador, pngPlano) {
   return png;
 }
 
+/* ── EL ACENTO DEL DEPARTAMENTO, HORNEADO ─────────────────────────────────────
+   Hasta el 5/9/2026 esto era una capa `<div>` con `mix-blend-mode: color`
+   encima de la textura, una sobre el fondo y otra sobre la mesa. Se veía bien y
+   costaba caro: un blend obliga al navegador a LEER DE VUELTA todo lo que
+   dibujó debajo, cada vez que algo de abajo repinta —o sea, todo el tiempo—, y
+   eso es una superficie compuesta más que la GPU del teléfono comprime de a
+   bloques de 4x4. Ahí es donde salen las manchitas (ver 5/9/2026 en
+   Historial.md).
+
+   Acá se hace la misma cuenta UNA vez, al hornear. El resultado es el mismo
+   dibujo con dos capas menos en vivo.
+
+   ── La fórmula es la del navegador, no una parecida ────────────────────────
+   `mix-blend-mode: color` está definido en la especificación de composición:
+   toma el TONO y la SATURACIÓN de la capa de arriba y la LUMINOSIDAD de lo que
+   hay debajo. Por eso la madera conserva sus nudos y sus rayones y sólo vira de
+   color. Se implementa tal cual —`SetLum(Cs, Lum(Cb))` con su `ClipColor`— y
+   después se mezcla con la opacidad de la capa.
+
+   `sharp.tint()` NO sirve acá: se parece pero es otra cuenta, y el objetivo es
+   que no cambie un solo píxel.
+
+   Se tiñe DESPUÉS de achicar a 1400px, no antes: el navegador tiñe lo que se
+   ve, y la mezcla no es lineal, así que teñir-y-achicar no da lo mismo que
+   achicar-y-teñir. */
+const LUM = (r, g, b) => 0.3 * r + 0.59 * g + 0.11 * b;
+
+function conLuminosidad([r, g, b], l) {
+  const d = l - LUM(r, g, b);
+  let [cr, cg, cb] = [r + d, g + d, b + d];
+  /* ClipColor: al correr la luminosidad un canal se puede ir de rango, y
+     recortarlo a secas cambiaría el tono. Se comprime hacia el gris. */
+  const L = LUM(cr, cg, cb);
+  const n = Math.min(cr, cg, cb);
+  const x = Math.max(cr, cg, cb);
+  if (n < 0 && L !== n) {
+    cr = L + ((cr - L) * L) / (L - n);
+    cg = L + ((cg - L) * L) / (L - n);
+    cb = L + ((cb - L) * L) / (L - n);
+  }
+  if (x > 1 && x !== L) {
+    cr = L + ((cr - L) * (1 - L)) / (x - L);
+    cg = L + ((cg - L) * (1 - L)) / (x - L);
+    cb = L + ((cb - L) * (1 - L)) / (x - L);
+  }
+  return [cr, cg, cb];
+}
+
+const deHex = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+
+/** Aplica el acento sobre un buffer de imagen y devuelve otro buffer PNG. */
+async function acentuar(buffer, hex, fuerza) {
+  const { data, info } = await sharp(buffer)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const arriba = deHex(hex);
+  for (let i = 0; i < data.length; i += 4) {
+    /* Donde la textura es transparente no hay nada que teñir: ahí se ve el
+       telón, que es un color plano y se tiñe aparte en `colorFondo`. */
+    if (data[i + 3] === 0) continue;
+    const abajo = [data[i] / 255, data[i + 1] / 255, data[i + 2] / 255];
+    const mezclado = conLuminosidad(arriba, LUM(abajo[0], abajo[1], abajo[2]));
+    for (let k = 0; k < 3; k++) {
+      const v = (1 - fuerza) * abajo[k] + fuerza * mezclado[k];
+      data[i + k] = Math.max(0, Math.min(255, Math.round(v * 255)));
+    }
+  }
+  return sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } })
+    .png()
+    .toBuffer();
+}
+
+/** El mismo acento sobre un color plano: el telón que asoma por las esquinas. */
+function acentuarColor(hex, acento, fuerza) {
+  const abajo = deHex(hex);
+  const mezclado = conLuminosidad(deHex(acento), LUM(abajo[0], abajo[1], abajo[2]));
+  const canal = (k) =>
+    Math.round(Math.max(0, Math.min(1, (1 - fuerza) * abajo[k] + fuerza * mezclado[k])) * 255)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${canal(0)}${canal(1)}${canal(2)}`;
+}
+
 /** El color medio de una imagen: es lo que se pinta mientras la textura carga. */
 async function colorMedio(buffer) {
   const { channels } = await sharp(buffer).stats();
@@ -146,34 +232,68 @@ async function colorMedio(buffer) {
   return `#${aHex(channels[0].mean)}${aHex(channels[1].mean)}${aHex(channels[2].mean)}`;
 }
 
+/* Las dos fuerzas del acento, tal cual estaban escritas en `CapaDeAcento`.
+   La madera lleva MENOS que el fondo: es lo que uno mira todo el rato y tiene
+   que seguir siendo madera. El fondo puede virar más porque está lejos y
+   desenfocado. */
+const ACENTO_MESA = 0.1;
+const ACENTO_FONDO = 0.22;
+
+/** Los departamentos que juegan en este ambiente, en el orden del mapa. */
+const departamentosDe = (clave) =>
+  Object.keys(COLOR_DEPARTAMENTO).filter((d) => ambienteDe(d).clave === clave);
+
 async function generarUno(navegador, ambiente) {
   const plano = await rendir(navegador, maderaPlana(ambiente), 2400, 2900);
   const inclinada = await inclinar(navegador, plano);
-  const mesa = await sharp(inclinada)
+  /* Sin teñir y ya del tamaño final: de acá salen todas las variantes, así que
+     la parte cara —dibujar la madera y torcerla con la cámara— se hace UNA vez
+     por ambiente y no una por departamento. */
+  const mesaLimpia = await sharp(inclinada)
     .resize(FINAL_MESA.ancho, FINAL_MESA.alto, { kernel: "lanczos3", fit: "fill" })
-    .webp({ quality: 82, effort: 6 })
+    .png()
     .toBuffer();
 
   const fondoPng = await rendir(navegador, fondoPlano(ambiente), 2400, 900);
-  const fondo = await sharp(fondoPng)
+  const fondoLimpio = await sharp(fondoPng)
     .resize(FINAL_FONDO.ancho, FINAL_FONDO.alto, { kernel: "lanczos3", fit: "fill" })
-    .webp({ quality: 80, effort: 6 })
+    .png()
     .toBuffer();
 
-  await writeFile(path.join(SALIDA, `${ambiente.clave}-mesa.webp`), mesa);
-  await writeFile(path.join(SALIDA, `${ambiente.clave}-fondo.webp`), fondo);
-
+  const colorFondoLimpio = await colorMedio(fondoLimpio);
   const kb = (b) => (b.length / 1024).toFixed(0);
-  console.log(
-    `  ${ambiente.clave.padEnd(11)} mesa ${kb(mesa).padStart(4)} KB · fondo ${kb(fondo).padStart(4)} KB`,
-  );
+  const fichas = [];
 
-  return {
-    clave: ambiente.clave,
-    colorMesa: await colorMedio(inclinada),
-    colorFondo: await colorMedio(fondoPng),
-    pesoKb: Math.round((mesa.length + fondo.length) / 1024),
-  };
+  for (const depto of departamentosDe(ambiente.clave)) {
+    const acento = acentoDe(depto);
+    const slug = slugDepartamento(depto);
+
+    const mesa = await sharp(await acentuar(mesaLimpia, acento, ACENTO_MESA))
+      .webp({ quality: 82, effort: 6 })
+      .toBuffer();
+    const fondo = await sharp(await acentuar(fondoLimpio, acento, ACENTO_FONDO))
+      .webp({ quality: 80, effort: 6 })
+      .toBuffer();
+
+    await writeFile(path.join(SALIDA, `${slug}-mesa.webp`), mesa);
+    await writeFile(path.join(SALIDA, `${slug}-fondo.webp`), fondo);
+    console.log(
+      `  ${depto.padEnd(15)} ${ambiente.clave.padEnd(11)} mesa ${kb(mesa).padStart(4)} KB · fondo ${kb(fondo).padStart(3)} KB`,
+    );
+
+    fichas.push({
+      depto,
+      slug,
+      colorMesa: await colorMedio(mesa),
+      colorFondo: await colorMedio(fondo),
+      /* El telón es el color plano que asoma por las esquinas transparentes de
+         la mesa. Ahí la capa de acento que se fue tiñía con la fuerza de la
+         MESA, no con la del fondo, porque quien lo tapaba era `TablaMesa`. */
+      colorTelon: acentuarColor(colorFondoLimpio, acento, ACENTO_MESA),
+      pesoKb: Math.round((mesa.length + fondo.length) / 1024),
+    });
+  }
+  return fichas;
 }
 
 /**
@@ -188,39 +308,57 @@ async function generarUno(navegador, ambiente) {
 async function escribirIndice(fichas) {
   const lineas = fichas
     .map(
-      (f) => `  "${f.clave}": {
-    mesa: "/escenas/${f.clave}-mesa.webp",
-    fondo: "/escenas/${f.clave}-fondo.webp",
+      (f) => `  "${f.depto}": {
+    mesa: "/escenas/${f.slug}-mesa.webp",
+    fondo: "/escenas/${f.slug}-fondo.webp",
     colorMesa: "${f.colorMesa}",
     colorFondo: "${f.colorFondo}",
+    colorTelon: "${f.colorTelon}",
   },`,
     )
     .join("\n");
 
   const archivo = `/**
- * Las texturas de cada ambiente. GENERADO: no se edita a mano.
+ * Las texturas de cada DEPARTAMENTO. GENERADO: no se edita a mano.
  *
  *     node herramientas/generar-escena.mjs
+ *
+ * ── Por qué por departamento y no por ambiente ────────────────────────────
+ *
+ * Hasta el 5/9/2026 eran siete, una por ambiente, y encima de cada una iba una
+ * capa \`<div>\` con \`mix-blend-mode: color\` que le ponía el tono del
+ * departamento. Esa capa se fue: un blend obliga al navegador a leer de vuelta
+ * todo lo que dibujó debajo cada vez que algo repinta, y eso es una superficie
+ * compuesta más que la GPU del teléfono comprime de a bloques de 4×4 —de donde
+ * salen las manchitas—. Ahora el tono viene horneado y son diecinueve.
+ *
+ * El navegador baja SÓLO las dos imágenes del departamento que estás jugando,
+ * así que pesa lo mismo que antes por partida.
  *
  * Las rutas están escritas enteras a propósito, no armadas con plantillas: el
  * departamento entra por la dirección del navegador y una ruta que se arma
  * pegando texto es una ruta que se puede empujar. Acá sólo se puede elegir
- * entre estas siete.
+ * entre estas diecinueve.
  */
 
-import type { ClaveAmbiente } from "./ambientes.ts";
-
 export interface Escena {
-  /** La tabla, ya en perspectiva y con el borde lejano recortado. */
+  /** La tabla, ya en perspectiva, con el borde lejano recortado y entonada. */
   mesa: string;
   /** El ambiente detrás de la mesa, en tres capas de profundidad. */
   fondo: string;
   /** El color medio, para pintar mientras la textura carga. */
   colorMesa: string;
   colorFondo: string;
+  /**
+   * El telón, que es lo que asoma por las esquinas transparentes de la mesa
+   * —allá arriba, donde la madera ya se terminó—. Lleva el acento con la
+   * fuerza de la MESA y no la del fondo, porque quien lo tapaba era la capa de
+   * la mesa.
+   */
+  colorTelon: string;
 }
 
-export const ESCENAS: Record<ClaveAmbiente, Escena> = {
+export const ESCENAS: Record<string, Escena> = {
 ${lineas}
 };
 `;
@@ -246,31 +384,55 @@ async function principal() {
 
   const navegador = await chromium.launch();
   const fichas = [];
-  for (const c of claves) fichas.push(await generarUno(navegador, AMBIENTES[c]));
+  for (const c of claves) fichas.push(...(await generarUno(navegador, AMBIENTES[c])));
   await navegador.close();
 
-  // El índice se reescribe entero SIEMPRE, con los siete: si se regenerara sólo
-  // el que se pidió, el archivo quedaría sin los otros seis y no compilaría.
-  const porClave = new Map(fichas.map((f) => [f.clave, f]));
+  /* El índice se reescribe entero SIEMPRE, con los diecinueve departamentos: si
+     se regenerara sólo el ambiente que se pidió, el archivo quedaría sin los
+     demás y no compilaría. Los que no se rehornearon conservan lo que ya decía. */
+  const porDepto = new Map(fichas.map((f) => [f.depto, f]));
   const todas = [];
-  for (const c of Object.keys(AMBIENTES)) {
-    todas.push(porClave.get(c) ?? (await leerFichaVieja(c)));
+  for (const d of Object.keys(COLOR_DEPARTAMENTO)) {
+    todas.push(porDepto.get(d) ?? (await leerFichaVieja(d)));
   }
   await escribirIndice(todas);
-  console.log(`Listo. ${todas.reduce((s, f) => s + (f.pesoKb ?? 0), 0)} KB en total.`);
+  console.log(
+    `Listo. ${todas.length} departamentos, ` +
+      `${todas.reduce((s, f) => s + (f.pesoKb ?? 0), 0)} KB horneados en esta corrida.`,
+  );
 }
 
 /** Si sólo se regeneró un ambiente, los otros conservan lo que ya decía el índice. */
-async function leerFichaVieja(clave) {
+async function leerFichaVieja(depto) {
+  const slug = slugDepartamento(depto);
   try {
     const { ESCENAS } = await import(path.join(RAIZ, "lib", "escenas.ts"));
-    const e = ESCENAS[clave];
-    if (e) return { clave, colorMesa: e.colorMesa, colorFondo: e.colorFondo, pesoKb: 0 };
+    const e = ESCENAS[depto];
+    if (e) {
+      return {
+        depto,
+        slug,
+        colorMesa: e.colorMesa,
+        colorFondo: e.colorFondo,
+        colorTelon: e.colorTelon,
+        pesoKb: 0,
+      };
+    }
   } catch {
     /* todavía no existe: primera corrida */
   }
-  const a = AMBIENTES[clave];
-  return { clave, colorMesa: a.mesa[2], colorFondo: a.cielo[1], pesoKb: 0 };
+  /* Primera corrida y este departamento no se horneó: se deja algo que compile
+     y que se vea razonable hasta que se hornee de verdad. */
+  const a = ambienteDe(depto);
+  const acento = acentoDe(depto);
+  return {
+    depto,
+    slug,
+    colorMesa: acentuarColor(a.mesa[2], acento, ACENTO_MESA),
+    colorFondo: acentuarColor(a.cielo[1], acento, ACENTO_FONDO),
+    colorTelon: acentuarColor(a.cielo[1], acento, ACENTO_MESA),
+    pesoKb: 0,
+  };
 }
 
 await principal();

@@ -150,17 +150,95 @@ test("y sin embargo se enseña de verdad: la mano cortada con el tanto cantado",
   assert.ok(conFlor > 0, "en 80 partidas nunca se enseñó una flor");
 });
 
-test("el envido querido enseña los DOS tantos, y uno solo va marcado como ganador", () => {
+/**
+ * ── ESTE TEST DECÍA LO CONTRARIO HASTA EL 5/9/2026 ─────────────────────────
+ *
+ * Pedía que se enseñaran los DOS tantos, porque el motor cantaba los dos. Los
+ * dos estaban mal: `reglas.txt` 9.4 dice que empieza el mano y que **el que no
+ * puede superar lo que ya se cantó dice "son buenas" y no revela su tanto**.
+ *
+ * Enseñar el del perdedor es soplarle las cartas al otro: con su tanto y la
+ * muestra se deduce buena parte de lo que le queda en la mano. Santiago lo vio
+ * jugando —se leía "ÉL: 28" aunque el rival hubiera perdido— y por eso el test
+ * ahora pide lo de verdad.
+ */
+test("el envido querido enseña sólo el tanto del que lo dijo, y siempre el del ganador", () => {
+  let conDos = 0;
   for (let semilla = 1; semilla <= 80; semilla++) {
     recorrerManos(semilla, (p) => {
       const envidos = tantosAlCierre(p).filter((t) => t.clase === "envido");
       if (envidos.length === 0) return;
-      assert.equal(envidos.length, 2, `semilla ${semilla}: el envido no enseñó los dos tantos`);
+
+      /* Uno siempre; dos sólo cuando el pie superó al mano, porque ahí los dos
+         llegaron a decir su número en voz alta. */
+      assert.ok(
+        envidos.length === 1 || envidos.length === 2,
+        `semilla ${semilla}: el envido enseñó ${envidos.length} tantos`,
+      );
+      if (envidos.length === 2) conDos++;
+
       assert.equal(
         envidos.filter((t) => t.gano).length,
         1,
         `semilla ${semilla}: el envido no tiene exactamente un ganador`,
       );
+
+      /* El que ganó SIEMPRE dijo su número: o es el mano, que habla primero, o
+         es el pie y lo dijo justamente porque superaba. */
+      assert.ok(
+        envidos.some((t) => t.gano),
+        `semilla ${semilla}: no se enseñó el tanto del que ganó el envido`,
+      );
+
+      /* Y el perdedor, si aparece, es sólo porque el mano habló primero y
+         después el pie lo superó: nunca se enseña a alguien que dijo
+         "son buenas". */
+      const perdedor = envidos.find((t) => !t.gano);
+      if (perdedor) {
+        assert.equal(
+          perdedor.quien,
+          p.envidoJugado?.ganador === "vos" ? "rival" : "vos",
+          `semilla ${semilla}: el perdedor enseñado no es el que corresponde`,
+        );
+        assert.ok(
+          p.envidoJugado?.dicho[perdedor.quien],
+          `semilla ${semilla}: se enseñó el tanto de alguien que dijo "son buenas"`,
+        );
+      }
     });
   }
+  /* Que el caso de dos exista de verdad: si nunca pasara, el test de arriba
+     estaría pasando por no comprobar nada. */
+  assert.ok(conDos > 0, "en 80 semillas nunca ganó el pie superando al mano");
+});
+
+test('el que no supera al mano dice "son buenas" y su tanto no aparece en ningún lado', () => {
+  let casos = 0;
+  for (let semilla = 1; semilla <= 80; semilla++) {
+    recorrerManos(semilla, (p) => {
+      if (!p.envidoJugado) return;
+      const { ganador, dicho } = p.envidoJugado;
+      const callado = (["vos", "rival"] as const).find((q) => !dicho[q]);
+      if (!callado) return;
+      casos++;
+
+      /* El que se calla nunca es el que ganó. */
+      assert.notEqual(callado, ganador, `semilla ${semilla}: el ganador dijo "son buenas"`);
+
+      /* Y su número no puede estar escrito en ningún evento de la mano: es la
+         comprobación que de verdad cierra la filtración, porque la pantalla
+         dibuja los eventos tal cual. */
+      const suyo = String(p.envidoJugado[callado]);
+      const suyos = p.eventos.filter((e) => e.quien === callado);
+      assert.ok(
+        suyos.every((e) => e.texto !== suyo),
+        `semilla ${semilla}: ${callado} dijo "son buenas" pero su tanto (${suyo}) quedó en los eventos`,
+      );
+      assert.ok(
+        suyos.some((e) => e.texto === "Son buenas"),
+        `semilla ${semilla}: ${callado} no llegó a decir "son buenas"`,
+      );
+    });
+  }
+  assert.ok(casos > 0, "en 80 semillas nadie dijo nunca “son buenas”");
 });

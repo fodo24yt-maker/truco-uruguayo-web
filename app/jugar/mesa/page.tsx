@@ -41,10 +41,9 @@ import {
 } from "@/lib/motor/personalidades";
 import { fichaVacia, observarMano } from "@/lib/motor/lectura";
 import { explicarEnvido, valorEnvido } from "@/lib/motor/tantos";
-import { acentoDe, ambienteDe, objetoDe } from "@/lib/ambientes";
+import { ambienteDe, escenaDe, objetoDe } from "@/lib/ambientes";
 import { ALTURA, APOYO, ObjetoDeMesa, PROPORCION } from "@/components/mesa/Objetos";
 import { estiloEnMesa } from "@/lib/mesa-perspectiva";
-import { ESCENAS } from "@/lib/escenas";
 import { caraDe } from "@/lib/caras";
 import { porSlugDeDepartamento } from "@/lib/gira";
 import { botonera } from "@/lib/botonera";
@@ -686,10 +685,14 @@ function Mesa() {
 
   /** Dónde se juega y cómo es la cara del que tenés enfrente. */
   const ambiente = ambienteDe(rival.departamento);
-  /* El tono del departamento, el mismo del mapa. Es lo que separa a Salto de
-     Paysandú, que comparten el ambiente del litoral y hasta ahora eran la
-     misma pantalla. */
-  const acento = acentoDe(rival.departamento);
+  /* La textura del departamento, con su tono ya horneado adentro. Es lo que
+     separa a Salto de Paysandú, que comparten el ambiente del litoral y sin eso
+     serían la misma pantalla.
+
+     Hasta el 5/9/2026 el tono se pintaba en vivo con dos capas de
+     `mix-blend-mode: color`; el porqué de que se hayan ido está en
+     `components/mesa/Escenario.tsx`. */
+  const escena = escenaDe(rival.departamento);
   const caraRival = caraDe(rival.id);
   // El tanto se cuenta con las tres cartas del reparto, nunca con las que quedan
   const miFlor = p.flor.vos;
@@ -901,12 +904,12 @@ function Mesa() {
               terminó. */}
           <div
             className="absolute inset-0"
-            style={{ backgroundColor: ESCENAS[ambiente.clave].colorFondo }}
+            style={{ backgroundColor: escena.colorTelon }}
           />
 
           {/* el ambiente, al fondo */}
           <div className="absolute inset-x-0 top-0" style={{ height: `${d.fondo}%` }}>
-            <FondoAmbiente ambiente={ambiente} acento={acento} />
+            <FondoAmbiente escena={escena} />
           </div>
 
           {/* EL RIVAL VA ANTES DE LA TABLA, y no es un detalle de orden.
@@ -918,7 +921,7 @@ function Mesa() {
               lado. Su sombra va después: una sombra cae SOBRE la madera. */}
           {capaRival}
           <div className="absolute inset-x-0 bottom-0" style={{ top: `${d.fondo}%` }}>
-            <TablaMesa ambiente={ambiente} acento={acento} />
+            <TablaMesa escena={escena} />
           </div>
           <div className="pointer-events-none absolute left-1/2 -translate-x-1/2" style={cajonRival}>
             <SombraRival ficha={caraRival} />

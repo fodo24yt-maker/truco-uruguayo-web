@@ -96,11 +96,28 @@ export interface Partida {
    * `"27"` de una lista de strings.
    *
    * `null` MIENTRAS NO SE HAYA QUERIDO, y eso es la mitad del sentido del
-   * campo. Cuando el envido se quiere, los dos cantan su tanto en voz alta: son
-   * públicos y se pueden mostrar. Si se cantó y no se quiso, nadie dijo su
-   * número, y esto sigue en `null` para que no haya de dónde soplarlo.
+   * campo. Si se cantó y no se quiso, nadie dijo su número, y esto sigue en
+   * `null` para que no haya de dónde soplarlo.
+   *
+   * ── `dicho` NO ES DECORACIÓN, Y SE CORRIGIÓ EL 5/9/2026 ──────────────────
+   *
+   * Acá decía que al quererse "los dos cantan su tanto en voz alta: son
+   * públicos y se pueden mostrar", y eso está MAL. `reglas.txt` 9.4: *"El que
+   * no puede superar lo que ya se cantó dice 'son buenas' y no revela su
+   * tanto."* O sea que el perdedor no dice ningún número.
+   *
+   * Los dos valores se guardan igual porque el motor los necesita para
+   * comparar, pero **la pantalla sólo puede leer los que están en `dicho`**.
+   * Santiago lo agarró jugando: se leía "ÉL: 28" en la mesa aunque el rival
+   * hubiera perdido, y con eso se le deducen las cartas que le quedan.
    */
-  envidoJugado: { vos: number; rival: number; ganador: Jugador } | null;
+  envidoJugado: {
+    vos: number;
+    rival: number;
+    ganador: Jugador;
+    /** Quién llegó a decir su número en voz alta. El otro dijo "son buenas". */
+    dicho: Record<Jugador, boolean>;
+  } | null;
   florResuelta: boolean; // false mientras hay una flor cantada sin decidir
   florCantada: Record<Jugador, boolean>;
   /**
@@ -667,10 +684,25 @@ function responderQuiero(p: Partida, quien: Jugador): Partida {
         ? "vos"
         : "rival";
 
+  /* ── CÓMO SE DECLARAN LOS TANTOS (reglas.txt 9.4) ─────────────────────────
+     "Se dicen los tantos en voz alta SIN mostrar las cartas, empezando por el
+     MANO y siguiendo el orden de la mesa. El que no puede superar lo que ya se
+     cantó dice 'son buenas' y no revela su tanto."
+
+     Hasta el 5/9/2026 acá se cantaban los DOS números siempre, y por eso se
+     leía "ÉL: 28" en la mesa aunque el rival hubiera perdido: con el tanto del
+     otro y la muestra se le deducen las cartas que le quedan en la mano.
+
+     El pie tiene que SUPERAR, no igualar: el empate lo gana el mano, así que
+     con el mismo número tampoco puede ganar y también dice "son buenas". */
+  const mano = p.quienEsMano;
+  const pie: Jugador = mano === "vos" ? "rival" : "vos";
+  const pieSupera = tantos[pie] > tantos[mano];
+
   p.envidoCerrado = true;
-  p.envidoJugado = { ...tantos, ganador };
-  p.eventos.push({ quien: "vos", texto: `${tantos.vos}` });
-  p.eventos.push({ quien: "rival", texto: `${tantos.rival}` });
+  p.envidoJugado = { ...tantos, ganador, dicho: { [mano]: true, [pie]: pieSupera } as Record<Jugador, boolean> };
+  p.eventos.push({ quien: mano, texto: `${tantos[mano]}` });
+  p.eventos.push({ quien: pie, texto: pieSupera ? `${tantos[pie]}` : "Son buenas" });
 
   const { querido } = puntosEnvido(pendiente.cadena as CantoEnvido[], p.puntos);
   sumar(p, ganador, querido, { vos: "Ganás el envido", el: "gana el envido" });
