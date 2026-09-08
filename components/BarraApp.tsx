@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { seccionDe, volverDesde } from "@/lib/navegacion";
+import { MenuAjustes } from "@/components/MenuAjustes";
+import { volverDesde } from "@/lib/navegacion";
 
 /**
  * La barra de arriba de la app.
@@ -27,8 +28,12 @@ import { seccionDe, volverDesde } from "@/lib/navegacion";
  * flecha sola en un círculo no se encontrara. En el inicio no se dibuja, porque
  * no hay adónde volver.
  *
- * A la derecha los dos atajos, siempre. Son el motivo por el que esto existe:
- * poder saltar de Aprender a Jugar sin pasar por el menú.
+ * A la derecha, desde el 8/9/2026, UN engranaje en vez de los dos atajos que
+ * había. El motivo de esto sigue siendo el mismo —poder saltar de Aprender a
+ * Jugar sin pasar por el menú— pero los huecos de esta fila son dos y ya eran
+ * tres las pantallas: con el anotador puesto, y el sonido en camino, escribir
+ * cada destino acá no escalaba. El engranaje ocupa uno y adentro entran todos.
+ * Está en `components/MenuAjustes.tsx`.
  *
  * Y no va el nombre del sitio. En el inicio ya está escrito grande abajo, y en
  * las demás pantallas esa fila a 360 px la necesitan los botones.
@@ -53,7 +58,6 @@ const NOMBRE_DE = new Map([
 export function BarraApp() {
   const ruta = usePathname() ?? "/";
   const volver = volverDesde(ruta);
-  const seccion = seccionDe(ruta);
 
   return (
     <header className="barra-app madera border-b-2 filo-dorado">
@@ -76,52 +80,13 @@ export function BarraApp() {
             {NOMBRE_DE.get(volver) ?? "Volver"}
           </Link>
         ) : (
-          /* Un hueco vacío, para que los atajos queden a la derecha y no
+          /* Un hueco vacío, para que el engranaje quede a la derecha y no
              saltando de lado según la pantalla en la que estés. */
           <span />
         )}
 
-        <div className="flex gap-1 font-[family-name:var(--font-ui)] text-sm uppercase tracking-wide">
-          <Atajo href="/aprender" activo={seccion === "aprender"}>
-            Aprender
-          </Atajo>
-          <Atajo href="/jugar" activo={seccion === "jugar"} destacado>
-            Jugar
-          </Atajo>
-        </div>
+        <MenuAjustes />
       </nav>
     </header>
-  );
-}
-
-function Atajo({
-  href,
-  activo,
-  destacado,
-  children,
-}: {
-  href: string;
-  activo: boolean;
-  /** El de Jugar va en bordo, como estaba en la barra de antes. */
-  destacado?: boolean;
-  children: React.ReactNode;
-}) {
-  const base = "rounded px-3 py-2 transition-colors";
-  const color = destacado
-    ? "bg-bordo text-crema hover:bg-bordo-claro"
-    : "text-crema/85 hover:bg-black/25 hover:text-crema";
-  // El activo se marca con el filo dorado y no cambiándole el fondo: así los
-  // dos botones se siguen leyendo igual y lo único que cambia es cuál está
-  // encendido.
-  const marca = activo ? "ring-2 ring-inset ring-dorado" : "";
-
-  return (
-    <Link
-      href={href}
-      aria-current={activo ? "page" : undefined}
-      className={`${base} ${color} ${marca}`}
-    >
-      {children}
-    </Link>
   );
 }

@@ -30,7 +30,7 @@ import { volverDesde } from "../lib/navegacion.ts";
 
 const RAIZ = "http://localhost:4173";
 const RUTAS = ["/", "/aprender/", "/aprender/la-flor/", "/jugar/", "/jugar/gira/",
-  "/jugar/mesa/", "/jugar/mesa/?depto=rocha", "/legales/terminos/"];
+  "/jugar/mesa/", "/jugar/mesa/?depto=rocha", "/anotador/", "/legales/terminos/"];
 
 const nav = await chromium.launch();
 const ctx = await nav.newContext({ viewport: { width: 390, height: 844 } });

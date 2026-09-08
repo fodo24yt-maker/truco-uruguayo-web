@@ -70,9 +70,9 @@ async function abrir(pag, ruta) {
 console.log("el armazón de app:");
 {
   /** Las pantallas que no pueden scrollear nunca. */
-  const FIJAS = ["/", "/jugar"];
+  const FIJAS = ["/", "/jugar", "/anotador"];
   /** Dónde tiene que haber barra, y dónde no. */
-  const CON_BARRA = ["/", "/aprender", "/aprender/la-flor", "/jugar", "/legales/terminos"];
+  const CON_BARRA = ["/", "/aprender", "/aprender/la-flor", "/jugar", "/anotador", "/legales/terminos"];
   const SIN_BARRA = ["/jugar/gira", "/jugar/mesa?depto=montevideo"];
 
   const medir = (pag) =>
@@ -82,7 +82,12 @@ console.log("el armazón de app:");
          que depende que la mesa pueda esconder la barra. */
       const barra = document.querySelector("body > header.barra-app");
       const visible = barra ? barra.getBoundingClientRect().height > 0 : false;
-      const atajos = [...(barra?.querySelectorAll("nav > div a") ?? [])];
+      /* EL ENGRANAJE, y no los dos atajos que había hasta el 8/9/2026.
+         Se busca por `aria-label` a propósito: es un botón sin texto, así que
+         ese atributo no es un adorno de accesibilidad, es su ÚNICO nombre. Si
+         alguien se lo saca, el botón deja de tener nombre para un lector de
+         pantalla y esto falla, que es exactamente lo que tiene que pasar. */
+      const ajustes = barra?.querySelector('button[aria-label="Ajustes"]') ?? null;
       const volver = [...(barra?.querySelectorAll("nav > a") ?? [])][0] ?? null;
       const caja = (el) => {
         if (!el) return null;
@@ -93,7 +98,7 @@ console.log("el armazón de app:");
         hayBarra: visible,
         altoBarra: barra ? Math.round(barra.getBoundingClientRect().height) : 0,
         volver: visible && volver ? volver.getAttribute("href") : null,
-        atajos: atajos.map((a) => a.textContent.trim()),
+        hayAjustes: Boolean(ajustes),
         activo: barra?.querySelector('[aria-current="page"]')?.textContent?.trim() ?? null,
         sobraAlto: doc.scrollHeight - doc.clientHeight,
         sobraAncho: doc.scrollWidth - doc.clientWidth,
@@ -105,6 +110,11 @@ console.log("el armazón de app:");
         jugar: caja(
           [...document.querySelectorAll("main a")].find(
             (a) => a.textContent.trim().toLowerCase() === "jugar",
+          ),
+        ),
+        anotador: caja(
+          [...document.querySelectorAll("main a")].find((a) =>
+            a.textContent.trim().toLowerCase().startsWith("anotador"),
           ),
         ),
       };
@@ -127,8 +137,8 @@ console.log("el armazón de app:");
       if (m.hayBarra !== deberia) {
         falla(donde, deberia ? "no está la barra de la app" : "la barra tapa la pantalla de juego");
       }
-      if (deberia && m.atajos.join("·") !== "Aprender·Jugar") {
-        falla(donde, `los atajos son [${m.atajos}] y tienen que ser Aprender y Jugar`);
+      if (deberia && !m.hayAjustes) {
+        falla(donde, "no está el botón de ajustes en la barra");
       }
 
       // 2. el volver, contra la función que también usa el botón de Android
@@ -151,11 +161,79 @@ console.log("el armazón de app:");
 
       // 5. en el inicio, las dos puertas se ven sin arrastrar nada
       if (ruta === "/") {
-        for (const [nombre, caja] of [["Aprender a jugar", m.aprender], ["Jugar", m.jugar]]) {
+        for (const [nombre, caja] of [
+          ["Aprender a jugar", m.aprender],
+          ["Jugar", m.jugar],
+          ["Anotador", m.anotador],
+        ]) {
           if (!caja) falla(donde, `no está el botón "${nombre}"`);
           else if (caja.abajo > alto) falla(donde, `"${nombre}" queda fuera de la pantalla`);
         }
         await pag.screenshot({ path: path.join(SALIDA, `inicio-${etiqueta}.png`) });
+      }
+    }
+
+    if (fallos === antes) console.log(`  ${etiqueta.padEnd(9)} OK`);
+    await ctx.close();
+  }
+}
+
+/* ══ 1ter. EL PANEL DE AJUSTES ═════════════════════════════════════════════
+   La comprobación de arriba mira que el ENGRANAJE esté. Esto mira que sirva,
+   que no es lo mismo, y nace de un error que ya se pagó el 7/9/2026: un guard
+   que buscaba por atributo y, cuando el atributo cambiaba de nombre, salteaba
+   la prueba en silencio y seguía diciendo OK. **Un control que pasa en vacío es
+   peor que no tenerlo.**
+
+   Acá eso se traduce en que no alcanza con que exista el botón: hasta el
+   8/9/2026 los dos destinos estaban ESCRITOS en la barra y se veían de una;
+   ahora están detrás de un toque, y si el panel no abre, o abre sin alguno de
+   los destinos, la app se queda literalmente sin navegación y la barra sigue
+   pareciendo correcta.
+
+   Se prueban las tres cosas que pueden romperse por separado: que abra, que
+   estén los tres destinos, y que cierre con Escape —que es la misma tecla que
+   el botón físico de atrás de Android simula, así que probar Escape acá está
+   probando el atrás del teléfono—. */
+console.log("\nel panel de ajustes:");
+{
+  const DESTINOS = ["/aprender", "/jugar", "/anotador"];
+  for (const [ancho, alto] of TAMANOS) {
+    const ctx = await nav.newContext({ viewport: { width: ancho, height: alto } });
+    const pag = await ctx.newPage();
+    const etiqueta = `${ancho}x${alto}`;
+    const antes = fallos;
+
+    await abrir(pag, "/");
+    const engranaje = pag.locator('header.barra-app button[aria-label="Ajustes"]');
+    const panel = pag.locator('[role="dialog"][aria-modal="true"]');
+
+    if (await panel.count()) falla(etiqueta, "el panel de ajustes ya estaba abierto sin tocarlo");
+
+    await engranaje.click();
+    await pag.waitForTimeout(120);
+
+    if (!(await panel.count())) {
+      falla(etiqueta, "el engranaje no abre el panel de ajustes");
+    } else {
+      for (const destino of DESTINOS) {
+        if (!(await panel.locator(`a[href="${destino}"]`).count())) {
+          falla(etiqueta, `el panel de ajustes no ofrece ${destino}`);
+        }
+      }
+      // Que se vea entero: un panel cuyo último botón queda abajo del borde es
+      // un panel al que le falta una opción, y en un celular bajo pasa solo.
+      const seSale = await pag.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      if (seSale > 1) falla(etiqueta, `el panel de ajustes se sale de ancho ${seSale}px`);
+
+      await pag.screenshot({ path: path.join(SALIDA, `ajustes-${etiqueta}.png`) });
+
+      await pag.keyboard.press("Escape");
+      await pag.waitForTimeout(120);
+      if (await panel.count()) {
+        falla(etiqueta, "Escape no cierra el panel (y es la tecla del atrás de Android)");
       }
     }
 

@@ -12,6 +12,162 @@
 
 ---
 
+## 2026-09-08 — El anotador, el engranaje, y Git deja de ser mío
+
+Sesión de agregar, no de arreglar. Las manchitas quedaron para la próxima, con
+el celular enchufado; lo que se hizo fue lo nuevo.
+
+### La regla más importante del día no es código
+
+**Claude no commitea ni pushea más. Nunca.** Santiago lo pidió en mayúsculas y
+quedó escrito en `CLAUDE.md`, que ahora tiene una sección *Git: Claude no
+commitea ni pushea. Nunca.* donde antes decía lo contrario. El trabajo se deja
+en el árbol, se dice qué archivos se tocaron, y publicar lo decide él.
+
+De paso se escribieron como reglas dos cosas que estaban mencionadas al pasar:
+**revisar el diff buscando datos personales antes de dar algo por terminado**
+—el repo es público y lo que entra a Git no se va más— y **correr la revisión
+de seguridad con las skills, nombrándolas** (`security-review` siempre;
+`09-web-security` o `17-mobile-security` según qué se tocó).
+
+Ojo: **`CLAUDE.md` está en `.gitignore`** (línea 136). O sea que esas reglas
+viven sólo en la máquina de Santiago y no se suben. Está bien que sea así, pero
+conviene saberlo: una sesión que trabaje en un clon limpio no las tiene.
+
+### El anotador: `/anotador`
+
+La tablita de treinta, para cuando se juega con cartas de verdad. Es la primera
+pantalla del proyecto que **sirve sin la app**.
+
+Las reglas van en `lib/anotador.ts`, con quince pruebas propias, por lo mismo
+que `botonera.ts` y `navegacion.ts`: la pantalla no decide reglas. Ahí está qué
+es una mala y qué una buena (primeros 15 y últimos 15), cuántos palitos lleva un
+grupo a medio hacer, que "1 buena" no se diga "1 buenas", y el saneo de lo que
+sale del `localStorage`.
+
+**Clave propia, `truco-uy:anotador`, separada de `truco-uy:progreso`.** No es
+prolijidad: el progreso es la gira y los trofeos, y `CLAUDE.md` avisa dos veces
+de lo caro que sale tocar dónde vive eso. Si algún día hay que borrar la cuenta
+del anotador, se borra esa clave y la gira ni se entera.
+
+La prueba que más vale de las quince: **que los palitos dibujados sean
+exactamente los puntos**, recorriendo los 16 valores posibles de una mitad. Un
+error de un punto en el reparto de grupos no lo ve nadie leyendo el código; lo
+descubriría Santiago contando cuadraditos en el celular.
+
+### El dibujo: tres capturas y dos bugs de distribución
+
+El diseño salió de una referencia que mandó Santiago —otra app de anotar— y se
+replicó **la estructura**: dos columnas con los nombres, a cuánto se juega en el
+medio, el renglón de "7 malas / 1 buena" debajo de cada nombre, la raya que
+separa malas de buenas y los cuadraditos de cinco palitos. El material es el de
+esta casa: papel viejo sobre la mesa del boliche, tinta bordo.
+
+**Primera captura**: los cuadraditos salían de a dos por fila, chicos y
+amontonados arriba, con media hoja vacía. Santiago pidió **uno por renglón,
+tres y tres, más grandes**, y un hueco de anuncio abajo con lo que sobraba.
+
+Y ahí aparecieron dos bugs de alto que **no se veían leyendo el código**, los
+dos de la misma familia —una cadena de alto cortada— y los dos encontrados
+midiendo el DOM, no mirando la captura:
+
+1. **La grilla de la tablita no declaraba fila.** `grid-cols-2` sin
+   `grid-rows-1`: la única fila era implícita, y las implícitas son `auto`, así
+   que crecían con el contenido en vez de repartirse el alto. Medido: una mitad
+   en 147px y la otra en 360.
+2. **El `<div>` que dibujaba la raya de malas/buenas cortaba el alto.** Era el
+   hijo de la grilla y se llevaba los 147px del renglón, pero adentro la mitad
+   quedaba en `height: auto`, así que sus tres renglones de `1fr` no tenían
+   contra qué resolverse y **cada cuadradito caía en el tamaño de su `viewBox`**:
+   124×124 abajo contra 124×45 arriba. Se veía como un cuadrado gigante en las
+   buenas. La raya pasó a ir en la propia mitad, sin envoltorio.
+
+**La lección, que ya es la tercera vez**: `min-h-0` y `flex-1` no alcanzan si en
+el medio hay un elemento que no propaga el alto. Un `<div>` puesto para colgarle
+un borde puede romper seis niveles más abajo.
+
+El pulso de la mano —que los palitos no cierren de escuadra— sale de una cuenta
+**fija según la posición del grupo**, calculada una vez al cargar el módulo.
+Con `Math.random()` los treinta palitos temblarían en cada dibujo, o sea repintar
+la pantalla entera cada vez que se aprieta `+`.
+
+### El engranaje, y por qué la barra ya no lista pantallas
+
+`components/MenuAjustes.tsx`. La barra de arriba tenía dos huecos y ya eran tres
+las pantallas —el sonido va a ser la cuarta—: a 320px no entran. Un engranaje
+ocupa uno y adentro entran las que sean.
+
+Adentro: Aprender, Jugar, Anotador, Sonido (apagado, con "próximamente": se
+reserva el lugar, no la función) y los legales, que hasta hoy sólo se alcanzaban
+desde el pie de `/aprender`.
+
+**El panel es `role="dialog" aria-modal="true"`, y eso es lo que lo hace andar
+en el teléfono sin tocar una línea de Android.** `BotonAtrasAndroid.tsx` busca
+exactamente ese selector y le manda `Escape`: el botón físico de atrás cierra el
+panel en vez de sacarte de la pantalla, gratis, por cumplir un contrato que ya
+existía para la vitrina de trofeos.
+
+**Fondo opaco (`bg-noche`), sin `/95` ni `backdrop-blur`.** Una hoja translúcida
+a pantalla completa obliga a componer todo lo de abajo en una superficie aparte,
+que es literalmente el bug de las manchitas. No se ve peor.
+
+### El control nuevo se rompió a propósito antes de creerle
+
+`mirar-web.mjs` comprobaba `atajos === "Aprender·Jugar"`, y con el engranaje eso
+quedaba mirando cero elementos: **habría seguido diciendo OK con la navegación
+rota**. Es exactamente el error del 7/9.
+
+Ahora hay un bloque nuevo, *el panel de ajustes*, que comprueba tres cosas por
+separado —que abra, que ofrezca los tres destinos, y que `Escape` lo cierre (la
+misma tecla que simula el atrás de Android)— y **se verificó rompiéndolo**: con
+el destino del anotador cambiado, falla en los tres tamaños con el mensaje
+correcto y sale con código 1.
+
+El engranaje se busca por `aria-label`, y eso no es accesibilidad decorativa: es
+un botón sin texto, así que ése es su único nombre. Si alguien se lo saca, la
+prueba falla, que es lo que corresponde.
+
+### El repaso de seguridad encontró una promesa vencida
+
+El diff no abre superficie de ataque: es marcado, CSS y una clave nueva de
+`localStorage` que sanea igual de duro que `lib/progreso.ts` —entero, no
+negativo, con techo de 30, y devolviendo un objeto literal de dos campos, así
+que nada de lo guardado se cuela—. Sin scripts nuevos, sin red, sin cambios en
+la CSP.
+
+Lo que sí apareció: **`app/legales/privacidad` decía "lo único que se guarda es
+tu progreso en la gira"**, y desde hoy también se guarda la cuenta del anotador.
+Esa página promete por escrito y ahora nombra las dos cosas. Es la clase de cosa
+que no rompe nada y sin embargo es la que Play Store mira.
+
+El barrido de datos personales sobre el diff dio limpio.
+
+### Estado al cerrar
+
+`npm test` **183/183** · `tsc --noEmit` limpio · `mirar-web`, `mirar-mesa` y
+`mirar-app-compilada` **TODO OK** · los dos builds OK · `/anotador/` aguanta la
+recarga dura en el export de la app, con `index.html` en su carpeta.
+
+**Sin commitear**, que es la regla nueva.
+
+### Pendiente
+
+1. **Las motas del mapa de la gira, con el celular enchufado.** Santiago las
+   sigue viendo, y el 7/9 el mapa midió 0 en ocho fotos: la medición no estaba
+   mirando el caso que falla. **No tocar nada antes de tener el número.** Los
+   sospechosos, en orden: el `feTurbulence` de `MapaUruguay.tsx:66` (un filtro
+   sobre la hoja entera; el A/B que lo absolvió corrió en la compu, y
+   `capas.mjs` no ve lo que decide la GPU del teléfono), la marcha de hormigas
+   del camino, y el `anim-pop` de la ficha de la parada.
+2. **Las motas al cantar envido cuando el rival dice QUIERO**, ~1 s. Santiago
+   las describió hoy. Con el teléfono enchufado se fotografían en la misma
+   corrida.
+3. Si el culpable es el `feTurbulence`: hornearlo, como `generar-escena.mjs`
+   hornea la madera.
+4. **Medir en el APK**, que es lo que Santiago juega.
+5. `deviceScaleFactor: 2` en las herramientas que todavía miran a DPR 1.
+6. Prender AdMob. El anotador ya tiene su hueco reservado.
+
 ## 2026-09-07 — El instrumento era ciego, y la banda de la mano seguía viva
 
 Quinta sesión con las manchitas. Las cuatro anteriores diagnosticaron mirando un

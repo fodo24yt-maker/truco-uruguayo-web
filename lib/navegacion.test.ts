@@ -35,6 +35,7 @@ const PANTALLAS = [
   "/aprender/puntos-y-partida",
   "/jugar",
   "/jugar/gira",
+  "/anotador",
   "/jugar/mesa",
   "/legales/privacidad",
   "/legales/terminos",
@@ -59,6 +60,7 @@ test("desde el inicio no se vuelve a ningún lado", () => {
 test("cada pantalla vuelve a la que la contiene", () => {
   assert.equal(volverDesde("/aprender"), "/");
   assert.equal(volverDesde("/jugar"), "/");
+  assert.equal(volverDesde("/anotador"), "/");
   assert.equal(volverDesde("/aprender/la-muestra"), "/aprender");
   assert.equal(volverDesde("/jugar/gira"), "/jugar");
 });
@@ -113,6 +115,7 @@ test("la sección marcada es la que estás mirando", () => {
   assert.equal(seccionDe("/jugar"), "jugar");
   assert.equal(seccionDe("/jugar/gira"), "jugar");
   assert.equal(seccionDe("/jugar/mesa"), "jugar");
+  assert.equal(seccionDe("/anotador"), "anotador");
 });
 
 /*

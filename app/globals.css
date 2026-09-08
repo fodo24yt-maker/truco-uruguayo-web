@@ -188,6 +188,16 @@ footer {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* Una hoja que tapa la pantalla entera: hoy, el panel de ajustes.
+   Lleva los DOS rellenos porque no está ni arriba ni abajo, está en todos
+   lados: el reloj del sistema le pisa el título y la barra de gestos le pisa
+   los últimos botones. Es la misma cuenta que ya hacen `.barra-app` y el pie,
+   junta. En la web las dos valen 0 y esto no cambia nada. */
+.hoja-completa {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 /* La barra de juego: la franja finita de arriba mientras jugás.
    Reemplaza a la navegación del sitio, que adentro de una partida no pinta nada
    y se llevaba 76px de alto. En un celular de 640 eso son las cartas.

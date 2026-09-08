@@ -29,6 +29,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.8,
     })),
     { url: urlDe("/jugar"), lastModified: hoy, changeFrequency: "monthly", priority: 0.7 },
+    // El anotador se puede buscar solo ("anotador de truco") y sirve entero sin
+    // haber jugado acá nunca, así que va al mapa del sitio como cualquier página.
+    { url: urlDe("/anotador"), lastModified: hoy, changeFrequency: "monthly", priority: 0.6 },
     { url: urlDe("/legales/privacidad"), lastModified: hoy, priority: 0.2 },
     { url: urlDe("/legales/terminos"), lastModified: hoy, priority: 0.2 },
   ];

@@ -38,9 +38,10 @@ export default function Privacidad() {
             No sabemos quién entró, ni cuántos entraron, ni desde dónde.
           </p>
           <p>
-            Lo único que se guarda es <strong>tu progreso en la gira</strong>, y
-            se guarda <em>en tu propio dispositivo</em>: nunca nos llega. Está
-            explicado más abajo.
+            Lo único que se guarda es <strong>tu progreso en la gira</strong> y
+            <strong>la cuenta del anotador</strong>, y las dos cosas se guardan{" "}
+            <em>en tu propio dispositivo</em>: nunca nos llegan. Está explicado
+            más abajo.
           </p>
           <p>
             No es una promesa de buena voluntad: es una consecuencia técnica. La
@@ -72,6 +73,12 @@ export default function Privacidad() {
             las ayudas están prendidas y contra quién jugaste la última vez).
           </p>
           <p>
+            <strong>La cuenta del anotador</strong>: dos números, los puntos de
+            cada lado de la tablita. Se guarda para que no se te pierda la
+            cuenta si se apaga la pantalla en medio de una partida, y se borra
+            sola cuando apretás empezar de nuevo.
+          </p>
+          <p>
             Eso se guarda en el almacenamiento local de tu navegador
             (<em>localStorage</em>) y{" "}
             <strong>se queda en tu dispositivo</strong>: no viaja a ningún lado
@@ -82,7 +89,8 @@ export default function Privacidad() {
           <p>
             En la app de Android, la copia de seguridad de Android puede
             incluirlo, para que la gira no se pierda al cambiar de teléfono. Es
-            progreso de un juego: no hay un dato personal adentro.
+            progreso de un juego y dos números: no hay un dato personal
+            adentro.
           </p>
 
           <h2>Publicidad</h2>

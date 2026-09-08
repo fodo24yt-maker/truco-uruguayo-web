@@ -30,8 +30,15 @@
  * `tantos-al-cierre.ts`: la pantalla no decide reglas.
  */
 
-/** Las dos secciones que tienen atajo propio en la barra de arriba. */
-export type Seccion = "aprender" | "jugar";
+/**
+ * Las tres pantallas que el panel de ajustes ofrece, para poder marcar en cuál
+ * estás parado.
+ *
+ * Eran dos y eran "las que tienen atajo propio en la barra". Desde el 8/9/2026
+ * la barra no tiene atajos —tiene un engranaje— y las opciones viven adentro
+ * del panel, que es donde entra una tercera sin pelear por el ancho.
+ */
+export type Seccion = "aprender" | "jugar" | "anotador";
 
 /**
  * De qué pantalla cuelga cada una.
@@ -47,6 +54,7 @@ export type Seccion = "aprender" | "jugar";
 const PADRE = new Map<string, string>([
   ["/aprender", "/"],
   ["/jugar", "/"],
+  ["/anotador", "/"],
   ["/jugar/gira", "/jugar"],
   ["/legales/privacidad", "/"],
   ["/legales/terminos", "/"],
@@ -103,5 +111,8 @@ export function seccionDe(ruta: string): Seccion | null {
   const r = normalizarRuta(ruta);
   if (r === "/aprender" || r.startsWith("/aprender/")) return "aprender";
   if (r === "/jugar" || r.startsWith("/jugar/")) return "jugar";
+  // El anotador no tiene hijos y no los va a tener: es UNA pantalla, la tablita.
+  // Por eso va por igualdad y no por prefijo, como las otras dos.
+  if (r === "/anotador") return "anotador";
   return null;
 }

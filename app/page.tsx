@@ -54,6 +54,23 @@ export default function Inicio() {
           >
             Jugar
           </Link>
+          {/* LA TERCERA PUERTA, DESDE EL 8/9/2026.
+              Va apagada a propósito —borde más tenue, letra más chica— y no
+              porque valga menos: las otras dos son la app, ésta es una
+              herramienta. Alguien que entra por primera vez tiene que elegir
+              entre aprender y jugar, no entre tres cosas del mismo peso.
+
+              Y es la única que sirve SIN la app: es para cuando estás jugando
+              con las cartas en la mano. */}
+          <Link
+            href="/anotador"
+            className="rounded border-2 border-crema/15 px-7 py-[clamp(0.6rem,2.2vh,0.9rem)] font-[family-name:var(--font-ui)] text-[clamp(0.85rem,2.2vh,1rem)] uppercase tracking-wide text-crema/70 transition-colors hover:border-dorado/50 hover:bg-black/25 hover:text-crema"
+          >
+            Anotador
+            <span className="mt-0.5 block font-[family-name:var(--font-texto)] text-[clamp(0.68rem,1.6vh,0.78rem)] normal-case tracking-normal text-crema/45">
+              La tablita, para jugar con cartas de verdad
+            </span>
+          </Link>
         </div>
       </div>
 
