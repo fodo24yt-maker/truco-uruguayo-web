@@ -127,10 +127,50 @@ export default function Gira() {
           franja de mapa perdida en el medio; va en `dvh` y no en `vh` porque
           la mesa ya usa `dvh` y en iOS Safari eso son unos 90 px de diferencia
           que hacían saltar el encuadre entre una pantalla y la otra. */}
-      <div className="relative mx-auto min-h-0 w-full max-w-[min(100%,calc(100dvh-13rem))] flex-1">
+      {/* ── EL MAPA TIENE ALTO FIJO, Y ESO ES EL ARREGLO DE LAS MANCHITAS ──
+          Medido en el celular el 8/9/2026, con 40 toques automáticos por rama:
+
+              mapa con `flex-1` (se achica al abrirse la ficha)   40/40 sucias · media 6,3
+              mapa con alto fijo 58dvh                             3/40 sucias · media 0,1
+              mapa con alto fijo 55dvh (el MISMO que tenía arriba) 4/40 sucias · media 0,3
+
+          Las dos últimas son el control que importa: al mismo tamaño, limpio o
+          sucio según CÓMO se llega. Con `flex-1`, abrir la ficha del rival le
+          robaba alto al mapa, y cambiar de tamaño obliga a rasterizar de nuevo
+          los ~2000 comandos de dibujo del SVG a otra escala. Esa rasterización
+          es la que vuelve mal, y una vez que vuelve mal QUEDA mal: se midieron
+          80 fotos idénticas a lo largo de 76 segundos.
+
+          Con la caja fija, abrir la ficha no le toca un píxel al mapa.
+
+          El alto va en `calc(100dvh - 18rem)` y no en un `55dvh` suelto: esos
+          18rem son lo que miden la barra de arriba y la ficha juntas, así que
+          el hueco reservado queda del tamaño de la ficha y no sobra negro. Con
+          un porcentaje fijo sobraban 105px de fondo en las dos pantallas.
+
+          EMPEZÓ EN 16rem Y LE CORTABA EL NOMBRE AL RIVAL: la ficha no entraba
+          y, con `justify-end`, lo que sobra se recorta ARRIBA, o sea justo
+          donde está el nombre. Se vio en una captura del celular ("Luquita"
+          partido al medio y el renglón del paso directamente ausente).
+
+          OJO CON VOLVER A PONER `flex-1` ACÁ. Se probaron antes otras dos
+          cosas y las dos se cayeron con número, así que no se reintentan:
+          sacar el `feTurbulence` (40/40, igual) y aplanar los 37 grupos con
+          `opacity` del mapa (77 de media, DOCE VECES PEOR: partir el dibujo en
+          muchas pasadas chicas estaba ayudando, no estorbando). */}
+      <div className="relative mx-auto h-[calc(100dvh-18rem)] w-full max-w-[min(100%,calc(100dvh-13rem))] shrink-0">
         <MapaUruguay paradas={paradas} elegido={elegido} onElegir={setElegido} />
       </div>
 
+      {/* ── EL HUECO DE LA FICHA, RESERVADO SIEMPRE ─────────────────────
+          Es la otra mitad del arreglo de arriba: esta caja se queda con TODO
+          el alto que sobra, haya ficha o no. La franja y la ficha se turnan
+          adentro y el mapa nunca se entera. Es el mismo criterio que
+          `EspacioAnuncio`: se reserva el espacio desde el principio para que
+          después nada se mueva.
+
+          `justify-end` deja la franja pegada abajo, donde estaba. */}
+      <div className="flex min-h-0 flex-1 flex-col justify-end overflow-hidden">
       {/* Sin nada elegido, una franja discreta dice adónde hay que ir. Antes
           iba superpuesta y tapaba justo Montevideo, que es donde se arranca. */}
       {!parada && (
@@ -143,7 +183,7 @@ export default function Gira() {
 
       {/* La ficha de la parada elegida */}
       {parada && rival && (
-        <div className="papel anim-pop shrink-0 border-t-4 border-madera px-4 py-4">
+        <div className="papel anim-pop min-h-0 overflow-y-auto border-t-4 border-madera px-4 py-4">
           <div className="mx-auto flex max-w-lg flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <p className="font-[family-name:var(--font-ui)] text-[11px] uppercase tracking-widest text-tinta/50">
@@ -183,6 +223,7 @@ export default function Gira() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

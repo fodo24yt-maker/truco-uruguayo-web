@@ -17,6 +17,8 @@
  * vientos y el sombrero son coordenadas.
  */
 
+import { useMemo } from "react";
+
 import { type Parada, estadosDeTramos } from "@/lib/gira";
 
 import { Adornos } from "./Adornos";
@@ -41,7 +43,20 @@ export interface PropsMapa {
 }
 
 export function MapaUruguay({ paradas, elegido, onElegir }: PropsMapa) {
-  const tramos = estadosDeTramos(paradas);
+  /* El camino no depende de `elegido`, pero `estadosDeTramos()` devolvía un
+     array NUEVO en cada dibujo, así que al tocar un departamento `CaminoGira`
+     recibía una referencia distinta y se volvía a dibujar entero: 18 trazos
+     punteados redibujados sin que hubiera cambiado un píxel de ellos. Es el
+     mismo criterio que las constantes PERGAMINO y ADORNOS de acá arriba.
+
+     ── OJO: ESTO NO ARREGLA LAS MANCHITAS, Y SE PUSO CREYENDO QUE SÍ ────────
+     Se midió el 8/9/2026 en el celular, con 48 toques automáticos: con el alto
+     fijo solo daba 3 de 40 pantallas sucias, y con esto puesto 2 de 48. Es la
+     misma cifra. Se queda porque ahorrar trabajo de dibujo es cierto igual,
+     pero **el arreglo de las manchitas es el alto fijo del contenedor**, que
+     está explicado en `app/jugar/gira/page.tsx`. No atribuirle a esto un
+     mérito que la medición no le dio. */
+  const tramos = useMemo(() => estadosDeTramos(paradas), [paradas]);
 
   return (
     <svg

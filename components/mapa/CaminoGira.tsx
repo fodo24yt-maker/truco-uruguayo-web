@@ -12,6 +12,8 @@
  * pantalla que se calienta.
  */
 
+import { memo } from "react";
+
 import type { EstadoTramo } from "@/lib/gira";
 import { CAMINO } from "@/lib/gira-camino";
 
@@ -24,7 +26,15 @@ const ESTILO: Record<EstadoTramo, { grosor: number; opacidad: number; clase: str
   cerrado: { grosor: 7, opacidad: 0.4, clase: "" },
 };
 
-export function CaminoGira({ estados }: { estados: readonly EstadoTramo[] }) {
+/* `memo` con el `useMemo` de `MapaUruguay`: los dos juntos son lo que hace que
+   tocar un departamento no vuelva a dibujar el camino. Uno solo no alcanza —el
+   `memo` compara referencias, así que sin el `useMemo` del padre igual vería un
+   array distinto cada vez—. */
+export const CaminoGira = memo(function CaminoGira({
+  estados,
+}: {
+  estados: readonly EstadoTramo[];
+}) {
   return (
     <g fill="none" strokeLinecap="round" className="pointer-events-none">
       {CAMINO.map((tramo, i) => {
@@ -53,4 +63,4 @@ export function CaminoGira({ estados }: { estados: readonly EstadoTramo[] }) {
       })}
     </g>
   );
-}
+});

@@ -12,6 +12,153 @@
 
 ---
 
+## 2026-09-08 (tarde) — Las manchitas del mapa: era el CAMBIO DE TAMAÑO
+
+Sexta sesión con las manchitas, y la primera que las mide con estadística en vez
+de con una foto. Salió el arreglo del mapa, con número, y se cayeron dos modelos
+que el proyecto daba por buenos.
+
+### Lo que cambió todo: se pudo automatizar
+
+Santiago prendió **«Depuración USB (ajustes de seguridad)»** en el Xiaomi, que
+da el permiso `INJECT_EVENTS`. Desde ahí `adb shell input tap` funciona y las
+mediciones dejaron de necesitar sus manos: **40 toques por rama en tres
+minutos**, en vez de una hora de ida y vuelta por chat.
+
+Los guiones quedaron en el temporal de la sesión, pero la receta es corta:
+`adb shell input tap x y` para tocar, `adb exec-out screencap -p` para la foto,
+y `bloques.mjs` para contar.
+
+**El cerrojo, que es obligatorio.** Santiago dio permiso para trabajar EN LA APP
+y en nada más de su teléfono. Eso se cumple con código, no con cuidado: antes de
+cada toque y de cada foto se pregunta `dumpsys activity activities` +
+`dumpsys window` y, si el paquete en primer plano no es `uy.trucouruguayo.app`,
+el guión corta. Saltó de verdad dos veces y evitó fotografiar el escritorio.
+
+### El disparador, y cómo se encontró
+
+Con el celular enchufado apareció enseguida:
+
+    mapa recién abierto                    0 manchitas
+    después de tocar un departamento       aparecen — y QUEDAN
+
+«Quedan» es literal: **80 fotos idénticas byte a byte a lo largo de 76 segundos**,
+y lo único que cambiaba entre dos capturas separadas dos minutos eran los 451
+píxeles del reloj del sistema. No es la GPU fallando cuadro a cuadro: es una
+rasterización que volvió mal y se está reusando de la caché.
+
+### El instrumento estaba bien; lo usé mal
+
+`bloques.mjs` daba 4 donde el ojo contaba 15. **No era el detector: era la
+banda.** Analiza una franja vertical y la de por omisión (0,27–0,72) es la de la
+mesa; la basura del mapa cae en y=376, arriba de eso. El propio archivo lo
+avisa en un comentario y hay una opción `--banda`. Con `--banda 0.17,0.72` el
+número pasó a 15, que es exactamente lo que se veía.
+
+**Para el mapa se mide con `--banda 0.15,0.68`.** Con la de la mesa da 0 en
+pantallas sucias.
+
+### Las cinco ramas, 40 toques automáticos cada una
+
+    A  original                                40/40 sucias · media  6,3 · max  11
+    B  sin el feTurbulence                     40/40 sucias · media  6,1 · max   8
+    C  sin los 37 grupos con `opacity`         40/40 sucias · media 77,2 · max 146
+    D  mapa con alto fijo 58dvh                 3/40 sucias · media  0,1 · max   4
+    D2 mapa con alto fijo 55dvh (control)       4/40 sucias · media  0,3 · max   7
+    ★  alto fijo + hueco reservado              0/40 sucias · media  0,0 · max   0
+
+**D y D2 son el control que cierra el caso.** 55dvh es EL MISMO tamaño que tenía
+el mapa en la rama A con la ficha puesta. Al mismo tamaño: limpio si se llega
+sin resize, sucio si se llega achicándose. **No es la escala, es el cambio.**
+
+### Qué pasaba, en una línea
+
+El mapa era `flex-1`. Al abrirse la ficha del rival, el mapa se achicaba, y
+achicarse obliga a rasterizar de nuevo los ~2.000 comandos de dibujo del SVG a
+otra escala. Esa rasterización es la que vuelve mal.
+
+El arreglo: **alto fijo** (`calc(100dvh - 18rem)`) y el hueco de la ficha
+reservado siempre, para que abrir la ficha no le toque un píxel al mapa. Está
+en `app/jugar/gira/page.tsx` con el detalle escrito al lado.
+
+### DOS MODELOS QUE SE CAYERON, y hay que dejar de usarlos
+
+**1. El `feTurbulence` no tenía nada que ver.** Era el sospechoso número uno del
+plan, el que venía señalado desde el 7/9. 40/40 con y sin él.
+
+**2. «Cuantas menos superficies compuestas, mejor» es FALSO para el mapa.** Ese
+es el modelo con el que se viene trabajando desde el 1/9. La rama C lo probó al
+derecho: se aplanaron los 37 grupos con `opacity` —18 tramos del camino, 18
+paradas cerradas y el marco— y salió **doce veces peor**, con la basura
+repartida por todo el mapa en vez de concentrada. Partir el dibujo en muchas
+pasadas chicas estaba **ayudando**.
+
+Lo que sí predice los datos es: **cuánta geometría entra en una sola pasada de
+rasterización, y cuántas veces se rehace esa pasada.**
+
+### Dos cosas que se midieron inertes y SE REVIRTIERON
+
+Aplicando la regla del 4/9 —tocar lugares para arreglar algo que se midió inerte
+es el error que ya se cometió dos veces—:
+
+- **Memoizar las 19 marcas de `ParadasGira`** (separarlas en un componente con
+  `memo`): 5/64 contra 2/48. Misma cifra. Revertido entero.
+- **Memoizar el camino** (`useMemo` + `memo`): 2/48 contra 3/40. También inerte.
+  **Se dejó puesto igual**, porque ahorrar el redibujado de 18 trazos punteados
+  en cada toque es cierto por su cuenta, pero el comentario del código dice
+  explícitamente que NO arregla las manchitas. No atribuirle méritos que la
+  medición no le dio.
+
+### El cartel de la ficha, que rompí y arreglé
+
+El hueco reservado quedó en 16rem y la ficha no entraba. Con `justify-end`, lo
+que sobra **se recorta arriba**: justo donde va el nombre. Santiago lo vio en el
+celular ("Luquita" partido al medio, sin el renglón del paso). Está en 18rem y
+la ficha perdió el `shrink-0`, así que si algún rival tiene descripción larga en
+una pantalla baja, se achica y scrollea en vez de cortarse. Verificado en
+320×568, 390×844 y 1440×900: paso y nombre enteros, y el mapa sin cambiar de
+tamaño en los tres.
+
+### La mesa: limpia, MENOS al abrir el menú de envido
+
+Jugando automáticamente 12 manos —cantando envido, real envido y falta envido,
+contestando, y cambiando de rival cada cuatro manos—: **108 de 114 fotos en 0**.
+
+Las 6 sucias son dos episodios, y los dos empiezan **al abrir el menú de
+envido** y se mantienen con la misma cifra en las tres fotos siguientes
+(`abre-menu` → `canta` → `responde`, 5 y 5 y 5; después 8 y 8 y 8). O sea ~17%
+de las manos. **Es el bug que Santiago describió al abrir la sesión**: "cuando
+el rival dice quiero, hay como un segundo donde se crean esas motas".
+
+La basura NO cae en los botones: cae en la **madera de la mesa**, alrededor del
+mate (x 72-683, y 598-713), con un azul violeta y un verde imposibles.
+
+**Y el mecanismo del mapa no explica éste**: el menú va `absolute` y está
+escrito y verificado que no le corre un píxel a la mesa. Es otra cosa. La
+sospecha razonable —sin medir todavía, y por eso no se tocó nada— es que un
+elemento `z-30` que aparece encima de la escena promueve por solapamiento lo que
+tiene debajo, que es exactamente la mesa donde cae la basura.
+
+### Estado al cerrar
+
+`npm test` 183/183 · `tsc` limpio · `mirar-web` y `mirar-mesa` TODO OK · los dos
+builds OK · sin commitear.
+
+### Pendiente
+
+1. **El menú de envido de la mesa.** Está reproducido, cuantificado (~17% de las
+   manos) y localizado. Es lo próximo, y con el rig automático es media hora.
+2. **El resto del mapa.** Queda un piso de 1-2 bloques en un 5-8% de las
+   pantallas. Bajó de 6,3 de media a 0,15, pero no es cero.
+3. **MIUI bloquea la instalación** cada dos o tres veces
+   (`INSTALL_FAILED_USER_RESTRICTED`). La receta que funciona es
+   `pm uninstall --user 0` y después instalar, reintentando: suele entrar al
+   segundo o tercer intento.
+4. **El hueco negro de la ficha** en pantallas altas. Santiago lo dejó pasar por
+   ahora; la alternativa es superponer la ficha sobre el mapa en vez de
+   reservarle lugar.
+5. Prender AdMob. El anotador ya tiene su hueco.
+
 ## 2026-09-08 — El anotador, el engranaje, y Git deja de ser mío
 
 Sesión de agregar, no de arreglar. Las manchitas quedaron para la próxima, con
