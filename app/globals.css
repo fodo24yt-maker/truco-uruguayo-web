@@ -242,6 +242,127 @@ footer {
     0 0 18px -2px rgba(201, 146, 46, 0.85);
 }
 
+/* ── LAS MANCHITAS DEL MAPA: CADA CAPA EN SU PROPIA PASADA ─────────────────
+
+   Medido en el Redmi 13C (Mali-G52) el 8/9/2026, tocando departamentos con el
+   rig automático, 12 tandas por rama y contando con
+   `bloques.mjs --banda 0.15,0.68`:
+
+       A  como estaba                        media 1.8 · 11 de 12 sucias
+       B  opacity 0.999 en los hijos del svg media 0.0 ·  0 de 12 sucias
+       C  isolation: isolate en los hijos    media 2.3
+       D  contain: paint en los hijos        media 1.7
+
+   O sea: **es `opacity`, y no "crear un contexto de apilado"**. `isolation`
+   crea el contexto igual y no arregla nada; `contain` tampoco. Lo que arregla
+   es que Chromium tenga que dibujar ese subárbol en un búfer aparte y después
+   componerlo: una `opacity` menor que 1 lo obliga, y las otras dos no.
+
+   Por qué hacía falta, y qué es lo que se rompía: en la GPU de este teléfono,
+   una pasada de rasterizado que abarca demasiada geometría vuelve con cuadrados
+   de 4×4 píxeles de gris plano (medido: rgb(53,52,51) sobre pergamino
+   rgb(181,147,99)). No los dibuja nuestro código —la misma pantalla en la
+   computadora, mismo viewport y mismo DPR, da CERO— y tampoco los mete la
+   pantalla: aparecen ya en la captura que hace Chromium de sí mismo.
+
+   ── ESTO CONFIRMA DOS MEDICIONES VIEJAS QUE NADIE HABÍA PODIDO EXPLICAR ────
+
+   El 8/9 se midió que aplanar los 37 grupos con `opacity` del mapa salía DOCE
+   VECES PEOR, y quedó escrito que "partir el dibujo en muchas pasadas chicas
+   estaba ayudando" sin saber por qué. Esta misma sesión, apagando el camino
+   —que son 18 grupos con `opacity` más— el número salta de 1,8 a 39,2.
+
+   Los grupos con `opacity` del dibujo no son decoración: **están sosteniendo
+   el rasterizado**. Si alguna vez se aplanan "para simplificar", vuelve el bug.
+
+   ── Y OJO CON PARTIR MÁS FINO, QUE NO ES "MÁS PASADAS, MEJOR" ─────────────
+
+       cada uno de los 8 hijos del svg en su pasada    media 0.0
+       cada uno de los 19 departamentos en su pasada   media 6.7  ← PEOR
+
+   Tampoco sirve promover el mapa a su propia capa de GPU, que era la apuesta
+   del plan de esta sesión: `will-change: transform` dio 7,9 y un
+   `translateZ(0)` dio 8,5, contra 1,8 sin tocar nada. Las dos se probaron y
+   las dos se cayeron. */
+.mapa-gira > *:not(defs) {
+  opacity: 0.999;
+}
+
+/* Y lo mismo en la mesa, medido jugando SIN salir de la partida —apretando
+   envido, truco y respondiendo— y grabando todos los cuadros por screencast:
+
+       A  como estaba                     9 de 21 cuadros sucios · max 9 bloques
+       B  opacity 0.999 en `.escena > *`  0 de 26 cuadros sucios · max 0
+       C  sólo el svg de la escena       65 de 80 cuadros sucios
+
+   La C importa: el svg tiene UN solo hijo, así que ponerle la opacidad ahí es
+   casi lo mismo que no partir nada, y sale siete veces peor que el control.
+   Confirma que lo que cuenta es en cuántas pasadas se reparte el dibujo, no
+   que haya una `opacity` en algún lado.
+
+   Esto es lo que Santiago describía como "un frame se rompe y después vuelve":
+   la basura aparece en cuadros sueltos mientras se juega, no de forma fija. */
+.escena > * {
+  opacity: 0.999;
+}
+
+/* ── Y EL MENÚ DE JUGAR, QUE ERA EL TERCERO Y EL ÚLTIMO ────────────────────
+
+   Medido el 10/9/2026 en el Redmi 13C, con SANTIAGO tocando el teléfono y el
+   rig sólo mirando: 15 regresos al menú por la rama de control y 8 por la
+   candidata, alternadas por debajo cada 4 vueltas para que el cansancio de la
+   mano y la memoria del teléfono le pegaran igual a las dos. Contando contra
+   una foto del menú que él miró y dio por limpia, y separando las dos zonas
+   de la pantalla, que es lo que destapó el caso:
+
+                                       zona GIRA      zona PARTIDA RÁPIDA
+       A  como estaba                   690 px (max 855)     23 px
+       E  opacity en los 3 bloques      598 px (max 615)     47 px   ← inerte
+       F  opacity en las CUATRO cartas    1 px                9 px   ← ésta
+       H  opacity sólo en las de la gira  1 px               32 px
+
+   De 879 píxeles a 10, y esos 10 no son basura: son diferencias de 4 a 8 sobre
+   255 en el contorno de las cartas, que es el antialias de la propia opacidad.
+   La basura de verdad salta de 65 a 129 (madera donde tendría que haber
+   pergamino). Son dos poblaciones y no se confunden.
+
+   H se descarta aunque limpie la zona de la gira igual de bien: `.halo-pieza`
+   sólo existe en las cartas de la gira, así que deja intacta la basura de la
+   zona de Partida rápida. Las CUATRO cartas es lo que cubre las dos.
+
+   ── QUÉ ES ESTE BUG DE VERDAD, QUE NO ES LO QUE CREÍA EL PROYECTO ────────
+
+   Hasta hoy esto estaba escrito como "compresión de bloques de la GPU": un
+   mosaico cuyo dato vuelve mal. Santiago lo miró y dijo otra cosa, mirando los
+   COLORES: que los píxeles rotos traen el color de la pantalla ANTERIOR. Se
+   midió, y tiene razón. Donde tendría que haber madera del menú:
+
+       (272,1044)  debía ser rgb( 85, 59, 23)  →  es rgb(201,166,105)
+       (284,1060)  debía ser rgb( 63, 42, 18)  →  es rgb(199,168,114)
+
+   Ese rgb(~200,166,105) es el PERGAMINO DEL MAPA de la gira. Viniendo de la
+   portada la basura sale marrón, que es la madera de la portada; viniendo de
+   la mesa, del color de la mesa. El color delata de dónde venís.
+
+   O sea que no es un mosaico que vuelve corrupto: es un mosaico VIEJO que se
+   reusa y no se termina de tapar cuando se cambia de escena rápido. Eso
+   explica de una vez las tres cosas que el modelo viejo no explicaba: por qué
+   depende del camino, por qué "moverlo rápido" lo dispara, y por qué se limpia
+   solo un rato después (cuando algo obliga a redibujar ese mosaico).
+
+   Y explica por qué `opacity` cura y `isolation` no, que quedó medido el 8/9
+   sin entenderse: una opacidad menor que 1 obliga a Chromium a dibujar ese
+   subárbol en un BÚFER PROPIO Y NUEVO, en vez de reusar el mosaico donde ya
+   había dibujado la escena anterior. `isolation` crea el contexto de apilado
+   pero sigue pintando sobre lo mismo.
+
+   Va atado a `.pantalla-fija` y no a todas las cartas del sitio porque acá es
+   donde está medido. La mesa ya tiene lo suyo (`.escena > *`, arriba) y las
+   cartas de las lecciones no dieron problema nunca. */
+.pantalla-fija .carta {
+  opacity: 0.999;
+}
+
 /* Cada departamento del mapa de la gira. Al pasar por encima se aclara apenas:
    alcanza para saber cuál vas a tocar, sin que el mapa parpadee.
 

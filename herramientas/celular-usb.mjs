@@ -148,7 +148,7 @@ const adb = (...a) => spawnSync(ADB, a, { encoding: "utf8" });
    Los tres estados que importan se tratan distinto porque se arreglan distinto:
    sin teléfono es un cable, `unauthorized` es un cartel sin aceptar en la
    pantalla del celular, y `offline` casi siempre se arregla desenchufando. */
-function elCelular() {
+export function elCelular() {
   const salida = adb("devices", "-l").stdout || "";
   const filas = salida.split("\n").slice(1)
     .map((l) => l.trim()).filter(Boolean)
@@ -292,7 +292,7 @@ function enVivo(celular) {
 
    Y sin `encoding`, para que `spawnSync` devuelva un Buffer y no un texto: un
    PNG interpretado como UTF-8 se corrompe sin avisar. */
-function sacarFoto(destino) {
+export function sacarFoto(destino) {
   const r = spawnSync(ADB, ["exec-out", "screencap", "-p"], { maxBuffer: 64 * 1024 * 1024 });
   const png = r.stdout;
   if (!png || png.length < 1000 || png[0] !== 0x89 || png[1] !== 0x50)
@@ -346,8 +346,16 @@ async function fotos(celular, cuantas) {
   }
 }
 
+/* Lo de acá abajo es la línea de comandos, y corre SÓLO cuando se invoca este
+   archivo directamente. Importado —lo hace `rig-celular.mjs`, que reusa
+   `elCelular()`, `sacarFoto()` y `adb()` en vez de volver a escribirlas— no
+   tiene que compilar, ni instalar, ni sacar ninguna foto. Es el mismo cerrojo
+   que ya usan `motas.mjs` y `medir-bots.mjs`. */
+export { ADB, adb, PAQUETE, ACTIVIDAD };
+
 // ── Andar ───────────────────────────────────────────────────────────────────
 
+if (import.meta.url === `file://${process.argv[1]}`) {
 if (desinstalar) {
   const celular = elCelular();
   console.log(`✓ celular: ${celular.serie}`);
@@ -365,4 +373,5 @@ if (desinstalar) {
   console.log(`✓ celular: ${modelo}`);
   if (conApk) { compilar(); instalar(celular); }
   else enVivo(celular);
+}
 }

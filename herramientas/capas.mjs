@@ -39,9 +39,25 @@
  * ── Para qué sirve el número ─────────────────────────────────────────────
  *
  * Para comparar un antes con un después, y para nada más. No dice cuántas
- * manchitas vas a ver: dice cuántas oportunidades le estamos dando a la GPU de
- * equivocarse. Si un cambio no baja este número, no hay motivo para creer que
- * arregle nada, y eso se puede saber en segundos en vez de en una sesión.
+ * manchitas vas a ver: dice cuántas superficies compuestas declara la
+ * especificación.
+ *
+ * ── LO QUE ESTE ARCHIVO DECÍA HASTA EL 8/9/2026, Y ERA FALSO ──────────────
+ *
+ * Decía: «Si un cambio no baja este número, no hay motivo para creer que
+ * arregle nada». Se midió en el celular y es al revés.
+ *
+ * El arreglo que apagó las manchitas —`opacity: 0.999` en los hijos del mapa
+ * y de la escena, ver `app/globals.css`— **SUBE** este total de 21 a 28, y en
+ * el teléfono lleva el mapa de 1,8 bloques de media a 0,0 en 20 tandas, y la
+ * mesa de 9 cuadros sucios de 21 a 0 de 26.
+ *
+ * O sea: más superficies compuestas puede ser MEJOR. Lo que importa no es
+ * cuántas hay, sino cuánta geometría entra en una sola pasada de rasterizado.
+ * Este número sigue sirviendo para ver QUÉ se promueve y POR QUÉ
+ * (`compositingReasons`), que es para lo que se usó de verdad; **no sirve
+ * para decidir si algo va a arreglar una manchita**. Para eso hay que medir
+ * en el celular, con `herramientas/rig-celular.mjs`.
  *
  * Corre en modo TÁCTIL y a DPR 2, como el laboratorio. Sin eso `(hover: hover)`
  * da true y el navegador aplica reglas que en un celular no existen: se estaría
@@ -276,5 +292,6 @@ await nav.close();
 
 const suma = resultados.reduce((s, r) => s + r.nuestras, 0);
 console.log(`\nTotal de capas nuestras en las ${resultados.length} pantallas medidas: ${suma}`);
-console.log("El número sirve para comparar un ANTES con un DESPUÉS. Si un cambio no");
-console.log("lo baja, no hay motivo para creer que arregle una manchita.\n");
+console.log("Sirve para ver QUÉ se promueve y por qué, no para predecir manchitas:");
+console.log("el arreglo del 8/9/2026 SUBIÓ este número de 21 a 28 y las apagó.");
+console.log("Las manchitas se miden con `node herramientas/rig-celular.mjs`.\n");

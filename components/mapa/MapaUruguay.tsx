@@ -64,7 +64,7 @@ export function MapaUruguay({ paradas, elegido, onElegir }: PropsMapa) {
       preserveAspectRatio="xMidYMid meet"
       // Anclado al contenedor: con h-full dependía de que el padre tuviera
       // altura explícita, y dentro de un flex crecía de más.
-      className="absolute inset-0 h-full w-full"
+      className="mapa-gira absolute inset-0 h-full w-full"
       role="group"
       aria-label="Mapa del Uruguay: la gira, departamento por departamento"
     >

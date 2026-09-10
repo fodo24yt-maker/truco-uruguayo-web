@@ -449,6 +449,12 @@ export interface PropsCarta {
   style?: React.CSSProperties;
 }
 
+/**
+ * La clase `carta` que sale en el `<svg>` NO ES DECORACIÓN: es el gancho del
+ * que cuelga el arreglo de las manchitas del menú, en `app/globals.css`. Está
+ * en las dos variantes —de frente y de dorso— para que el día que una pantalla
+ * fija muestre un dorso, la regla lo agarre igual. Si se saca, vuelve el bug.
+ */
 export function Carta({
   carta,
   oculta = false,
@@ -473,7 +479,7 @@ export function Carta({
       <svg
         viewBox="0 0 100 150"
         style={estilo}
-        className={`rounded-lg shadow-lg shadow-black/50 ${className}`}
+        className={`carta rounded-lg shadow-lg shadow-black/50 ${className}`}
         aria-hidden="true"
       >
         <rect x="1" y="1" width="98" height="148" rx="7" fill="var(--color-bordo)" />
@@ -514,7 +520,7 @@ export function Carta({
     <svg
       viewBox="0 0 100 150"
       style={estilo}
-      className={`rounded-lg shadow-lg shadow-black/50 ${pieza ? "halo-pieza" : ""} ${className}`}
+      className={`carta rounded-lg shadow-lg shadow-black/50 ${pieza ? "halo-pieza" : ""} ${className}`}
       role="img"
       aria-label={`${carta.numero} de ${carta.palo}${pieza ? ", es pieza" : ""}`}
     >

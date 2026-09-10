@@ -12,6 +12,526 @@
 
 ---
 
+## 2026-09-10 — El menú de jugar: ARREGLADO. Y el modelo del bug era equivocado.
+
+Octava sesión con las manchitas y la que cierra el tema: **era el último bug de
+dibujo que quedaba**. Salió el arreglo, con número, y de paso se cayó el modelo
+físico con el que el proyecto venía trabajando desde el 5/9. Lo tiró abajo
+Santiago mirando colores, no yo midiendo.
+
+Además esta entrada recupera **la sesión del 9/9, que nunca se escribió acá**.
+Lo que se sabía de ella estaba sólo en los comentarios de `rig-celular.mjs`.
+
+### LO QUE CAMBIÓ DE VERDAD: EL REPARTO DE TAREAS
+
+**Santiago toca el teléfono. Claude sólo mide.** No es una comodidad: es la
+única forma que hay de que el bug aparezca.
+
+El 9/9 el rig tocó 16 veces solo, con `adb shell input tap`, por el recorrido
+correcto, y de esas 16 vueltas volvió **UNA sucia**. Con eso no se distingue
+ninguna rama de ninguna. El bug pide el ritmo de una persona —los tiempos entre
+toques, el dedo tapando media pantalla, la vuelta saliendo antes de que la
+pantalla termine de asentarse— y `input tap` no lo tiene.
+
+Con Santiago tocando, la misma rama de control dio **14 de 15 sucias**.
+
+Reglas del reparto, que quedan escritas porque valen para la próxima:
+
+- Claude **no toca la pantalla, no navega, no escribe el `localStorage`, no
+  instala ni desinstala**. Sólo lee: `screencap`, screencast, `dumpsys`,
+  `/proc`, y consultas a la página que no la modifican.
+- La única excepción autorizada es **inyectar el CSS de cada rama** con
+  `addStyleTag`. Eso es lo que hace que cambiar de candidato cueste
+  milisegundos, y de ahí sale lo mejor del diseño experimental: **las ramas se
+  alternan por debajo mientras la persona juega de corrido**. Santiago hizo 32
+  idas y vueltas seguidas sin saber cuál estaba puesta. El cansancio de la
+  mano, la deriva de memoria del teléfono y el cambio de ritmo le pegaron
+  **igual a las dos ramas**, que es algo que las corridas del 8/9 —una rama
+  entera y después la otra— no podían decir.
+
+### EL DEFECTO DEL MÉTODO, QUE HACÍA DAR CERO CON LA PANTALLA ROTA
+
+Esto es lo primero que hubo que arreglar, y es la razón por la que el 9/9 no
+llegó a ninguna parte.
+
+El recorrido `--menu` del 9/9 no usaba `bloques.mjs` —bien: en esta pantalla el
+papel es casi neutro y da 0 con la pantalla rota—. Usaba otra cosa: agrupaba
+las fotos por hash y **llamaba «limpia» a la que más se repetía**.
+
+**Esa basura es DETERMINISTA.** Ya estaba medido el 8/9 en el mapa (20 tandas,
+los bloques cayendo en exactamente los mismos dos píxeles) y se confirmó hoy en
+el menú. La rama de control dio, vuelta tras vuelta:
+
+    855 · 855 · 823 · 855 · 855 · 854 · 855 · 823 · 855 · 855 · 855 · 855 · 855
+
+O sea que **todas las fotos salen idénticas entre sí Y SUCIAS**, el método las
+corona referencia limpia, y reporta **0 sucias con la pantalla rota**. Da cero
+justo cuando el bug está.
+
+Se descubrió porque Claude dijo «salieron limpias» y Santiago contestó **«no
+salió limpio, yo los vi»**. Sin esa corrección, la sesión entera habría medido
+ruido.
+
+**El arreglo: la referencia limpia se PIDE, no se adivina.** Santiago miró la
+pantalla, dijo «ahora está limpia», y esa foto quedó como patrón de toda la
+sesión (`capturas/celular/REFERENCIA-menu-limpio.png`, que no se sube porque
+`capturas/` está en `.gitignore`).
+
+Que eso sea válido se comprobó antes de usarlo, contra la única foto sucia que
+sobrevivió del 9/9:
+
+    zona 720x1410  ·  32 px distintos  ·  1 mancha de 8x4 en (280,1012)
+
+Todo el menú —720x1410 píxeles— **idéntico byte a byte** entre una foto de
+ayer y una de hoy, salvo esa mancha. **El dibujo es estable al píxel entre
+corridas y entre días**, así que comparar contra una referencia fija es
+correcto y no hay corrimiento de distribución que la ensucie.
+
+### EL SEGUNDO DEFECTO: LA ZONA QUE SE MIRABA ERA DEMASIADO CHICA
+
+El 9/9 se medía la caja de las CARTAS más 16px (262x204). Santiago venía
+diciendo desde el principio **«las cartas Y LAS LETRAS»**. Si la basura caía
+sobre «GIRA NACIONAL» o sobre el texto de abajo, la medición no la veía.
+
+Ahora se mira `.pantalla-fija` entera. Deja afuera el reloj del sistema —que
+cambia cada minuto y ensuciaría toda comparación— y la barra del sitio.
+
+### LAS MEDICIONES
+
+Tres corridas, todas con Santiago tocando y las ramas alternándose por debajo.
+Contra la referencia limpia, y **separando las dos zonas de la pantalla**, que
+es lo que destapó el caso:
+
+**Corrida 1 · A contra H · 29 vueltas · sólo el camino de la gira**
+
+                                     zona GIRA        zona PARTIDA RÁPIDA
+    A  como estaba (15 fotos)     14/15 · media 791     14/15 · media 43
+    H  opacity .999 en .halo-pieza  8/8 · media   1      8/8 · media 32
+
+**Corrida 2 · A contra F contra E · 12 vueltas · caminos variados**
+
+    A  como estaba      690 px (max 855)      23 px
+    E  opacity en los 3 bloques de la pantalla   598 px (max 615)   47 px
+    F  opacity en las CUATRO cartas                1 px             9 px
+
+**Corrida 3 · A contra F · 9 vueltas · SÓLO el camino de partida rápida**
+
+    A  4/4 sucias · zona gira media 835 · zona partida rápida 45
+    F  4/4 en exactamente 10 px (1 + 9), las cuatro veces iguales
+
+**F gana: de 879 píxeles a 10.**
+
+Y esos 10 no son basura. Son diferencias de **4 a 8 sobre 255** en el contorno
+de las cartas —el antialias de la propia opacidad—, constantes en todas las
+fotos. La basura de verdad tiene saltos de **65 a 129** y cambia de vuelta en
+vuelta. Son dos poblaciones y no se confunden.
+
+**H se descarta aunque limpie la zona de la gira igual de bien** (1 px): como
+`.halo-pieza` sólo existe en las cartas de la gira, deja intacta la basura de
+la zona de Partida rápida. Las cuatro cartas es lo que cubre las dos.
+
+**E queda descartada de plano**: la regla gruesa —una `opacity` por bloque de
+la pantalla— casi no mueve el número, y en la zona de partida rápida lo empeora.
+Confirma otra vez lo del 8/9: no es «más pasadas, mejor»; es **dónde** se corta.
+
+### QUÉ ES ESTE BUG DE VERDAD. EL MODELO VIEJO ERA EQUIVOCADO.
+
+Hasta hoy esto estaba escrito, en `bloques.mjs` y en `globals.css`, como
+**«compresión de bloques de la GPU»**: un mosaico cuyo dato vuelve corrupto.
+
+**Lo tiró abajo Santiago, mirando los colores**, y textualmente: *«esos píxeles
+no son randoms, se rompe al hacer el cambio de escena, los píxeles son del
+color de la escena anterior»*.
+
+Se midió, y tiene razón. Donde el menú tendría que tener madera oscura:
+
+    (272,1044)  debía ser rgb( 85, 59, 23)  →  es rgb(201,166,105)
+    (284,1060)  debía ser rgb( 63, 42, 18)  →  es rgb(199,168,114)
+    (228,1016)  debía ser rgb(102, 71, 26)  →  es rgb(201,164, 96)
+
+Ese `rgb(~200,166,105)` es **el pergamino del mapa de la gira** (el 8/9 quedó
+medido el papel del mapa en `rgb(181,147,99)`: la misma familia). Viniendo de la
+portada la basura sale **marrón**, que es la madera de la portada. Viniendo de
+la mesa, del color de la mesa. **El color delata de dónde venís.**
+
+O sea: no es un mosaico que vuelve corrupto. Es un **mosaico VIEJO que se reusa
+y no se termina de tapar** cuando se cambia de escena rápido.
+
+Ese modelo explica de una vez cuatro cosas que el viejo no explicaba:
+
+1. **Por qué depende del camino** que hiciste antes.
+2. **Por qué «moverlo rápido» lo dispara**, que es como lo reproduce Santiago.
+3. **Por qué se limpia solo un rato después**: cuando algo obliga a redibujar
+   ese mosaico, la basura desaparece. No es un refresh de la página.
+4. **Por qué `opacity` cura y `isolation` no**, que quedó medido el 8/9 sin
+   entenderse: una opacidad menor que 1 obliga a Chromium a dibujar ese subárbol
+   en un **búfer propio y nuevo**, en vez de reusar el mosaico donde ya había
+   dibujado la escena anterior. `isolation` crea el contexto de apilado pero
+   sigue pintando sobre lo mismo.
+
+**Este modelo reemplaza al anterior. Los comentarios de `bloques.mjs` que
+hablan de AFBC describen bien la FORMA de la basura (cuadraditos de 4x4 planos,
+alineados a la grilla de 4) pero se equivocan en la CAUSA.**
+
+### EL ARREGLO
+
+    .pantalla-fija .carta { opacity: 0.999; }
+
+En `app/globals.css`, con la tabla de mediciones al lado, que es como están las
+otras dos de la familia. Y en `components/Carta.tsx`, la clase `carta` en las dos
+variantes del `<svg>`.
+
+**La clase es a propósito y no es cosmética.** Para medir por el cable alcanzaba
+`svg[role="img"]`, pero como regla permanente eso cuelga de un atributo de
+accesibilidad: si alguien lo toca, vuelve el bug sin que nadie entienda por qué.
+
+Va atado a `.pantalla-fija` y no a todas las cartas del sitio porque **acá es
+donde está medido**. La mesa ya tiene lo suyo (`.escena > *`) y las cartas de
+las lecciones no dieron problema nunca.
+
+### LO QUE SE PROBÓ Y SE CAYÓ
+
+- **E, `opacity` en los tres bloques de la pantalla.** Ver arriba: inerte.
+- **La hipótesis del cambio de tamaño.** Era la apuesta grande del plan del día
+  y **no era la causa**, aunque el mecanismo existe y quedó medido: con un
+  `ResizeObserver` puesto en la página se ve que **cada ida y vuelta cambia el
+  alto del `body` de 800 a 766 y vuelve** —son los 34px del
+  `padding-top: env(safe-area-inset-top)` que `.mesa-pantalla-completa` agrega y
+  `.pantalla-fija` no—, más el `.pantalla-fija` entero yendo a `0x0` y volviendo.
+  Entre 8 y 53 eventos de cambio de tamaño por vuelta. Pero pasa en TODAS las
+  vueltas, también en las limpias, así que no separa nada. **No se tocó el CSS
+  de las pantallas completas**: aplicar un cambio a algo que se midió inerte es
+  el error que este proyecto ya cometió dos veces.
+- **Un detector intrínseco de basura, sin referencia.** Se pensó y se descartó
+  leyendo `bloques.mjs`: en esta pantalla el dibujo está lleno de detalle chico
+  (letras, palos de las cartas) con la misma firma física que un bloque roto, y
+  el propio archivo cuenta que ya se equivocó así una vez. **Acá no se puede
+  distinguir basura de dibujo sin una referencia limpia.**
+
+### LA HERRAMIENTA
+
+`herramientas/rig-celular.mjs` gana el modo `--a-mano`:
+
+    node herramientas/rig-celular.mjs --menu --a-mano --ramas A,F \
+         --vueltas 16 --bloque 4 --referencia capturas/celular/REFERENCIA-menu-limpio.png
+
+No es un recorrido nuevo: reusa entera la maquinaria del 9/9 y sólo reemplaza
+`unaVuelta()` —que toca la pantalla— por esperar a que llegue una persona.
+
+- **Detecta el regreso solo**, sondeando `location.pathname` cada 200ms, sin
+  tocar nada. Cuenta el regreso desde CUALQUIER pantalla y no sólo desde la
+  gira: Santiago midió a mano que el bug sale por tres caminos (gira, partida
+  rápida y portada), y exigir la gira dejaba dos tercios sin medir.
+- **El cerrojo acá ESPERA en vez de matar.** Cortar sería tirar media hora de
+  trabajo de manos porque entró una llamada. La regla que importa —no
+  fotografiar nada que no sea la app— se cumple igual.
+- **La comprobación de que sigue en el menú va PEGADA al disparo de la foto.**
+  Estaba unos décimos de segundo antes, y en la primera corrida **dos fotos de
+  dieciséis salieron siendo el MAPA**.
+- **Verifica que la rama aplicó**, preguntando `getComputedStyle` de la carta
+  **y del bloque padre**. Con sólo la carta, una rama que le pone la regla al
+  padre se ve idéntica al control y se mide un control disfrazado de arreglo.
+  Es el error del 8/9 (`@media (hover:hover)`) repetido de otra forma.
+
+### EL REPASO DE SEGURIDAD
+
+`security-review` sobre el diff completo, `09-web-security` sobre la web y
+`17-mobile-security` sobre el APK y el manifest.
+
+**Un hallazgo, y era real.** `morir()` es `process.exit(1)`, y **`process.exit`
+no ejecuta los bloques `finally`**: el `finally` que cierra el puente a DevTools
+no corría nunca por ese camino. No es un camino raro, es **el del cerrojo**: si
+el teléfono se bloquea a mitad de una corrida, el rig aborta bien y deja el
+inspector del WebView —con permiso para ejecutar JavaScript adentro de la app y
+leerle el `localStorage` donde vive la gira— escuchando sin que nadie se entere.
+Pasó de verdad hoy al cortar una corrida con `pkill`.
+
+Arreglado con `process.on("exit", cerrarDevtools)`, verificado con una prueba
+que lo reproduce. Se agregaron además dos cinturones: el guión del puente ahora
+**se apaga solo a los 30 minutos** (para el `kill -9`, que no hay manejador que
+atrape) y se **borra del temporal de Windows** al cerrar.
+
+Y un cuarto arreglo que salió de la misma revisión: el encabezado del rig
+imprimía el **número de serie del teléfono** cuando `adb devices -l` no traía
+`model:`. Las tablas de medición de este proyecto se pegan tal cual en este
+archivo y en los comentarios del CSS, o sea que un serial tenía camino directo
+al repositorio público. Ahora dice `"celular"`.
+
+Lo que se revisó y salió limpio:
+
+- **El puente sigue atado a UNA sola dirección** (la placa de WSL), no a
+  `0.0.0.0`. Ése fue el arreglo del 8/9 y sigue en pie.
+- **Sin inyección de comandos**: todos los `spawn`/`spawnSync` usan la forma de
+  arreglo y ninguno lleva `shell: true`. Nada de lo que sale del teléfono llega
+  a un intérprete.
+- **Sin path traversal**: las rutas se arman con la fecha, índices numéricos y
+  claves de rama validadas contra `RAMAS_MENU`.
+- **El CSS y `Carta.tsx` no abren superficie**: la regla nueva son tres líneas
+  de `opacity`, sin `url()`, sin `@import`, sin peticiones de red; el cambio del
+  componente agrega texto a un `className` literal.
+- **Cabeceras y CSP intactas**: `default-src 'self'`, `frame-ancestors 'none'`,
+  `form-action 'none'`, `object-src 'none'`. El build no pide **nada** a la red:
+  las tipografías son `.woff2` propias, cero CDN, cero `url(data:)`.
+- **El APK**: `webContentsDebuggingEnabled` en `false` —verificado en
+  `capacitor.config.ts` **y** en el `capacitor.config.json` ya copiado a
+  `android/app/src/main/assets/`—, `usesCleartextTraffic="false"`, sin
+  `debuggable`, un solo permiso (`INTERNET`), el único componente exportado es
+  la actividad del lanzador y el `FileProvider` está en `exported="false"`.
+  `allowBackup="true"` es una decisión tomada y acotada por `backup_rules.xml`
+  (se copia `app_webview`, que es donde vive el progreso, y se excluyen los
+  cachés). **Sin claves de firma, sin keystores, sin credenciales**: se firma
+  con la clave de depuración del SDK. El `app-debug.apk` está ignorado por
+  `android/.gitignore`.
+- **Barrido de datos personales** sobre el diff y sobre el rig entero (1.963
+  líneas): sin rutas `/home/…`, sin `C:\Users`, sin `\\wsl.localhost`, sin
+  correos, sin IPs privadas, sin credenciales, sin el serial ni el modelo del
+  teléfono.
+
+### ESTADO AL CERRAR
+
+`npm test` **183/183** · `tsc` limpio · `mirar-web`, `mirar-mesa`,
+`mirar-mesa-nueva` y `mirar-app-compilada` **TODO OK** · los dos builds OK, y
+verificado que la regla llegó al CSS horneado y que las cuatro cartas llevan la
+clase en el HTML exportado.
+
+Archivos tocados: `app/globals.css`, `components/Carta.tsx`,
+`herramientas/rig-celular.mjs` (nuevo) y este archivo.
+
+**Sin commitear.**
+
+### PENDIENTE
+
+Lo del día, primero:
+
+1. **Confirmar el arreglo en el APK compilado.** Todo lo de hoy se midió con el
+   CSS inyectado por el cable, que es lo que permitió alternar ramas. La regla
+   que se escribió (`.pantalla-fija .carta`) apunta a las mismas cuatro cartas
+   que la que se midió (`svg[role="img"]`), y está verificado en el build, pero
+   **falta compilar el APK y que Santiago lo mire**.
+2. **Las cromáticas del mapa** siguen sin atacarse de frente: 3 de 20, media
+   0,1. **No son el mismo bug** que los bloques.
+3. **El servidor de Capacitor no resuelve `/carpeta/` a su `index.html`**, y
+   `mirar-app-compilada.mjs` pasa en verde porque prueba otro servidor
+   (`python3 -m http.server`, que sí resuelve carpetas).
+4. **`bloques.mjs` tiene la causa escrita mal** en sus comentarios (ver arriba).
+   Describe bien la forma, se equivoca en el porqué. Vale corregirlo el día que
+   se lo toque.
+5. **`recorridoMenu` (el automático) quedó como peso muerto**: está medido que
+   no reproduce el bug. Duplica además el análisis que ahora vive en
+   `informeMenu`. Si nadie lo usa en dos sesiones, se borra.
+
+Y lo que viene después del bug, con cómo se haría y cuánto llevaría. **Nada de
+esto está empezado.**
+
+| | Qué es | Cómo se haría | Cuánto |
+|---|---|---|---|
+| 1 | **Aligerar la mesa.** Santiago la ve muy cargada; el ejemplo que dio es el cartel de «Acá está mi envido / mi flor», que repite algo que ya se dijo | Es texto en `app/jugar/mesa/page.tsx`. Sacarlo es fácil; el riesgo es que **la mesa está medida al píxel** y hay que re-correr `mirar-mesa.mjs` y `mirar-mesa-nueva.mjs` en los siete tamaños | media sesión |
+| 2 | **Sonido** | Sonidos cortos propios (no bajados: mismo criterio que el dibujo), un `<audio>` precargado por evento, y un interruptor en Ajustes guardado con el patrón de `lib/progreso.ts` | 1 sesión, más lo que lleve elegir los sonidos |
+| 3 | **Legales y privacidad** | `app/legales/privacidad` existe y **hoy promete por escrito que no se recoge nada**: hay que ponerla al día ANTES de los ads, no después. Play pide además la ficha «Seguridad de los datos» | media sesión · **va antes del 4** |
+| 4 | **Ads (AdMob)** | La parte difícil ya está hecha: el hueco está reservado y medido (`components/EspacioAnuncio.tsx`), así que encender el banner no le come alto a las cartas. Falta la cuenta de AdMob, el plugin de Capacitor, el consentimiento UMP/GDPR, y decidir si la app se declara dirigida a menores —eso cambia qué anuncios se pueden servir— | 1–2 sesiones + la espera de aprobación de AdMob |
+| 5 | **Branding de Play Store** | El icono ya lo hornea `generar-icono.mjs`. Faltan el gráfico de cabecera 1024x500, las capturas y los textos de la ficha. Se lo puede encargar Santiago | 1 sesión |
+| 6 | **Mejorar el bot** | `lib/motor/` y `medir-bots.mjs`, que ya mide fuerza jugando torneos entre personalidades. Es afinar y medir, no reescribir | 1–2 sesiones |
+| 7 | **Darles historia a los rivales**, que se sienta una persona y no un bot | Hoy cada rival tiene UNA línea de descripción y **los versos son de todos**: `VERSOS` en `lib/motor/versos.ts` es una tabla por tipo de canto, no por rival, así que los 19 dicen las mismas coplas. Tres capas: **(a)** coplas propias por rival o por departamento —la que más se nota y la más barata—; **(b)** que te reconozca: el progreso ya guarda ganadas/jugadas por `id`, así que puede decirte «la última vez me ganaste con la flor» sin guardar nada nuevo; **(c)** trasfondo de verdad. **Los `id` NO se tocan**: son la clave del progreso | 1 sesión por capa |
+
+## 2026-09-08 (noche) — Las manchitas: ENCONTRADAS Y APAGADAS, con número
+
+Séptima sesión, y la primera que las lleva a cero **en el APK de verdad**, en
+las dos pantallas. El arreglo es una regla de CSS de tres líneas, y todo lo
+demás de esta sesión es cómo se llegó a saber cuál.
+
+### Lo que cambió todo: CDP contra el WebView del teléfono
+
+Seis sesiones midieron la CAUSA en la computadora y el EFECTO en el celular.
+`herramientas/capas.mjs` lo dice en su propio encabezado: *"no ve las
+promociones que decide la GPU del teléfono. No hay atajo."* Había uno.
+
+Se prendió **temporalmente** `webContentsDebuggingEnabled` en
+`capacitor.config.ts`, y con eso el WebView publica su socket de DevTools. Como
+`adb.exe` es un programa de Windows, el `adb forward` deja el puerto atado al
+`127.0.0.1` de Windows, que WSL no ve: el puente es un reenviador de catorce
+líneas corriendo con el `node.exe` de Windows. Desde ahí, **Playwright maneja el
+WebView del celular como si fuera un navegador local**: `goto`, `click`,
+`evaluate`, `LayerTree`, `Page.startScreencast`.
+
+**`webContentsDebuggingEnabled` quedó de vuelta en `false`.** Verificado: el
+`git diff` de `capacitor.config.ts` está vacío.
+
+### Las cuatro mediciones que ubicaron el bug
+
+**1. No lo dibuja nuestro código.** La misma pantalla en la computadora, mismo
+viewport (360×800) y mismo DPR (2), con el click verificado (912.677 bytes de
+diferencia entre antes y después): **0 bloques**. En el celular, 1,8 de media.
+
+**2. No lo mete la pantalla.** Se capturó el mismo instante por dos caminos: la
+foto del framebuffer (`adb exec-out screencap`) y una captura tomada **por dentro
+de Chromium** (`Page.startScreencast`). La interna trae los bloques **igual o
+más** que la del framebuffer (2 contra 1). O sea que no son SurfaceFlinger, ni
+el compositor del sistema, ni la compresión de la pantalla: **ya vienen mal del
+rasterizador de Chromium**.
+
+**3. Son deterministas.** En 20 tandas con recarga de página entre medio, los
+bloques caen en **exactamente los mismos dos píxeles**: (156,836) y (44,1044).
+Mirado al detalle, (44,1044) es un cuadrado de **4×4 de `rgb(53,52,51)`
+perfectamente plano rodeado de pergamino `rgb(181,147,99)`** — un agujero gris
+en el papel, en zona vacía del dibujo.
+
+**4. Caen donde se redibuja.** Comparando la foto limpia con la tocada, las
+franjas que cambian son y 836-839, 868-875, 888-891, 932-939, 1008-1047 (y la
+ficha, en 1200-1599). Las manchas están **adentro de esas franjas**.
+
+### EL ARREGLO, y por qué es ése
+
+    .mapa-gira > *:not(defs) { opacity: 0.999; }
+    .escena > *              { opacity: 0.999; }
+
+Una `opacity` menor que 1 obliga a Chromium a dibujar ese subárbol en un búfer
+aparte y después componerlo. O sea: **parte el rasterizado en pasadas más
+chicas**. Medido en el celular, 12 tandas por rama, `--banda 0.15,0.68`:
+
+    A  como estaba                        media 1.8 · 11 de 12 sucias
+    B  opacity 0.999 en los hijos del svg media 0.0 ·  0 de 12 sucias
+    C  isolation: isolate en los hijos    media 2.3
+    D  contain: paint en los hijos        media 1.7
+
+**Es `opacity`, no "crear un contexto de apilado".** `isolation` crea el
+contexto igual y no arregla nada. `contain` tampoco. Lo que arregla es el búfer
+aparte.
+
+**Y no es "más pasadas siempre mejor":**
+
+    cada uno de los 8 hijos del svg en su pasada     media 0.0
+    cada uno de los 19 departamentos en su pasada    media 6.7  ← PEOR
+
+### Verificado en el APK real, no sólo en vivo
+
+Primer intento: **la regla no aplicó**, porque la puse sin querer adentro del
+`@media (hover: hover)`, que en un celular no existe. Se detectó preguntándole a
+la página `getComputedStyle` — daba `opacity: 1`. Movida afuera:
+
+    mapa, después de tocar   antes 12/20 sucias (media 1,1)  →  0/20 (media 0,0)
+    cromáticas               antes  7/20 (media 0,3)         →  3/20 (media 0,1)
+
+**La mesa, jugando SIN salir de la partida** y grabando todos los cuadros por
+screencast (que es como se caza un fallo que dura un frame):
+
+    A  control                        9 de 21 cuadros sucios · max 9 bloques
+    B  opacity 0.999 en `.escena > *`  0 de 26 cuadros sucios · max 0
+    C  sólo el svg de la escena       65 de 80 cuadros sucios
+
+La C importa: el svg tiene UN solo hijo, así que ponerle la opacidad ahí es casi
+lo mismo que no partir nada, y sale **siete veces peor que el control**. Confirma
+que lo que cuenta es en cuántas pasadas se reparte el dibujo.
+
+### ESTO EXPLICA, POR FIN, LAS DOS MEDICIONES RARAS DEL 8/9 A LA TARDE
+
+Quedaba escrito que aplanar los 37 grupos con `opacity` del mapa salía **doce
+veces peor** y que *"partir el dibujo en muchas pasadas chicas estaba
+ayudando"*, sin saber por qué. Esta sesión, bisecando el SVG hijo por hijo,
+apagar el camino —que son 18 grupos con `opacity` más— salta de 1,8 a **39,2**.
+
+**Los grupos con `opacity` del dibujo no son decoración: están sosteniendo el
+rasterizado.** Si alguna vez se aplanan "para simplificar", vuelve el bug.
+
+### LO QUE SE PROBÓ Y SE CAYÓ (para no reintentarlo)
+
+- **Promover el mapa a su propia capa de GPU.** Era la apuesta principal del
+  plan de esta sesión. `will-change: transform` dio **7,9** y `translateZ(0)`
+  dio **8,5**, contra 1,8 sin tocar nada. **Cinco veces PEOR.** La hipótesis de
+  "hacer las superficies estables" está muerta.
+- **`android:hardwareAccelerated="false"`** en el `AndroidManifest`. Se compiló,
+  se instaló y se midió: **1,5 contra 1,2**. No cambia nada. Revertido.
+- **Las banderas de Chromium por `/data/local/tmp/webview-command-line`.** No
+  sirve en este teléfono: el WebView sólo lee ese archivo si el WebView MISMO es
+  depurable, y acá `ro.debuggable=0`. Verificado con `--force-device-scale-factor=3`,
+  que no movió el DPR. Esa vía está cerrada, no perder tiempo.
+- **`isolation: isolate` y `contain: paint`.** Ver la tabla de arriba.
+
+### `capas.mjs` decía algo que ahora sabemos que es falso
+
+Decía: *"Si un cambio no baja este número, no hay motivo para creer que arregle
+nada"*. El arreglo que apagó las manchitas **SUBE** el total de 21 a 28. Más
+superficies compuestas puede ser MEJOR. El archivo quedó corregido: sigue
+sirviendo para ver **qué** se promueve y **por qué** (`compositingReasons`), que
+es para lo que se usó de verdad, pero **no para predecir manchitas**.
+
+### El rig, que esta vez SÍ queda en el repositorio
+
+`herramientas/rig-celular.mjs`. El del 8/9 a la tarde quedó en el temporal de la
+sesión y se perdió. Este tiene:
+
+- el **cerrojo obligatorio**: antes de cada toque y de cada foto pregunta
+  `dumpsys activity activities` y corta si el primer plano no es
+  `uy.trucouruguayo.app`;
+- **cada tanda con su propio control**: recarga, fotografía LIMPIA, toca, y
+  fotografía SUCIA. El del 8/9 sacaba 40 fotos seguidas sin recargar, y como la
+  basura del mapa QUEDA, esas 40 no eran 40 medidas independientes;
+- anota la **memoria libre**, que era la variable que nunca se controló;
+- cuenta **las dos poblaciones por separado**, nunca sumadas;
+- levanta y baja el puente a DevTools solo.
+
+Para que se lo pueda importar, `celular-usb.mjs` ahora exporta `elCelular()`,
+`sacarFoto()`, `adb()` y las constantes, y su línea de comandos quedó detrás del
+mismo cerrojo `import.meta.url` que ya usan `motas.mjs` y `medir-bots.mjs`:
+**importarlo no compila, no instala y no saca ninguna foto**.
+
+### Un bug NUEVO que apareció de paso, y no es de píxeles
+
+**El servidor local de Capacitor no resuelve `/carpeta/` a
+`/carpeta/index.html`: devuelve la PORTADA.** Medido contra el WebView de verdad
+en las seis rutas del sitio:
+
+    /aprender/  /anotador/  /jugar/  /jugar/mesa/  /legales/terminos/
+    → todas devuelven "Truco Uruguayo — aprender y practicar, gratis"
+    /jugar/gira/index.html  → sí devuelve la página correcta (90 KB contra 18)
+
+O sea que el `trailingSlash` que se puso el 1/9 **no arregla lo que dice que
+arregla** en el servidor real. `mirar-app-compilada.mjs` no lo ve porque prueba
+contra `python3 -m http.server`, **que sí resuelve las carpetas**: el guardián
+está probando un servidor distinto del que corre en el teléfono.
+
+Se nota cuando Android mata el proceso del WebView y lo restaura en una ruta
+profunda. **No se tocó nada de esto**, porque es otro tema y la sesión se cortó.
+
+### El repaso de seguridad
+
+`security-review` sobre el diff. Lo único que salió es de la herramienta nueva:
+**el puente escuchaba en `0.0.0.0`**, o sea en todas las interfaces de Windows,
+incluida la del wifi. Eso deja el inspector del WebView —con permiso para
+ejecutar JavaScript adentro de la app y leerle el `localStorage`, donde vive la
+gira— abierto a cualquiera en la misma red mientras corre el rig. **Corregido**:
+ahora se ata sólo a la dirección de la placa de WSL. El CSS y la `className` no
+abren superficie de ataque.
+
+El barrido de datos personales sobre el diff dio limpio: sin rutas, sin el
+número de serie del teléfono, sin el usuario de Windows, sin credenciales.
+
+### Estado al cerrar
+
+`npm test` **183/183** · `tsc` limpio · `mirar-web`, `mirar-mesa`,
+`mirar-mesa-nueva` y `mirar-app-compilada` **TODO OK** · los dos builds OK.
+
+El cambio visual está medido: 0,15% de los píxeles en la gira y 0,35% en la
+mesa, todo en bordes horizontales, media de 1,5 y 3,5 sobre 255. A ojo, en la
+comparación recortada, son indistinguibles.
+
+**Sin commitear.**
+
+### Pendiente
+
+1. **Terminar de validar la mesa con partidas variadas.** El A/B que la midió
+   (9/21 → 0/26) fue con una partida sola por rama. Quedó a medias un guión que
+   juega al azar entre envido, real, falta, truco, flor y mazo con semilla fija
+   para que las dos ramas jueguen la misma partida de decisiones: se cortó
+   cuando se desenchufó el celular. Está en el temporal de la sesión.
+2. **Las cromáticas del mapa no llegaron a cero**: 3 de 20 tandas, media 0,1
+   (venían de 0,3). Son la otra población, la de 1 píxel CSS y color saturado, y
+   **no son el mismo bug que los bloques**. Nunca se las atacó de frente.
+3. **El servidor de Capacitor y las carpetas** (arriba). Incluye arreglar
+   `mirar-app-compilada.mjs`, que hoy pasa en verde probando otro servidor.
+4. **El screencast entrega ~1 cuadro por segundo**, poco para un fallo de un
+   frame. Si hace falta más densidad, la salida es ráfagas de `screencap`.
+5. Prender AdMob.
+
 ## 2026-09-08 (tarde) — Las manchitas del mapa: era el CAMBIO DE TAMAÑO
 
 Sexta sesión con las manchitas, y la primera que las mide con estadística en vez
