@@ -17,9 +17,24 @@
 # puede regenerar.
 *.jks
 *.keystore
+# Y el APK/AAB firmado, esté donde esté. `android/.gitignore` ya trae `*.apk`,
+# pero sólo cubre lo que cuelga de esa carpeta: un `app-release.apk` copiado a
+# la raíz para probarlo entraba al repo. Un APK de release lleva la firma
+# aplicada adentro, y encima pesa.
+*.apk
+*.aab
 # La contraseña de esa clave. Gradle la lee de acá, así que el archivo tiene la
 # clave en texto plano: filtrarlo es filtrar la firma.
+#
+# SON DOS NOMBRES Y HAY QUE TENER LOS DOS. `keystore.properties` es el que usa
+# la plantilla de Capacitor, pero **la documentación oficial de Android llama a
+# ese archivo `key.properties`**, y ése es el nombre que va a tener el día que
+# se firme la app para Play Store —que está en la lista de pendientes—. Faltaba,
+# y se encontró el 10/9/2026 preguntándole a `git check-ignore` por los archivos
+# peligrosos que TODAVÍA NO EXISTEN. Ninguno de los dos existe hoy: esto es
+# cerrar la puerta antes, no después.
 keystore.properties
+key.properties
 # La configuración de los servicios de Google (AdMob, si algún día se prende).
 # Trae el id del proyecto y las claves de las APIs que estén habilitadas.
 google-services.json
@@ -127,6 +142,29 @@ ideas/imagenes/referencias/
 /*.bmp
 /*.tif
 /*.tiff
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Audio: las tomas crudas NO suben; los archivos finales SÍ
+# ═══════════════════════════════════════════════════════════════════════════
+# `public/audio/` es parte del sitio y se sube entero: sin esos archivos la web
+# no suena. Lo que no sube es el material del que salen —los WAV de la tarde de
+# grabación, los descartes, el proyecto del editor—, que pesa decenas de veces
+# más y no le sirve a nadie que venga a leer el proyecto.
+#
+# Es el mismo criterio que ya se aplica al dibujo: `herramientas/escena/` es el
+# código que dibuja y sube, `public/escenas/*.webp` es lo dibujado y sube, y lo
+# de 2800px del medio no existe más.
+#
+# Los formatos sin comprimir se ignoran en TODO el repo y no sólo en
+# audio-fuente/: al sitio van `.m4a` y nada más, así que un `.wav` en
+# `public/audio/` es siempre un error —pesa diez veces más por el mismo
+# sonido—. El catálogo de lo que hay que grabar está en `ideas/sonido.md`.
+/audio-fuente/
+*.wav
+*.aif
+*.aiff
+*.flac
+*.aup3
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  Andamiaje: archivos que genera la herramienta y no le sirven a nadie que

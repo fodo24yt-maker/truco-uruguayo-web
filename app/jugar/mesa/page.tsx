@@ -7,6 +7,9 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { Carta } from "@/components/Carta";
 import { EspacioAnuncio } from "@/components/EspacioAnuncio";
 import { DialogoMio, DialogoRival } from "@/components/mesa/Dialogo";
+import { ObjetoDeMesa } from "@/components/mesa/Objetos";
+import { CartelEnMesa, TantosBajoMedallon } from "@/components/mesa/Tantos";
+import { type ClaveObjeto, PROPORCION } from "@/lib/objetos";
 import {
   FondoAmbiente,
   Mate,
@@ -32,7 +35,6 @@ import {
   nuevaPartida,
   siguienteMano,
 } from "@/lib/motor/partida";
-import { versoDelCanto } from "@/lib/motor/versos";
 import {
   LUKI,
   PERSONALIDADES,
@@ -42,13 +44,17 @@ import {
 import { fichaVacia, observarMano } from "@/lib/motor/lectura";
 import { explicarEnvido, valorEnvido } from "@/lib/motor/tantos";
 import { ambienteDe, escenaDe, objetoDe } from "@/lib/ambientes";
-import { ALTURA, APOYO, ObjetoDeMesa, PROPORCION } from "@/components/mesa/Objetos";
 import { estiloEnMesa } from "@/lib/mesa-perspectiva";
 import { caraDe } from "@/lib/caras";
 import { porSlugDeDepartamento } from "@/lib/gira";
 import { botonera } from "@/lib/botonera";
+import { cartasEnMesa } from "@/lib/cartas-en-mesa";
 import { tantosAlCierre } from "@/lib/tantos-al-cierre";
-import { anotarPartida, guardarPreferencia, leerProgreso } from "@/lib/progreso";
+import {
+  anotarPartida,
+  guardarPreferencia,
+  leerProgreso,
+} from "@/lib/progreso";
 
 const DEMORA_BOT = 900; // lo que el bot "piensa", para que se pueda seguir
 
@@ -91,10 +97,8 @@ const FIN_REPARTO = MOMENTO_VOLTEO + 2 * ENTRE_VOLTEOS + VOLTEO;
  * la sombra sigue la misma silueta que seguía el filtro y no se ve distinto.
  * NO VOLVER A PONER UN FILTRO ACÁ: `mirar-mesa.mjs` falla si aparece uno.
  */
-const SOMBRA_EN_MANO = "0 10px 12px -3px rgba(0,0,0,0.75), 0 4px 8px -4px rgba(0,0,0,0.6)";
-
-/** Lo que queda un verso en pantalla si no lo cerrás ni contestás. */
-const DURA_VERSO = 6500;
+const SOMBRA_EN_MANO =
+  "0 10px 12px -3px rgba(0,0,0,0.75), 0 4px 8px -4px rgba(0,0,0,0.6)";
 
 /**
  * Cuánto se esperan las cartas en la mesa después de que se cierra la mano.
@@ -104,6 +108,24 @@ const DURA_VERSO = 6500;
  * alcanzan para ver qué pasó y no llegan a aburrir.
  */
 const ESPERA_ANTES_DE_BARRER = 2000;
+
+/**
+ * Cuánto tarda el que ganó el envido o cantó la flor en dar vuelta lo que le
+ * quedaba, desde que se cierra la mano.
+ *
+ * Va ADENTRO de los dos segundos de arriba y no después: la ventana en que la
+ * mesa queda a la vista sigue siendo la misma, y estas cartas caen al principio
+ * para que se las pueda mirar el resto del tiempo. Medio segundo es lo que
+ * tarda una persona en darse cuenta de que la mano terminó; antes de eso el
+ * gesto se pierde entre la última baza y esto.
+ *
+ * Qué cartas caen y de quién lo decide `lib/cartas-en-mesa.ts`, que es función
+ * pura y tiene test. Acá sólo se decide CUÁNDO.
+ */
+const ESPERA_ANTES_DE_ENSEÑAR = 450;
+
+/** Lo que se escalona una carta enseñada respecto de la anterior. */
+const ENTRE_ENSEÑADAS = 90;
 
 /**
  * Lo que tarda el barrido, contando el escalonado de las seis cartas.
@@ -187,49 +209,15 @@ interface DisenoDeMesa {
    * Se centran como grupo: ancladas a la izquierda, con una sola baza puesta
    * —que es la mitad del tiempo— quedaba tirada contra el borde.
    */
-  baza: { suya: number; tuya: number; ganador: number; ancho: string; paso: number };
+  baza: {
+    suya: number;
+    tuya: number;
+    ganador: number;
+    ancho: string;
+    paso: number;
+  };
   /** Las tres que le reparten a él, que existen sólo mientras dura el reparto. */
   reparto: { v: number; ancho: string };
-  /**
-   * El objeto del departamento, en el hueco que dejó el descarte.
-   *
-   * Va del lado del MAZO y hacia el borde cercano: ese costado quedó con el
-   * mazo solo cuando se sacó la pila de descartes, mientras que el otro tiene
-   * el mate y —en la compu— la libreta.
-   *
-   * Cerca y no al fondo, por lo mismo que el mate: `estiloEnMesa` ancla por la
-   * BASE y todo crece HACIA ARRIBA, así que un objeto apoyado allá lejos se le
-   * sube al rival por el pecho.
-   *
-   * PERO TAMPOCO PEGADO AL BORDE CERCANO, y esto lo fijó la medición. La
-   * perspectiva ABRE el frente: en el canto de acá sólo se ve de `u` 0,20 a
-   * 0,80, porque el plano se hornea a 4700 de ancho para un cuadro de 2800.
-   * Puesto en 0,14 —que a ojo es "al costado, cerca"— el objeto salía por la
-   * izquierda: `mirar-mesa-nueva.mjs` lo midió en x −53..−6 en 1100x800, o sea
-   * afuera de la pantalla entera. Es la cuarta vez en este proyecto que un
-   * número de la mesa se calcula en papel y sale mal.
-   *
-   * Y EN EL CELULAR VA MÁS ARRIBA (0,67 contra 0,72), porque ahí abajo está tu
-   * mano. En una pantalla de 568 de alto quedan 80px entre la base del mazo y
-   * el borde de arriba de la mano, y con 0,72 el objeto se metía 9px adentro.
-   * Ojo: **eso pasa sólo con la mano de TRES cartas**, o sea al empezar cada
-   * mano, y la herramienta medía con dos ya jugadas —cuando la mano es más
-   * chica y llega más abajo—, así que lo daba por bueno. Hasta el vaso, que es
-   * el más angosto de los diecinueve, cruzaba.
-   *
-   * Y el margen tiene que ser MARGEN, no un ajuste al límite: el alto de la
-   * escena en el celular **cambia con la mano que te tocó**, porque la fila de
-   * la flor y la línea del tanto aparecen o no. Ajustado a 3px, el farol
-   * pasaba o fallaba según el reparto. En 568 de alto quedan 80px entre la base
-   * del mazo y la mano, y el más alto de los diecinueve ocupa 45.
-   *
-   * EL TAMAÑO SE MIDE CONTRA EL MATE, que es el otro objeto de la mesa. La
-   * primera versión iba a 9,5vh y quedaba en un tercio del mate: en la mesa un
-   * vaso y un mate son parecidos de alto, así que a ese tamaño no se leía un
-   * vaso, se leía una miniatura. Va en dos tercios del mate, que es la
-   * proporción de verdad.
-   */
-  objeto: { u: number; v: number; alto: string };
 }
 
 /**
@@ -274,20 +262,6 @@ const MESA: DisenoDeMesa = {
     paso: 0.13,
   },
   reparto: { v: 0.22, ancho: "min(10cqw, 9.5cqh)" },
-  /* El objeto del departamento va del lado del mazo y hacia el borde cercano,
-     pero NO pegado al borde: la perspectiva abre el frente y en el canto de acá
-     sólo se ve de `u` 0,20 a 0,80. Puesto en 0,14 —que a ojo es "al costado,
-     cerca"— salía por la izquierda entero.
-
-     Y va en 0,65 y no más abajo porque ahí abajo está tu mano, con las TRES
-     cartas, que es cuando más sube. El margen tiene que ser margen: el alto de
-     la escena cambia con la mano que te tocó, porque la fila de la flor y la
-     línea del tanto aparecen o no.
-
-     EL TAMAÑO SE MIDE CONTRA EL MATE: en una mesa un vaso y un mate son
-     parecidos de alto. Va en dos tercios del mate, que es la proporción de
-     verdad; a un tercio no se leía un vaso, se leía una miniatura. */
-  objeto: { u: 0.26, v: 0.72, alto: "min(12.3cqw, 13.5cqh)" },
 };
 
 /**
@@ -297,7 +271,8 @@ const MESA: DisenoDeMesa = {
  * caiga exactamente sobre el canto de la mesa de la ESCENA. Si cambia `fondo` o
  * el `viewBox` del rival, esto se acomoda solo.
  */
-const altoDelRival = (fondo: number) => (fondo * RIVAL_VB.alto) / RIVAL_VB.borde;
+const altoDelRival = (fondo: number) =>
+  (fondo * RIVAL_VB.alto) / RIVAL_VB.borde;
 
 /**
  * Cuánto espera cada carta antes de salir del mazo.
@@ -305,7 +280,11 @@ const altoDelRival = (fondo: number) => (fondo * RIVAL_VB.alto) / RIVAL_VB.borde
  * Se reparte de a una y empezando por el mano (reglas.txt 6, paso 1), así que
  * se van alternando: mano, pie, mano, pie, mano, pie.
  */
-function retrasoDeReparto(quien: Jugador, indice: number, soyMano: boolean): number {
+function retrasoDeReparto(
+  quien: Jugador,
+  indice: number,
+  soyMano: boolean,
+): number {
   const empieza = quien === "vos" ? soyMano : !soyMano;
   return (indice * 2 + (empieza ? 0 : 1)) * ENTRE_CARTAS;
 }
@@ -383,7 +362,9 @@ function Mesa() {
   /** El que juega de verdad. En historia manda el mapa; en libre, vos. */
   const rival = rivalDelDepto ?? rivalElegido;
   const [eligiendo, setEligiendo] = useState(false);
-  const [marcas, setMarcas] = useState<Record<string, { ganadas: number; jugadas: number }>>({});
+  const [marcas, setMarcas] = useState<
+    Record<string, { ganadas: number; jugadas: number }>
+  >({});
   const anotada = useRef<Partida | null>(null);
 
   /**
@@ -405,6 +386,20 @@ function Mesa() {
    *
    * Es sólo visual: el motor ya cerró la mano, esto no cambia ni un punto.
    */
+  /**
+   * Si ya se apoyaron sobre la mesa las cartas del que tenía que enseñar.
+   *
+   * Es lo único que se agrega a la cadena de tiempos del cierre de mano, y no
+   * tiene reloj propio: comparte el `useEffect` de más abajo con los otros dos.
+   */
+  /**
+   * El premio recién ganado, para el cartel de fin de partida.
+   *
+   * Se prende sólo la PRIMERA vez que le ganás a un rival de la gira. Cómo se
+   * sabe que es la primera está abajo, en el efecto que anota la partida.
+   */
+  const [premio, setPremio] = useState<ClaveObjeto | null>(null);
+  const [enseñadas, setEnseñadas] = useState(false);
   const [barrida, setBarrida] = useState(false);
   /** El cartel de fin de mano, que ahora espera a que la mesa se levante. */
   const [carteleada, setCarteleada] = useState(false);
@@ -416,9 +411,9 @@ function Mesa() {
    * Mientras no está en "listo" no se puede tocar nada y el bot tampoco piensa:
    * el que reparte no juega al mismo tiempo.
    */
-  const [faseReparto, setFaseReparto] = useState<"repartiendo" | "volteando" | "listo">(
-    "listo",
-  );
+  const [faseReparto, setFaseReparto] = useState<
+    "repartiendo" | "volteando" | "listo"
+  >("listo");
   /** Sube de a uno con cada mano nueva. Es lo que dispara el reloj del reparto. */
   const [manoNro, setManoNro] = useState(0);
   /**
@@ -435,16 +430,6 @@ function Mesa() {
   const carasArriba = faseReparto !== "repartiendo";
 
   /**
-   * El verso que está diciendo el rival, si le tocó versear. Es puro color: el
-   * canto de verdad ya está aplicado en la partida cuando esto aparece.
-   */
-  const [verso, setVerso] = useState<{ lineas: readonly string[]; canto: string } | null>(
-    null,
-  );
-  /** El último que dijo, para no repetirle la misma copla dos veces seguidas. */
-  const ultimoVerso = useRef<string | undefined>(undefined);
-
-  /**
    * DOS SEGUNDOS Y SE LEVANTA LA MESA.
    *
    * Vive acá arriba y no adentro del dibujo porque tiene que arrancar cuando
@@ -457,12 +442,22 @@ function Mesa() {
    */
   useEffect(() => {
     if (!p || p.fase === "jugando") return;
+    /* LOS TRES VAN EN EL MISMO EFECTO, y eso no es prolijidad: si el de
+       enseñar viviera en un `useEffect` aparte, tendría sus propias
+       dependencias y una mano que termina rápido podría heredar el reloj de la
+       anterior. Es el bug que el comentario de arriba ya evitó una vez con
+       `manoNro`, y no se repite. */
+    const muestra = setTimeout(
+      () => setEnseñadas(true),
+      ESPERA_ANTES_DE_ENSEÑAR,
+    );
     const barre = setTimeout(() => setBarrida(true), ESPERA_ANTES_DE_BARRER);
     const cartel = setTimeout(
       () => setCarteleada(true),
       ESPERA_ANTES_DE_BARRER + DURA_BARRIDO,
     );
     return () => {
+      clearTimeout(muestra);
       clearTimeout(barre);
       clearTimeout(cartel);
     };
@@ -470,7 +465,8 @@ function Mesa() {
 
   /** Empieza una mano nueva y larga el reparto. Todas las manos pasan por acá. */
   const repartirNueva = (nueva: Partida) => {
-    setVerso(null);
+    setPremio(null);
+    setEnseñadas(false);
     setFlorSalvada(false);
     setMenuEnvido(false);
     setBarrida(false);
@@ -492,9 +488,9 @@ function Mesa() {
     setMarcas(progreso.rivales);
     // Sólo para el modo libre: en historia el rival ya salió del departamento.
     if (rivalPedido) setRivalElegido(buscarPersonalidad(rivalPedido));
-    else if (progreso.ultimoRival) setRivalElegido(buscarPersonalidad(progreso.ultimoRival));
+    else if (progreso.ultimoRival)
+      setRivalElegido(buscarPersonalidad(progreso.ultimoRival));
     ficha.current = fichaVacia();
-    ultimoVerso.current = undefined;
     repartirNueva(nuevaPartida());
     // Sólo se vuelve a repartir de cero si cambió a quién enfrentás: si acá
     // entrara `repartirNueva`, se rearmaría la partida en cada dibujado.
@@ -503,7 +499,10 @@ function Mesa() {
   // El reloj del reparto: darlas vuelta, y después soltar el juego.
   useEffect(() => {
     if (manoNro === 0 || !animandoReparto.current) return;
-    const alVoltear = setTimeout(() => setFaseReparto("volteando"), MOMENTO_VOLTEO);
+    const alVoltear = setTimeout(
+      () => setFaseReparto("volteando"),
+      MOMENTO_VOLTEO,
+    );
     const alTerminar = setTimeout(() => setFaseReparto("listo"), FIN_REPARTO);
     return () => {
       clearTimeout(alVoltear);
@@ -511,39 +510,24 @@ function Mesa() {
     };
   }, [manoNro]);
 
-  // El verso se borra solo. Si contestás antes, lo borra `hacer`.
-  useEffect(() => {
-    if (!verso) return;
-    const reloj = setTimeout(() => setVerso(null), DURA_VERSO);
-    return () => clearTimeout(reloj);
-  }, [verso]);
-
   // El turno del bot, con la personalidad del rival elegido
   useEffect(() => {
-    if (!p || p.fase !== "jugando" || p.turno !== "rival" || repartiendo) return;
+    if (!p || p.fase !== "jugando" || p.turno !== "rival" || repartiendo)
+      return;
     const reloj = setTimeout(() => {
-      const accion = decidirJugada(p, "rival", Math.random, rival, ficha.current);
-      if (!accion) return;
-
-      // Con qué verso lo canta, si es de los que versean. Se decide ANTES de
-      // aplicar la acción porque el verso depende de cómo está la mesa en ese
-      // momento: un "no se ponga tan contento" le contesta a un envido que
-      // todavía está sin resolver.
-      const copla = versoDelCanto(
-        accion,
+      const accion = decidirJugada(
         p,
-        rival.verso,
+        "rival",
         Math.random,
-        ultimoVerso.current,
+        rival,
+        ficha.current,
       );
-      const despues = aplicar(p, accion, "rival");
-      if (copla) {
-        ultimoVerso.current = copla.id;
-        // El primer evento nuevo ES el canto. El último no sirve: una flor que
-        // se cobra sola deja abajo el "+3" y ahí se leería eso en vez del canto.
-        setVerso({ lineas: copla.lineas, canto: despues.eventos[p.eventos.length]?.texto ?? "" });
-      }
-      setP(despues);
+      if (!accion) return;
+      /* Canta pelado, y eso es todo lo que hay que hacer acá: el texto del
+         canto —"¡Truco!", "¡Envido!"— lo arma `partida.ts` y sale por
+         `p.eventos` a la chapa del diálogo. Hasta el 10/9/2026 acá se elegía
+         además una copla de `versos.ts`; se fue el archivo entero. */
+      setP(aplicar(p, accion, "rival"));
     }, DEMORA_BOT);
     return () => clearTimeout(reloj);
   }, [p, rival, repartiendo]);
@@ -567,8 +551,31 @@ function Mesa() {
     if (!p || p.fase !== "partida-terminada" || anotada.current === p) return;
     anotada.current = p;
     const gane = p.ganadorPartida === "vos";
+    const nuevas = anotarPartida(rival.id, gane, {
+      vos: p.puntos.vos,
+      rival: p.puntos.rival,
+    });
+
+    /* ── EL PREMIO DEL DEPARTAMENTO, DESDE EL 10/9/2026 ──────────────────
+       Los objetos salieron de la mesa y pasaron a ser lo que se gana. Este es
+       el momento en que se ganan, así que el aviso va acá.
+
+       **La primera victoria se deduce, no se guarda.** `anotarPartida` devuelve
+       el progreso YA actualizado, así que si después de anotar tenés
+       exactamente una ganada, ésta fue la primera. No hace falta ningún campo
+       nuevo en `localStorage`, y eso importa: en este proyecto tocar dónde vive
+       el progreso es de lo más caro que hay —está avisado dos veces en
+       `CLAUDE.md`— porque un cambio ahí le borra la gira a quien ya jugó.
+
+       Sólo en la gira: en partida libre elegís vos al rival y no hay
+       departamento que ganar. */
+    setPremio(
+      gane && esHistoria && (nuevas.rivales[rival.id]?.ganadas ?? 0) === 1
+        ? objetoDe(rival.departamento)
+        : null,
+    );
     setMarcas(
-      anotarPartida(rival.id, gane, { vos: p.puntos.vos, rival: p.puntos.rival }).rivales,
+      nuevas.rivales,
     );
   }, [p, rival]);
 
@@ -577,7 +584,6 @@ function Mesa() {
   const hacer = (accion: Accion) => {
     setMenuEnvido(false);
     setFlorSalvada(false);
-    setVerso(null); // contestaste: el verso ya cumplió
     if (repartiendo) return; // todavía se está repartiendo
 
     /**
@@ -588,7 +594,8 @@ function Mesa() {
      * Con las ayudas apagadas rige la regla de verdad y la flor se puede
      * perder, que es como se juega y como se aprende a no olvidársela.
      */
-    const esCantoDeFlor = accion.tipo === "flor" || accion.tipo === "flor-canto";
+    const esCantoDeFlor =
+      accion.tipo === "flor" || accion.tipo === "flor-canto";
     if (ayudas && !esCantoDeFlor && puede("flor")) {
       const conLaFlor = aplicar(p, { tipo: "flor" }, "vos");
       setFlorSalvada(true);
@@ -633,7 +640,8 @@ function Mesa() {
   const ladoMazo = p.quienEsMano === "vos" ? "izquierda" : "derecha";
   const soyMano = p.quienEsMano === "vos";
   /** Te cantaron flor a secas y te toca contestar: ahí "no quiero" es achicarse. */
-  const meCantaronFlor = p.pendiente?.tipo === "flor" && p.pendiente.cadena.length === 0;
+  const meCantaronFlor =
+    p.pendiente?.tipo === "flor" && p.pendiente.cadena.length === 0;
   /** Si ya hay un envido en la mesa, lo que hacés es subirlo; si no, abrirlo. */
   const subiendoEnvido = p.pendiente?.tipo === "envido";
   const bazaActual = p.bazas[p.bazas.length - 1];
@@ -659,7 +667,8 @@ function Mesa() {
     if (b.envidos.length > 0 || b.flor || b.florCantos.length > 0) return null;
     if (p.florCantada.rival) return "Cantó flor: la flor anula el envido";
     if (p.florCantada.vos) return "Cantaste flor: el envido queda anulado";
-    if (p.historial.some((h) => h.tipo === "envido")) return "El envido ya se jugó en esta mano";
+    if (p.historial.some((h) => h.tipo === "envido"))
+      return "El envido ya se jugó en esta mano";
     return null;
   })();
 
@@ -669,7 +678,8 @@ function Mesa() {
      que un día digan cosas distintas. */
   const hayFlor = b.flor || b.florCantos.length > 0;
   const haySubida =
-    (menuEnvido && b.envidos.length > 0) || (b.contestando && (b.envidos.length > 0 || b.truco));
+    (menuEnvido && b.envidos.length > 0) ||
+    (b.contestando && (b.envidos.length > 0 || b.truco));
 
   /**
    * QUE LA BARRA NUNCA CORTE TU MANO.
@@ -698,11 +708,6 @@ function Mesa() {
   const caraRival = caraDe(rival.id);
   // El tanto se cuenta con las tres cartas del reparto, nunca con las que quedan
   const miFlor = p.flor.vos;
-  /* Del DEPARTAMENTO y no del rival, igual que el ambiente y el acento de las
-     dos líneas de arriba: si mañana hay dos rivales en el mismo lugar, la mesa
-     es la misma. Vale también en partida libre, porque ahí el rival lo elegís
-     vos pero sigue siendo de algún lado. */
-  const objeto = objetoDe(rival.departamento);
 
   const miTanto = valorEnvido(p.manoInicial.vos, p.muestra);
 
@@ -718,6 +723,27 @@ function Mesa() {
    * se jugó entera devuelve vacío y acá no aparece nada.
    */
   const tantosEnseñados = barrida ? [] : tantosAlCierre(p);
+
+  /**
+   * LAS CARTAS QUE SE APOYAN SOBRE LA MESA AL CERRARSE LA MANO.
+   *
+   * Quién las da vuelta y en qué lugar caen lo decide `lib/cartas-en-mesa.ts`,
+   * que es función pura y tiene test: acá no hay ni una regla. Lo único que se
+   * decide en la pantalla es CUÁNDO —entre `enseñadas` y `barrida`, o sea la
+   * misma ventana en la que la mesa queda a la vista— y eso es a propósito: no
+   * hay dos lugares donde equivocarse.
+   *
+   * Con la mano jugada entera la lista viene vacía y no se apoya nada, porque
+   * las seis cartas ya están sobre la mesa.
+   */
+  const enMesa =
+    enseñadas && !barrida ? cartasEnMesa(p) : { clase: null, cartas: [] };
+
+  /* Las tuyas SALEN DEL ABANICO en el mismo cuadro en que caen sobre la mesa.
+     Sin esto se ven dos veces: en la mano y en la mesa. */
+  const enMesaMias = new Set(
+    enMesa.cartas.filter((c) => c.quien === "vos").map((c) => c.carta),
+  );
 
   /**
    * El ancho del abanico, para que la mano lo siga.
@@ -736,7 +762,8 @@ function Mesa() {
    * corrido media posición a la izquierda y la mesa se vería torcida.
    */
   const bazasJugadas = p.bazas.filter((b) => b.vos || b.rival).length;
-  const lugarDeBaza = (i: number) => (i - (Math.max(bazasJugadas, 1) - 1) / 2) * d.baza.paso;
+  const lugarDeBaza = (i: number) =>
+    (i - (Math.max(bazasJugadas, 1) - 1) / 2) * d.baza.paso;
   const anchoAbanico = `calc(${nCartas} * ${d.mano.ancho} - ${Math.max(0, nCartas - 1) * 16}px)`;
   /**
    * EL ANCHO DE LA MANO. Ojo: NO es el del abanico.
@@ -767,10 +794,6 @@ function Mesa() {
   const espejo = (u: number) => (ladoMazo === "izquierda" ? u : 1 - u);
   const uMazo = espejo(d.mazo.u);
   const uOtro = espejo(d.mate.u);
-  /* El objeto del departamento va del lado del mazo, así que NO se espeja: el
-     `u` de los diseños se guarda del lado izquierdo y `espejo` lo manda al lado
-     del mazo, que es justo donde tiene que estar. */
-  const uObjeto = espejo(d.objeto.u);
   const altoRival = altoDelRival(d.fondo);
   /**
    * Dónde va una carta jugada, y hacia dónde se va cuando se levanta la mesa.
@@ -780,7 +803,11 @@ function Mesa() {
    * precisión —para eso habría que medir píxeles en vivo— pero sale para SU
    * lado, que es lo que hace que se lea "se las llevó el que reparte".
    */
-  const alMazo = (u: number, v: number, orden: number): React.CSSProperties => ({
+  const alMazo = (
+    u: number,
+    v: number,
+    orden: number,
+  ): React.CSSProperties => ({
     ...estiloEnMesa(u, v),
     ...(barrida
       ? ({
@@ -815,8 +842,15 @@ function Mesa() {
     aspectRatio: `${RIVAL_VB.ancho} / ${RIVAL_VB.alto}`,
   };
   const capaRival = (
-    <div className="pointer-events-none absolute left-1/2 -translate-x-1/2" style={cajonRival}>
-      <RivalSentado ficha={caraRival} nombre={rival.nombre} luz={ambiente.luz} />
+    <div
+      className="pointer-events-none absolute left-1/2 -translate-x-1/2"
+      style={cajonRival}
+    >
+      <RivalSentado
+        ficha={caraRival}
+        nombre={rival.nombre}
+        luz={ambiente.luz}
+      />
     </div>
   );
 
@@ -837,7 +871,14 @@ function Mesa() {
           className="flex items-center gap-1 rounded px-1.5 py-1 font-[family-name:var(--font-ui)] text-[11px] uppercase tracking-wide text-crema/75 transition-colors hover:text-crema"
         >
           <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" aria-hidden="true">
-            <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+            <path
+              d="M15 5 L8 12 L15 19"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
           {esHistoria ? "Mapa" : "Salir"}
         </Link>
@@ -876,8 +917,12 @@ function Mesa() {
         >
           {/* Sin `tracking`: a 10px la de la interfaz ya viene separada y
               con un poco más se lee "AY UD AS". */}
-          <span className="block text-[10px] leading-tight text-crema/55">Ayudas</span>
-          <span className={`block text-[12px] leading-tight ${ayudas ? "text-dorado" : "text-crema/70"}`}>
+          <span className="block text-[10px] leading-tight text-crema/55">
+            Ayudas
+          </span>
+          <span
+            className={`block text-[12px] leading-tight ${ayudas ? "text-dorado" : "text-crema/70"}`}
+          >
             {ayudas ? "sí" : "no"}
           </span>
         </button>
@@ -910,7 +955,10 @@ function Mesa() {
           />
 
           {/* el ambiente, al fondo */}
-          <div className="absolute inset-x-0 top-0" style={{ height: `${d.fondo}%` }}>
+          <div
+            className="absolute inset-x-0 top-0"
+            style={{ height: `${d.fondo}%` }}
+          >
             <FondoAmbiente escena={escena} />
           </div>
 
@@ -922,13 +970,18 @@ function Mesa() {
               lo que pasa de verdad— y por eso se lee alguien sentado del otro
               lado. Su sombra va después: una sombra cae SOBRE la madera. */}
           {capaRival}
-          <div className="absolute inset-x-0 bottom-0" style={{ top: `${d.fondo}%` }}>
+          <div
+            className="absolute inset-x-0 bottom-0"
+            style={{ top: `${d.fondo}%` }}
+          >
             <TablaMesa escena={escena} />
           </div>
-          <div className="pointer-events-none absolute left-1/2 -translate-x-1/2" style={cajonRival}>
+          <div
+            className="pointer-events-none absolute left-1/2 -translate-x-1/2"
+            style={cajonRival}
+          >
             <SombraRival ficha={caraRival} />
           </div>
-
 
           {/* ─── Lo que está APOYADO en la mesa ────────────────────────
               Todo acá adentro se ubica con (u, v) y recibe su escala sola: lo
@@ -951,7 +1004,9 @@ function Mesa() {
                subir" —que sería un bug— de "arriba de la falta envido no hay
                nada", que es la regla del juego. */
             data-pendiente={
-              p.pendiente ? `${p.pendiente.tipo}:${p.pendiente.cadena.at(-1) ?? ""}` : "nada"
+              p.pendiente
+                ? `${p.pendiente.tipo}:${p.pendiente.cadena.at(-1) ?? ""}`
+                : "nada"
             }
             className="absolute inset-x-0 bottom-0"
             style={{ top: `${d.fondo}%` }}
@@ -1033,8 +1088,14 @@ function Mesa() {
 
             {/* el mate, siempre del lado contrario al mazo */}
             <div data-mesa="mate" style={estiloEnMesa(uOtro, d.mate.v)}>
-              <div className="relative" style={{ height: d.mate.alto, aspectRatio: "60 / 84" }}>
-                <SombraApoyada ancho={0.55} desvio={ladoMazo === "izquierda" ? 0.3 : -0.3} />
+              <div
+                className="relative"
+                style={{ height: d.mate.alto, aspectRatio: "60 / 84" }}
+              >
+                <SombraApoyada
+                  ancho={0.55}
+                  desvio={ladoMazo === "izquierda" ? 0.3 : -0.3}
+                />
                 <Mate />
               </div>
             </div>
@@ -1056,32 +1117,14 @@ function Mesa() {
                 levantan recién cuando apretás "Siguiente mano", o sea cuando
                 vos decidís que ya miraste. No volver a poner una pila acá.
 
-                LO QUE SÍ VA ACÁ es el objeto del departamento: el hueco quedó
-                libre y es lo que hace que Salto y Paysandú no sean la misma
-                pantalla. Un objeto, no una pila de cartas. */}
-            {objeto && (
-              <div data-mesa="objeto" style={estiloEnMesa(uObjeto, d.objeto.v)}>
-                <div
-                  className="relative"
-                  /* El alto base es UNO para todos y cada objeto se lleva su
-                     fracción: sin eso una botella y un sombrero medirían lo
-                     mismo de alto y el sombrero saldría del tamaño de una
-                     rueda. La sombra sale de cuánto APOYA, que no es lo mismo
-                     que cuánto mide: una botella apoya un círculo chico y un
-                     cajón apoya todo. */
-                  style={{
-                    height: `calc(${ALTURA[objeto]} * (${d.objeto.alto}))`,
-                    aspectRatio: PROPORCION[objeto],
-                  }}
-                >
-                  <SombraApoyada
-                    ancho={APOYO[objeto]}
-                    desvio={ladoMazo === "izquierda" ? 0.3 : -0.3}
-                  />
-                  <ObjetoDeMesa objeto={objeto} />
-                </div>
-              </div>
-            )}
+                Y EL OBJETO DEL DEPARTAMENTO TAMBIÉN SE FUE, el 10/9/2026.
+                Estuvo acá desde el 1/9 y era lo que hacía que Salto y Paysandú
+                no fueran la misma pantalla; Santiago lo sacó porque ocupa
+                lugar que la mesa necesita, en la misma pasada en que se fueron
+                los versos y los recuadros de tantos. **No desapareció**: los
+                diecinueve siguen dibujados en `components/mesa/Objetos.tsx` y
+                ahora se ganan como trofeo, que es donde se los mira de cerca.
+                Ver `components/Trofeos.tsx` y el cartel de fin de partida. */}
 
             {/* Las bazas: pares cruzando la mesa, CENTRADOS como grupo. La tuya
                 se monta sobre la de él, como quedan de verdad cuando las tirás
@@ -1103,16 +1146,28 @@ function Mesa() {
                     className={barrida ? "anim-al-mazo" : undefined}
                     style={alMazo(0.5 + lugarDeBaza(i), d.baza.suya, i * 2)}
                   >
-                    <CartaApoyada carta={baza.rival} de="rival" ancho={d.baza.ancho} />
+                    <CartaApoyada
+                      carta={baza.rival}
+                      de="rival"
+                      ancho={d.baza.ancho}
+                    />
                   </div>
                 )}
                 {baza.vos && (
                   <div
                     data-mesa="baza"
                     className={barrida ? "anim-al-mazo" : undefined}
-                    style={alMazo(0.53 + lugarDeBaza(i), d.baza.tuya, i * 2 + 1)}
+                    style={alMazo(
+                      0.53 + lugarDeBaza(i),
+                      d.baza.tuya,
+                      i * 2 + 1,
+                    )}
                   >
-                    <CartaApoyada carta={baza.vos} de="vos" ancho={d.baza.ancho} />
+                    <CartaApoyada
+                      carta={baza.vos}
+                      de="vos"
+                      ancho={d.baza.ancho}
+                    />
                   </div>
                 )}
                 {baza.ganador && (
@@ -1124,13 +1179,77 @@ function Mesa() {
                           sobre texto chico dentro de un contenedor que la
                           perspectiva escala por un factor fraccionario deja
                           basura con forma de letras. Ver `Mazo.tsx`. */
-                      className="block whitespace-nowrap font-[family-name:var(--font-ui)] text-[9px] uppercase tracking-wide text-crema/70 [text-shadow:0_1px_3px_rgba(0,0,0,1)]">
-                      {baza.ganador === "parda" ? "parda" : baza.ganador === "vos" ? "tuya" : "suya"}
+                      className="block whitespace-nowrap font-[family-name:var(--font-ui)] text-[9px] uppercase tracking-wide text-crema/70 [text-shadow:0_1px_3px_rgba(0,0,0,1)]"
+                    >
+                      {baza.ganador === "parda"
+                        ? "parda"
+                        : baza.ganador === "vos"
+                          ? "tuya"
+                          : "suya"}
                     </span>
                   </div>
                 )}
               </div>
             ))}
+
+            {/* ─── LO QUE SE ENSEÑA AL CERRARSE LA MANO ──────────────────
+                Las cartas que le quedaban al que ganó el envido o cantó la
+                flor, dadas vuelta y apoyadas, como en la mesa de verdad.
+
+                ── TRES COSAS QUE NO SON CASUALES ─────────────────────────
+
+                1. **Es la MISMA `<CartaApoyada>`** que dibuja una carta
+                   jugada, así que cae con la misma animación (`anim-caer` +
+                   `anim-sombra`). No hay CSS nuevo: si se vieran distinto,
+                   se leerían como otra cosa.
+                2. **`data-mesa="baza-enseñada"`, y no `"baza"`.** Son un
+                   agarre aparte para que las herramientas puedan medirlas
+                   sin confundirlas con las jugadas de verdad — y para que
+                   nadie que lea el DOM las confunda tampoco.
+                3. **El centro del grupo NO se recalcula.** `lugarDeBaza` se
+                   sigue calculando con `bazasJugadas`, que cuenta sólo lo
+                   jugado: si estas cartas entraran en esa cuenta, todas las
+                   que ya están apoyadas se correrían de golpe. "La mesa no
+                   se mueve" es justo lo que vigila `mirar-mesa-nueva.mjs`.
+                   Éstas caen al costado, que es donde se apoyan de verdad. */}
+            {enMesa.cartas.map((c) => (
+              <div
+                key={`${c.quien}-${c.carta.numero}-${c.carta.palo}`}
+                data-mesa="baza-enseñada"
+                className={barrida ? "anim-al-mazo" : undefined}
+                style={{
+                  ...alMazo(
+                    (c.quien === "rival" ? 0.5 : 0.53) + lugarDeBaza(c.baza),
+                    c.quien === "rival" ? d.baza.suya : d.baza.tuya,
+                    c.baza * 2 + (c.quien === "rival" ? 0 : 1),
+                  ),
+                  // escalonadas, para que se lea el gesto de ir dándolas vuelta
+                  ...(barrida
+                    ? {}
+                    : { animationDelay: `${c.orden * ENTRE_ENSEÑADAS}ms` }),
+                }}
+              >
+                <CartaApoyada
+                  carta={c.carta}
+                  de={c.quien}
+                  ancho={d.baza.ancho}
+                />
+              </div>
+            ))}
+
+            {/* El rótulo: "ENVIDO EN MESA". Sale sólo si hay algo apoyado, o
+                sea nunca con la mano jugada entera.
+
+                Va SOBRE LA MADERA, apenas por encima de la fila de bazas, y no
+                arriba del todo: allá arriba está el registro de lo que dijo el
+                rival, que en una pantalla baja ocupa toda la franja. Centrado y
+                a esa altura no se pisa con nada. */}
+            {enMesa.clase && (
+              <CartelEnMesa
+                clase={enMesa.clase}
+                posicion={estiloEnMesa(0.5, d.baza.ganador - 0.1)}
+              />
+            )}
           </div>
 
           {/* ─── El medallón y lo que se dice ──────────────────────────
@@ -1145,14 +1264,17 @@ function Mesa() {
             data-encima="medallon"
             className="absolute right-1.5 top-1.5 z-20 flex w-[min(78%,340px)] flex-col items-end gap-1"
           >
-            <Medallon rival={rival} deLaGira={esHistoria} onCambiar={() => setEligiendo(true)} />
-            <DialogoRival
-              lineas={verso?.lineas}
-              canto={verso?.canto}
-              eventos={p.eventos}
-              tantos={tantosEnseñados}
-              onCerrarVerso={() => setVerso(null)}
+            <Medallon
+              rival={rival}
+              deLaGira={esHistoria}
+              onCambiar={() => setEligiendo(true)}
             />
+            {/* Los dos tantos en número, ENTRE el medallón y el globo, para
+                que no haya que contar las cartas en dos segundos. Reserva alto
+                fijo aunque no diga nada: si creciera y se achicara empujaría
+                el globo de abajo y la mesa saltaría. */}
+            <TantosBajoMedallon tantos={tantosEnseñados} />
+            <DialogoRival eventos={p.eventos} compacto={enMesa.cartas.length > 0} />
           </div>
 
           {/* ─── Tu lado de la mesa: lo que decís vos, y tu mano ──────────
@@ -1164,7 +1286,7 @@ function Mesa() {
               punto: justo cuando no es tu turno es cuando hay que poder leer
               lo que acabás de cantar. */}
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
-            <DialogoMio eventos={p.eventos} tantos={tantosEnseñados} />
+            <DialogoMio eventos={p.eventos} />
 
             {/* ─── LO QUE PODÉS CANTAR, APOYADO SOBRE TUS CARTAS ─────────
                 Esto vivía adentro de la barra de abajo, y por eso la barra
@@ -1199,7 +1321,12 @@ function Mesa() {
             {(hayFlor || haySubida) && (
               <div className="pointer-events-auto absolute inset-x-0 bottom-2 z-30 mx-auto flex max-w-[760px] flex-wrap items-center justify-center gap-1.5 px-2">
                 {b.flor && (
-                  <BotonCanto canto="flor" onClick={() => hacer({ tipo: "flor" })} tono="dorado" suelto>
+                  <BotonCanto
+                    canto="flor"
+                    onClick={() => hacer({ tipo: "flor" })}
+                    tono="dorado"
+                    suelto
+                  >
                     {meCantaronFlor ? "Yo también" : "¡Flor!"}
                   </BotonCanto>
                 )}
@@ -1211,7 +1338,9 @@ function Mesa() {
                     tono="bordo"
                     suelto
                   >
-                    {canto === "con-flor-envido" ? "Con flor envido" : "Contraflor al resto"}
+                    {canto === "con-flor-envido"
+                      ? "Con flor envido"
+                      : "Contraflor al resto"}
                   </BotonCanto>
                 ))}
                 {haySubida && b.contestando && (
@@ -1236,8 +1365,14 @@ function Mesa() {
                     </BotonCanto>
                   ))}
                 {haySubida && b.contestando && b.truco && (
-                  <BotonCanto canto="truco" onClick={() => hacer({ tipo: "truco" })} tono="bordo" suelto>
-                    {["Truco", "Retruco", "Vale cuatro"][p.truco.nivel] ?? "Truco"}
+                  <BotonCanto
+                    canto="truco"
+                    onClick={() => hacer({ tipo: "truco" })}
+                    tono="bordo"
+                    suelto
+                  >
+                    {["Truco", "Retruco", "Vale cuatro"][p.truco.nivel] ??
+                      "Truco"}
                   </BotonCanto>
                 )}
               </div>
@@ -1348,23 +1483,28 @@ function Mesa() {
                 </span>
 
                 <div className="mano-abanico relative z-10 flex justify-center">
-                  {p.cartas.vos.map((carta, i) => (
-                    <CartaEnMano
-                      key={`${carta.numero}-${carta.palo}`}
-                      carta={carta}
-                      posicion={i}
-                      total={p.cartas.vos.length}
-                      pieza={ayudas && esPieza(carta, p.muestra)}
-                      habilitada={miTurno && b.jugar}
-                      tapada={!carasArriba}
-                      viajando={faseReparto === "repartiendo"}
-                      retrasoViaje={retrasoDeReparto("vos", i, soyMano)}
-                      retrasoVolteo={i * ENTRE_VOLTEOS}
-                      desdeX={ladoMazo === "izquierda" ? -140 : 140}
-                      ancho={d.mano.ancho}
-                      onClick={() => hacer({ tipo: "jugar", carta })}
-                    />
-                  ))}
+                  {/* Las que ya se apoyaron sobre la mesa NO se dibujan
+                      acá: si no, la misma carta se ve dos veces, en la mano y
+                      en la mesa. */}
+                  {p.cartas.vos
+                    .filter((carta) => !enMesaMias.has(carta))
+                    .map((carta, i, quedan) => (
+                      <CartaEnMano
+                        key={`${carta.numero}-${carta.palo}`}
+                        carta={carta}
+                        posicion={i}
+                        total={quedan.length}
+                        pieza={ayudas && esPieza(carta, p.muestra)}
+                        habilitada={miTurno && b.jugar}
+                        tapada={!carasArriba}
+                        viajando={faseReparto === "repartiendo"}
+                        retrasoViaje={retrasoDeReparto("vos", i, soyMano)}
+                        retrasoVolteo={i * ENTRE_VOLTEOS}
+                        desdeX={ladoMazo === "izquierda" ? -140 : 140}
+                        ancho={d.mano.ancho}
+                        onClick={() => hacer({ tipo: "jugar", carta })}
+                      />
+                    ))}
                 </div>
 
                 {/* El pulgar se mide contra LA MANO, no contra una carta.
@@ -1426,12 +1566,20 @@ function Mesa() {
              además es lo que ese momento pide: son la respuesta. */
           <div className="mx-auto flex max-w-[760px] gap-1.5 px-1.5 py-0">
             {b.quiero && (
-              <BotonCanto canto="quiero" onClick={() => hacer({ tipo: "quiero" })} tono="quiero">
+              <BotonCanto
+                canto="quiero"
+                onClick={() => hacer({ tipo: "quiero" })}
+                tono="quiero"
+              >
                 Quiero
               </BotonCanto>
             )}
             {b.noQuiero && (
-              <BotonCanto canto="no-quiero" onClick={() => hacer({ tipo: "no-quiero" })} tono="no">
+              <BotonCanto
+                canto="no-quiero"
+                onClick={() => hacer({ tipo: "no-quiero" })}
+                tono="no"
+              >
                 {meCantaronFlor ? "Me achico" : "No quiero"}
               </BotonCanto>
             )}
@@ -1439,14 +1587,25 @@ function Mesa() {
         ) : (
           <div className="mx-auto flex max-w-[760px] items-stretch">
             {b.envidos.length > 0 && (
-              <CantoEnFila canto="abrir-envido" onClick={() => setMenuEnvido((v) => !v)}>
+              <CantoEnFila
+                canto="abrir-envido"
+                onClick={() => setMenuEnvido((v) => !v)}
+              >
                 {subiendoEnvido ? "Subir" : "Envido"}
               </CantoEnFila>
             )}
-            <CantoEnFila canto="truco" onClick={() => hacer({ tipo: "truco" })} deshabilitada={!b.truco}>
+            <CantoEnFila
+              canto="truco"
+              onClick={() => hacer({ tipo: "truco" })}
+              deshabilitada={!b.truco}
+            >
               {["Truco", "Retruco", "Vale cuatro"][p.truco.nivel] ?? "Truco"}
             </CantoEnFila>
-            <CantoEnFila canto="irse-al-mazo" onClick={() => hacer({ tipo: "mazo" })} deshabilitada={!b.mazo}>
+            <CantoEnFila
+              canto="irse-al-mazo"
+              onClick={() => hacer({ tipo: "mazo" })}
+              deshabilitada={!b.mazo}
+            >
               Mazo
             </CantoEnFila>
           </div>
@@ -1461,16 +1620,24 @@ function Mesa() {
 
           Hoy no carga nada de nadie: es un hueco medido. El porqué completo
           está en el propio componente. */}
-      <EspacioAnuncio donde="mesa" className="relative z-30 border-t border-crema/10 bg-[#0d0906]" />
+      <EspacioAnuncio
+        donde="mesa"
+        className="relative z-30 border-t border-crema/10 bg-[#0d0906]"
+      />
 
       {p.fase !== "jugando" && carteleada && !eligiendo && (
         <Cartel
           partida={p}
           rival={rival}
           desdeLaGira={esHistoria}
+          premio={premio}
           onSeguir={() => {
             anotada.current = null;
-            repartirNueva(p.fase === "partida-terminada" ? nuevaPartida() : siguienteMano(p));
+            repartirNueva(
+              p.fase === "partida-terminada"
+                ? nuevaPartida()
+                : siguienteMano(p),
+            );
           }}
           onCambiarRival={() => setEligiendo(true)}
         />
@@ -1488,7 +1655,6 @@ function Mesa() {
             setRivalElegido(nuevo);
             guardarPreferencia("ultimoRival", nuevo.id);
             anotada.current = null;
-            ultimoVerso.current = undefined;
             repartirNueva(nuevaPartida());
             setEligiendo(false);
           }}
@@ -1525,7 +1691,15 @@ function Mesa() {
  * canto lejano, que es de donde vendría si la tuviera abajo de la mesa —que es
  * exactamente donde la tiene—.
  */
-function CartaApoyada({ carta, de, ancho }: { carta: CartaType; de: Jugador; ancho: string }) {
+function CartaApoyada({
+  carta,
+  de,
+  ancho,
+}: {
+  carta: CartaType;
+  de: Jugador;
+  ancho: string;
+}) {
   return (
     <div
       className="carta-apoyada relative"
@@ -1618,7 +1792,9 @@ function CartaEnMano({
       onClick={onClick}
       disabled={!habilitada}
       aria-label={
-        tapada ? "Carta boca abajo, repartiendo" : `Tirar el ${carta.numero} de ${carta.palo}`
+        tapada
+          ? "Carta boca abajo, repartiendo"
+          : `Tirar el ${carta.numero} de ${carta.palo}`
       }
       // El apagado de "no es tu turno" NO va acá: va en el grupo entero de la
       // mano (ver más arriba). Una carta translúcida deja ver el dorso de tu
@@ -1771,6 +1947,7 @@ function Cartel({
   partida,
   rival,
   desdeLaGira,
+  premio,
   onSeguir,
   onCambiarRival,
 }: {
@@ -1778,6 +1955,14 @@ function Cartel({
   rival: Personalidad;
   /** Si llegaste desde el mapa, al terminar te ofrece volver ahí. */
   desdeLaGira: boolean;
+  /**
+   * El objeto del departamento, si acabás de ganarlo.
+   *
+   * Viene con algo SÓLO la primera vez que le ganás a ese rival, y sólo en la
+   * gira: quién decide eso está en el efecto que anota la partida. Acá se
+   * dibuja y nada más.
+   */
+  premio: ClaveObjeto | null;
   onSeguir: () => void;
   onCambiarRival: () => void;
 }) {
@@ -1800,10 +1985,37 @@ function Cartel({
           {partida.puntos.vos} — {partida.puntos.rival}
         </p>
 
+        {/* ─── EL PREMIO DEL DEPARTAMENTO ────────────────────────────────
+            Va ADENTRO de este cartel y no en uno propio: son dos noticias del
+            mismo momento —ganaste y te llevás esto— y dos carteles seguidos
+            son dos cosas montándose y desmontándose encima de la mesa, que es
+            justo la familia de problemas que este proyecto viene apagando.
+
+            El objeto se dibuja igual que en la vitrina: caja de alto fijo con
+            su `PROPORCION`, sin `ALTURA` ni `APOYO`. Ésos dos son para cuando
+            está apoyado sobre la madera y acá no lo está — el porqué está
+            escrito en `components/Trofeos.tsx`. */}
+        {premio && (
+          <div className="mt-5 flex items-center justify-center gap-3 border-y border-tinta/15 py-3">
+            <div className="shrink-0" style={{ height: "2.6rem", aspectRatio: PROPORCION[premio] }}>
+              <ObjetoDeMesa objeto={premio} />
+            </div>
+            <p className="text-left font-[family-name:var(--font-ui)] text-[11px] uppercase leading-snug tracking-wide text-bordo">
+              Ganaste el premio
+              <br />
+              de {rival.departamento}
+            </p>
+          </div>
+        )}
+
         <div className="mt-5 space-y-0.5 text-left text-sm text-tinta/70">
           {partida.eventos.slice(-4).map((e, i) => (
             <p key={i}>
-              {e.quien === "sistema" ? "· " : e.quien === "vos" ? "Vos: " : "Él: "}
+              {e.quien === "sistema"
+                ? "· "
+                : e.quien === "vos"
+                  ? "Vos: "
+                  : "Él: "}
               {e.texto}
             </p>
           ))}

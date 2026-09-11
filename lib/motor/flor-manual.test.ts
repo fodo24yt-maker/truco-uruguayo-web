@@ -313,7 +313,41 @@ test("ANTI-FILTRACIÓN: no se muestra la flor de quien no la cantó", () => {
   p = aplicar(p, { tipo: "flor" }, "rival");
 
   const registro = p.eventos.map((e) => e.texto).join(" | ");
-  assert.ok(registro.includes("Flor: 47"), "la flor cantada sí se muestra");
   assert.ok(!registro.includes("Flor: 36"), `se filtró tu flor sin cantar: ${registro}`);
   assert.equal(p.puntos.rival, 3);
+});
+
+/* ── QUÉ FLOR SE CANTA EN VOZ ALTA, Y CUÁL SE ENSEÑA RECIÉN AL FINAL ────────
+   Cambió el 10/9/2026. El número se dice sólo cuando hubo que COMPARAR dos
+   flores; si la flor se cobró sola o el otro se achicó, no hay nada que contar
+   y no se dice nada. Ver el comentario de `revelarFlores` en partida.ts.
+
+   Los dos casos van juntos en el mismo test a propósito: separados, cualquiera
+   de los dos pasaría con un `revelarFlores` que no haga nada nunca. */
+test("la flor que se cobra sola no canta su número; la disputada sí", () => {
+  // A) SE COBRA SOLA: vos no tenés flor, el rival canta la suya y cobra 3.
+  let sola = mesa(["3C", "5E", "7O"], FLOR_RIVAL, "3B", "vos");
+  assert.equal(sola.flor.vos.tiene, false);
+  assert.equal(sola.flor.rival.valor, 47);
+  sola = aplicar(sola, { tipo: "jugar", carta: c("3C") }, "vos");
+  sola = aplicar(sola, { tipo: "flor" }, "rival");
+
+  const registroSola = sola.eventos.map((e) => e.texto).join(" | ");
+  assert.ok(registroSola.includes("¡Flor!"), `tiene que cantarla: ${registroSola}`);
+  assert.ok(
+    !registroSola.includes("Flor: 47"),
+    `nadie se la discutió, así que no canta el número: ${registroSola}`,
+  );
+  assert.equal(sola.puntos.rival, 3);
+
+  // B) SE COMPARAN: los dos cantan flor, hay que contar, y los dos números
+  //    salen en voz alta.
+  let dos = mesa(FLOR_VOS, FLOR_RIVAL, "3B", "rival");
+  dos = aplicar(dos, { tipo: "flor" }, "rival");
+  dos = aplicar(dos, { tipo: "flor" }, "vos");
+
+  const registroDos = dos.eventos.map((e) => e.texto).join(" | ");
+  assert.ok(registroDos.includes("Flor: 47"), `falta la del rival: ${registroDos}`);
+  assert.ok(registroDos.includes("Flor: 36"), `falta la tuya: ${registroDos}`);
+  assert.equal(dos.puntos.rival, 3, "la más alta se lleva los 3");
 });

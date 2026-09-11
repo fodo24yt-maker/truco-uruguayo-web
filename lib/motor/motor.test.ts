@@ -12,10 +12,11 @@ import {
   type Palo,
   esPieza,
   fuerza,
+  indice,
   piezaQueRepresenta,
   valorPieza,
 } from "./baraja.ts";
-import { analizarFlor, valorEnvido, valorFlor } from "./tantos.ts";
+import { analizarFlor, cartasDelEnvido, valorEnvido, valorFlor } from "./tantos.ts";
 
 /** "7C" -> siete de copa, "10B" -> sota de basto */
 function c(txt: string): Carta {
@@ -58,6 +59,72 @@ test("envido: los ocho ejemplos de reglas 9.2", () => {
   assert.equal(valorEnvido(mano("10B", "12E", "12C"), m), 27);
   assert.equal(valorEnvido(mano("1E", "7O", "4C"), m), 7);
   assert.equal(valorEnvido(mano("12E", "11O", "10C"), m), 0);
+});
+
+/* ── CON QUÉ CARTAS SE CUENTA, QUE ES LO QUE SE DIBUJA AL CERRAR LA MANO ────
+   `cartasDelEnvido` existe desde el 10/9/2026 porque el recuadro del final de
+   la mano resalta las cartas que suman. Se prueban las tres cosas que pueden
+   salir mal por separado: CUÁNTAS devuelve, CUÁLES, y —la que de verdad
+   importa— que sean siempre las que dan el número. */
+test("cartasDelEnvido: los tres casos, con cuántas y cuáles", () => {
+  const m = c("3B");
+  const txt = (cartas: readonly Carta[]) =>
+    cartas.map((x) => `${x.numero}${x.palo[0].toUpperCase()}`).join("+");
+
+  // A) con pieza: la pieza y la más alta de las otras dos, sin mirar el palo.
+  //    (el 4 de basto es pieza porque la muestra es de basto)
+  assert.equal(txt(cartasDelEnvido(mano("4B", "1E", "10C"), m)), "4B+1E");
+  // y con DOS piezas, la segunda entra por su número pelado
+  assert.equal(txt(cartasDelEnvido(mano("2B", "7O", "12C"), m)), "2B+7O");
+
+  // B) dos del mismo palo: las dos que más suman, no las dos primeras
+  assert.equal(txt(cartasDelEnvido(mano("7C", "6C", "12E"), m)), "7C+6C");
+  assert.equal(txt(cartasDelEnvido(mano("12O", "7O", "3E"), m)), "12O+7O");
+
+  // C) tres palos distintos: UNA SOLA carta, la más alta
+  const sola = cartasDelEnvido(mano("1E", "7O", "4C"), m);
+  assert.equal(sola.length, 1, "con tres palos distintos se cuenta una sola");
+  assert.equal(txt(sola), "7O");
+  // y con tres figuras, que valen 0, sigue siendo una sola
+  assert.equal(cartasDelEnvido(mano("12E", "11O", "10C"), m).length, 1);
+});
+
+/* Este es el que sostiene a los otros: sin él, `cartasDelEnvido` podría
+   devolver cualquier par y las pruebas de arriba seguirían pasando mientras el
+   número, que sale de otro lado, diera bien. Recorre la baraja entera. */
+test("las cartas del envido son SIEMPRE las que dan el número", () => {
+  for (const muestra of BARAJA) {
+    for (let i = 0; i < BARAJA.length; i += 7) {
+      for (let j = i + 1; j < BARAJA.length; j += 11) {
+        for (let k = j + 1; k < BARAJA.length; k += 13) {
+          const tres = [BARAJA[i], BARAJA[j], BARAJA[k]];
+          const elegidas = cartasDelEnvido(tres, muestra);
+          const nombre = `${tres.map((x) => `${x.numero}${x.palo[0]}`).join(",")} con muestra ${muestra.numero}${muestra.palo[0]}`;
+
+          // todas salen de la mano, ninguna repetida
+          assert.equal(new Set(elegidas).size, elegidas.length, `repetida en ${nombre}`);
+          for (const x of elegidas) assert.ok(tres.includes(x), `carta ajena en ${nombre}`);
+
+          /* Y suman exactamente el tanto. La cuenta se rehace ACÁ, escrita
+             de nuevo desde reglas 9.2, para no preguntarle a la misma función
+             que estamos probando. */
+          const suma =
+            elegidas.length === 1
+              ? indice(elegidas[0])
+              : esPieza(elegidas[0], muestra)
+                ? valorPieza(elegidas[0], muestra) + indice(elegidas[1])
+                : 20 + indice(elegidas[0]) + indice(elegidas[1]);
+          assert.equal(suma, valorEnvido(tres, muestra), `no cuadra en ${nombre}`);
+
+          // con pieza, la pieza va PRIMERA: de eso depende la cuenta de arriba
+          // y también la que hace `sumarEnvido` adentro de tantos.ts
+          if (elegidas.length === 2 && esPieza(elegidas[1], muestra)) {
+            assert.ok(esPieza(elegidas[0], muestra), `pieza en segundo lugar en ${nombre}`);
+          }
+        }
+      }
+    }
+  }
 });
 
 test("la muestra es pieza: el 12 la reemplaza (reglas 4.3)", () => {

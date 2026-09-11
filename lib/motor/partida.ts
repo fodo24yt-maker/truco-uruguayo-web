@@ -250,12 +250,23 @@ function compararFlores(p: Partida): Jugador {
 }
 
 /**
- * Muestra en el registro los tantos de flor, recién cuando se resuelve.
+ * Canta en voz alta los tantos de flor. SÓLO los de quien la cantó: mostrar la
+ * del que se la guardó sería contar una carta que nadie puso sobre la mesa.
  *
- * SÓLO los de quien la cantó. Mostrar la del que se la guardó —o la del que se
- * achicó sin enseñarla— sería contar una carta que nadie puso sobre la mesa: en
- * la mesa de verdad, la flor que no se canta no se ve, y saber que el otro
- * tenía 41 te dice que le quedan tres cartas buenas.
+ * ── SÓLO SE LLAMA CUANDO HUBO QUE COMPARAR, DESDE EL 10/9/2026 ────────────
+ *
+ * Antes se llamaba en los cuatro caminos por los que se resuelve una flor, y
+ * entonces una flor que se cobraba sola igual cantaba su número. Santiago lo
+ * sacó: si nadie te la discutió, no hay nada que contar en voz alta, y decir
+ * "Flor: 39" era repetir en la mesa algo que nadie preguntó.
+ *
+ * Quedan los dos caminos donde SÍ hace falta el número, que son los dos en los
+ * que se comparan dos flores: `resolverFlorASecas` (los dos la cantaron) y el
+ * "quiero" de una contraflor o de un con flor envido.
+ *
+ * Los otros dos —la flor que se cobra sola y la contraflor que no se quiso— no
+ * cantan nada. El número se ve igual, pero al CERRARSE LA MANO, en el recuadro
+ * que arma `lib/tantos-al-cierre.ts`: la flor cantada siempre se enseña.
  */
 function revelarFlores(p: Partida) {
   for (const quien of ["vos", "rival"] as Jugador[]) {
@@ -607,8 +618,9 @@ function cantarFlor(p: Partida, quien: Jugador, canto: CantoFlor | null): Partid
     (p.flor[rival].tiene && !p.florCantada[rival] && !p.yaHablo[rival] && p.bazas.length === 1);
 
   if (!rivalPuedeContestar) {
-    // Nadie con quién discutirla: se cobran los 3 y se sigue jugando.
-    revelarFlores(p);
+    /* Nadie con quién discutirla: se cobran los 3 y se sigue jugando. Y NO se
+       canta el número, porque no hubo nada que comparar; se enseña al cerrarse
+       la mano. Ver el comentario de `revelarFlores`. */
     p.florResuelta = true;
     sumar(p, quien, 3, { vos: "Cobrás la flor", el: "cobra la flor" });
     return seguirDespuesDeApuesta(p);
@@ -723,7 +735,8 @@ function responderNoQuiero(p: Partida, quien: Jugador): Partida {
   }
 
   if (pendiente.tipo === "flor") {
-    revelarFlores(p);
+    /* Se achicó, así que tampoco acá se comparó nada y no se canta ningún
+       número. Ver el comentario de `revelarFlores`. */
     p.florResuelta = true;
     // Se cobra lo que estaba en juego antes del canto rechazado (reglas 8.5):
     // 3 si venía sólo de la flor, 6 si venía de un "con flor envido" ya en pie.

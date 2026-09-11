@@ -121,6 +121,47 @@ body {
   );
 }
 
+/* Las vetas de la tabla, para poner ENCIMA de `.tabla-mesa`.
+   Existe desde el 10/9/2026, para la portada: `.tabla-mesa` sola es un degradé
+   radial y se veía como un degradé, no como madera. La mesa de la partida no
+   la necesita porque ahí las vetas vienen horneadas adentro del `.webp` que
+   hace `generar-escena.mjs`; acá no hay imagen que las traiga.
+
+   Son tres `repeating-linear-gradient` en el mismo `background-image`, o sea
+   UNA sola capa de pintura y ni una superficie de composición más:
+
+     · dos de 90deg con períodos primos entre sí (37 y 91 px) para que las
+       tablas no caigan siempre en el mismo lugar y no se lea la repetición;
+     · uno de 88deg, apenas torcido, que es el grano de la madera cruzando.
+
+   Todo por debajo del 4% de opacidad: a más se ve el rayado y deja de ser
+   madera para ser una tela. */
+.vetas-madera {
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 240, 214, 0.028) 0px,
+      rgba(255, 240, 214, 0.028) 1px,
+      transparent 1px,
+      transparent 37px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(12, 7, 3, 0.05) 0px,
+      rgba(12, 7, 3, 0.05) 2px,
+      transparent 2px,
+      transparent 91px
+    ),
+    repeating-linear-gradient(
+      88deg,
+      rgba(12, 7, 3, 0.035) 0px,
+      rgba(12, 7, 3, 0.035) 1px,
+      transparent 1px,
+      transparent 13px
+    ),
+    radial-gradient(ellipse 66% 54% at 50% 34%, #a97341 0%, #8a5c33 22%, #63401f 45%, #3a2411 72%, #1d1108 100%);
+}
+
 /* ── LA ESCENA ES LA UNIDAD DE MEDIDA, DESDE EL 5/9/2026 ───────────────────
    Todo lo apoyado en la mesa medía en `vh`, o sea contra la VENTANA, pero vive
    adentro de la ESCENA, que es lo que queda después de la barra de arriba, la
@@ -359,9 +400,26 @@ footer {
    Va atado a `.pantalla-fija` y no a todas las cartas del sitio porque acá es
    donde está medido. La mesa ya tiene lo suyo (`.escena > *`, arriba) y las
    cartas de las lecciones no dieron problema nunca. */
-.pantalla-fija .carta {
+.pantalla-fija .carta,
+.pantalla-fija .marca {
   opacity: 0.999;
 }
+
+/* ── `.marca` ENTRÓ EL 10/9/2026, Y NO ESTÁ MEDIDA ─────────────────────────
+   Se dice porque este proyecto ya se equivocó dos veces atribuyéndole méritos
+   a cambios que la medición no le dio.
+
+   Lo que SÍ está medido es todo lo de arriba: que en una `.pantalla-fija` un
+   dibujo grande que aparece al cambiar de escena vuelve con pedazos de la
+   pantalla anterior, y que una `opacity` menor que 1 lo cura porque obliga a
+   Chromium a usar un búfer propio.
+
+   El logo de la portada es exactamente eso —un SVG grande, en una pantalla
+   fija, y encima en LA pantalla que el 10/9 quedó identificada como origen del
+   color de la basura ("viniendo de la portada la basura sale marrón")—, así
+   que entra a la regla por analogía y de entrada, en vez de esperar a que
+   Santiago lo vea roto en el teléfono. Si algún día se mide y resulta inerte
+   acá, se saca: una regla que no hace nada es deuda. */
 
 /* Cada departamento del mapa de la gira. Al pasar por encima se aclara apenas:
    alcanza para saber cuál vas a tocar, sin que el mapa parpadee.

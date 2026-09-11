@@ -8,6 +8,12 @@
  * la flor: +3", que aparecía y lo pisaba el canto siguiente, y desde tu silla
  * parecía que el juego te había sacado el botón de envido de la nada—.
  *
+ * EL GLOBO DEL VERSO YA NO EXISTE, DESDE EL 10/9/2026. Los rivales cantaban con
+ * coplas de payada de ★3 para arriba; se fueron todas, junto con `versos.ts`.
+ * Ahora todos cantan pelado —"¡Truco!", "¡Envido!"— y eso sale por `eventos`
+ * como cualquier otra cosa que pase en la mesa. El hueco de acá quedó igual: lo
+ * que se sacó fue una de las formas que sabía tomar, no la franja.
+ *
  * Ahora son franjas PROPIAS, con alto reservado fijo. No se superponen con nada
  * porque no flotan: ocupan su lugar en la columna.
  *
@@ -24,72 +30,45 @@
  * Lo del sistema —"gana el rival la baza"— va arriba y no abajo a propósito: no
  * lo dice nadie, es la mesa narrando, y arriba es donde está el hueco grande.
  *
- * ── TRES FORMAS Y UN SOLO HUECO ───────────────────────────────────────────
+ * ── Y LOS TANTOS TAMPOCO ESTÁN ACÁ, DESDE EL 10/9/2026 ────────────────────
  *
- * Cada zona sabe mostrar tres cosas: el globo del verso, el registro de lo que
- * pasó, y —al cerrarse la mano— los tantos que se cantaron.
+ * Hubo un tercer inquilino en este hueco: el papel de "acá está mi envido", que
+ * se turnaba con el registro al cerrarse la mano. Se fue con el rediseño: ahora
+ * las cartas se apoyan sobre la mesa (`lib/cartas-en-mesa.ts`) y los dos tantos
+ * en número cuelgan del medallón, arriba de esta franja
+ * (`components/mesa/Tantos.tsx`).
  *
- * Las tres van en el MISMO hueco, y eso no es ahorro de código: es lo que
- * impide que se solapen. La columna del medallón es `absolute` y crece hacia
- * abajo, y justo abajo está la libreta, que en la compu cae de este mismo lado
- * cuando el mazo está a la izquierda. Un cuarto elemento colgado abajo la
- * empujaría contra el papel. Turnándose en el hueco que ya tiene el alto
- * reservado, la mesa no se mueve ni un píxel.
+ * Cada zona muestra UNA sola cosa: el registro de lo que pasó. El alto sigue
+ * reservado igual, que es lo que impide que la mesa salte cuando alguien abre
+ * la boca.
  */
 
 import type { Evento } from "@/lib/motor/partida";
-import type { TantoMostrado } from "@/lib/tantos-al-cierre";
-
-/**
- * La puntita del papel, la que dice de quién es lo que está escrito.
- *
- * Apunta SIEMPRE a quien habla: arriba, al medallón del rival; abajo, a tus
- * cartas. Es medio cuadrado girado 45°, o sea el mismo truco de siempre, y va
- * pegado al mismo borde en las dos para que se lea como el mismo objeto.
- */
-function Puntita({ abajo = false }: { abajo?: boolean }) {
-  return (
-    <span
-      className={`absolute h-[11px] w-[11px] rotate-45 ${abajo ? "bottom-[-5px] left-6" : "right-6 top-[-5px]"}`}
-      style={{ background: "var(--color-papel)" }}
-    />
-  );
-}
 
 export function DialogoRival({
-  lineas,
-  canto,
   eventos,
-  tantos,
-  onCerrarVerso,
+  compacto = false,
 }: {
-  /** Los renglones de la copla, si el rival está verseando. */
-  lineas?: readonly string[];
-  /** El canto en limpio, abajo de la copla: es lo que hay que contestar. */
-  canto?: string;
   /** Lo último que pasó en la mesa, del más viejo al más nuevo. */
   eventos: readonly Evento[];
   /**
-   * Lo que se enseña al cerrarse la mano, si quedó algo sin ver.
+   * Sólo la última línea, sin el registro apagado de atrás.
    *
-   * Viene vacío casi siempre: sólo trae algo cuando la mano se cortó antes de
-   * jugarse las seis cartas Y hubo un tanto cantado. Lo decide
-   * `lib/tantos-al-cierre.ts`, que es donde vive la regla.
+   * Se prende cuando hay cartas enseñadas sobre la mesa. No es estética: en una
+   * pantalla baja las tres líneas de esta franja bajan hasta la altura de las
+   * bazas y se pisan con el rótulo "FLOR EN MESA". Se vio en la captura de
+   * 320x568, no leyendo el código.
+   *
+   * Y no se pierde nada: cuando la mano se cerró, las líneas viejas ya las
+   * leíste, y el cartel de fin de mano vuelve a decir el resultado dos segundos
+   * después.
    */
-  tantos?: readonly TantoMostrado[];
-  onCerrarVerso: () => void;
+  compacto?: boolean;
 }) {
-  const versea = lineas !== undefined && lineas.length > 0;
   /* Los tuyos no: ésos los muestra `DialogoMio`. Lo del sistema sí, que es la
      mesa narrando y no tiene silla. */
   const suyos = eventos.filter((e) => e.quien !== "vos");
-  const deEl = tantos?.filter((t) => t.quien === "rival") ?? [];
-  /* GANA A LAS OTRAS DOS. Cuando la mano se cerró, el registro ya no importa
-     —sus últimas líneas son las mismas que este cartel dice mejor— y un globo
-     de verso colgado de un canto anterior quedaría hablando de una mano que ya
-     terminó. */
-  const enseña = deEl.length > 0;
-  const ultimos = suyos.slice(-3);
+  const ultimos = suyos.slice(compacto ? -1 : -3);
   const ultimo = ultimos[ultimos.length - 1];
   const previos = ultimos.slice(0, -1);
 
@@ -105,54 +84,30 @@ export function DialogoRival({
           otro `80%` los dos se multiplicaban y el globo quedaba tan angosto que
           "Ganás la baza" salía cortado en "Ganás la…". */}
       <div className="w-full">
-        {enseña ? (
-          <TantosEnseñados tantos={deEl} />
-        ) : versea ? (
-          <button
-            onClick={onCerrarVerso}
-            className="papel anim-pop relative w-full rounded-sm px-3 py-2 text-center shadow-2xl shadow-black/80"
-          >
-            <Puntita />
-            {lineas.map((linea, i) => (
-              <span
-                key={i}
-                className="block font-[family-name:var(--font-mano)] text-[14px] leading-[1.35] text-tinta sm:text-[16px]"
-              >
-                {linea}
-              </span>
-            ))}
-            {canto && (
-              <span className="mt-1.5 block border-t border-tinta/15 pt-1 font-[family-name:var(--font-ui)] text-[11px] uppercase tracking-wide text-bordo">
-                {canto}
-              </span>
-            )}
-          </button>
-        ) : (
-          <div className="text-right">
-            {/* lo de antes, apagado: queda como registro sin robar atención */}
-            {previos.map((e, i) => (
-              <p
-                key={`${suyos.length}-${i}`}
-                className="truncate font-[family-name:var(--font-ui)] text-[10px] uppercase leading-snug tracking-wide text-crema/40 [text-shadow:0_1px_2px_rgba(0,0,0,0.9)]"
-              >
-                {e.quien === "sistema" ? "" : "Él: "}
-                {e.texto}
-              </p>
-            ))}
-            {ultimo && (
-              <p
-                key={suyos.length}
-                className={`anim-pop mt-0.5 inline-block max-w-full truncate rounded-full px-3 py-1 font-[family-name:var(--font-ui)] text-[13px] uppercase tracking-wide sm:text-sm ${
-                  ultimo.quien === "sistema"
-                    ? "text-crema/80 [text-shadow:0_2px_3px_rgba(0,0,0,0.95)]"
-                    : "bg-crema text-tinta shadow-lg shadow-black/60"
-                }`}
-              >
-                {ultimo.texto}
-              </p>
-            )}
-          </div>
-        )}
+        <div className="text-right">
+          {/* lo de antes, apagado: queda como registro sin robar atención */}
+          {previos.map((e, i) => (
+            <p
+              key={`${suyos.length}-${i}`}
+              className="truncate font-[family-name:var(--font-ui)] text-[10px] uppercase leading-snug tracking-wide text-crema/40 [text-shadow:0_1px_2px_rgba(0,0,0,0.9)]"
+            >
+              {e.quien === "sistema" ? "" : "Él: "}
+              {e.texto}
+            </p>
+          ))}
+          {ultimo && (
+            <p
+              key={suyos.length}
+              className={`anim-pop mt-0.5 inline-block max-w-full truncate rounded-full px-3 py-1 font-[family-name:var(--font-ui)] text-[13px] uppercase tracking-wide sm:text-sm ${
+                ultimo.quien === "sistema"
+                  ? "text-crema/80 [text-shadow:0_2px_3px_rgba(0,0,0,0.95)]"
+                  : "bg-crema text-tinta shadow-lg shadow-black/60"
+              }`}
+            >
+              {ultimo.texto}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -164,24 +119,15 @@ export function DialogoRival({
  * ── Por qué es más chica que la de él ─────────────────────────────────────
  *
  * Porque el hueco de arriba es aire —arriba del rival no hay nada que mirar— y
- * el de acá se lo saca a tus cartas. Así que reserva un renglón, que es lo que
- * ocupa un canto ("¡Quiero!", "33", "Me voy al mazo"), y el papel de los tantos
- * —que es más alto y aparece dos segundos al cerrarse la mano— crece HACIA
- * ARRIBA en `absolute`, sobre la madera, sin empujar la mano ni un píxel.
+ * el de acá se lo saca a tus cartas. Así que reserva UN renglón, que es lo que
+ * ocupa un canto ("¡Quiero!", "33", "Me voy al mazo"), y nada más.
  *
  * Y no lleva verso: el verso lo canta el rival, nunca vos. Si algún día versea
  * el jugador, va acá y este comentario se borra.
  */
-export function DialogoMio({
-  eventos,
-  tantos,
-}: {
-  eventos: readonly Evento[];
-  tantos?: readonly TantoMostrado[];
-}) {
+export function DialogoMio({ eventos }: { eventos: readonly Evento[] }) {
   const mios = eventos.filter((e) => e.quien === "vos");
   const ultimo = mios[mios.length - 1];
-  const tantosMios = tantos?.filter((t) => t.quien === "vos") ?? [];
 
   return (
     <div
@@ -192,105 +138,14 @@ export function DialogoMio({
       role="status"
       aria-live="polite"
     >
-      {tantosMios.length > 0 ? (
-        /* Al contenido y no al 78% como el de arriba: acá va UN número —el
-           tuyo— y un papel del ancho de la pantalla para decir "39" se lee como
-           un cartel, no como una carta que estás enseñando. El `min-w` es para
-           que el título entre en una línea. */
-        <div className="absolute bottom-0 left-1.5 w-fit min-w-[168px] max-w-[min(78%,340px)]">
-          <TantosEnseñados tantos={tantosMios} puntaAbajo />
-        </div>
-      ) : (
-        ultimo && (
-          <p
-            key={mios.length}
-            className="anim-pop inline-block max-w-full truncate rounded-full bg-crema px-3 py-1 font-[family-name:var(--font-ui)] text-[13px] uppercase tracking-wide text-tinta shadow-lg shadow-black/60 sm:text-sm"
-          >
-            {ultimo.texto}
-          </p>
-        )
+      {ultimo && (
+        <p
+          key={mios.length}
+          className="anim-pop inline-block max-w-full truncate rounded-full bg-crema px-3 py-1 font-[family-name:var(--font-ui)] text-[13px] uppercase tracking-wide text-tinta shadow-lg shadow-black/60 sm:text-sm"
+        >
+          {ultimo.texto}
+        </p>
       )}
-    </div>
-  );
-}
-
-/**
- * "Acá está mi envido": lo que se enseña cuando la mano se cortó antes.
- *
- * ── Por qué es un papel y no una línea más del registro ───────────────────
- *
- * Porque es un gesto de la mesa, no una anotación. El que ganó el envido da
- * vuelta las cartas y las apoya, y el otro mira. El mismo `papel` del globo del
- * verso —que es el otro momento en que alguien ENSEÑA algo— con la puntita
- * apuntando a quien lo está enseñando.
- *
- * ── Va uno por dueño, y por eso el título no cambia ───────────────────────
- *
- * Antes era un papel solo con los dos números adentro, colgado del medallón del
- * rival: o sea que tu propio envido te lo enseñaba él. Ahora cada uno enseña lo
- * suyo desde su lado, y el título sigue diciendo "Acá está mi envido" en los dos
- * porque cada papel está en la voz de su dueño.
- *
- * ── Los números van en la manuscrita, y el nombre no ──────────────────────
- *
- * Es la misma división que hace la libreta: lo escrito a mano es el número, y
- * la etiqueta va en la de siempre. Un tanto es algo que alguien anotó.
- *
- * ── El ancho ──────────────────────────────────────────────────────────────
- *
- * El peor caso es la franja a su mínimo: 78% de 320px, o sea ~250px. Las
- * columnas van en un `grid` de fracciones iguales y no en un `flex` con
- * `justify-between`: con `flex` se separan hasta los bordes y la fila se lee
- * como dos cosas sueltas.
- */
-function TantosEnseñados({
-  tantos,
-  puntaAbajo = false,
-}: {
-  tantos: readonly TantoMostrado[];
-  puntaAbajo?: boolean;
-}) {
-  /* Nunca aparecen las dos clases juntas —la flor anula el envido— pero la
-     lista puede traer las dos flores si los dos la cantaron. Se agrupa por
-     clase para que el título se escriba una sola vez. */
-  const clase = tantos[0].clase;
-  const titulo = clase === "flor" ? "Acá está mi flor" : "Acá está mi envido";
-
-  return (
-    <div
-      /* El agarre con el que `mirar-web.mjs` mide el rectángulo REAL del cartel
-         en el navegador y verifica que no se le monte a la libreta ni se salga
-         de la escena. Mismo papel que cumplen los `data-mesa`. */
-      data-tantos={clase}
-      className="papel anim-pop relative w-full rounded-sm px-3 py-2 shadow-2xl shadow-black/80"
-    >
-      <Puntita abajo={puntaAbajo} />
-      <p className="text-center font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-[0.14em] text-tinta/60">
-        {titulo}
-      </p>
-      <div
-        className="mt-0.5 grid gap-1"
-        style={{ gridTemplateColumns: `repeat(${tantos.length}, minmax(0, 1fr))` }}
-      >
-        {tantos.map((t) => (
-          <p key={`${t.clase}-${t.quien}`} className="flex items-baseline justify-center gap-1.5">
-            <span
-              className={`font-[family-name:var(--font-ui)] text-[11px] uppercase tracking-wide ${
-                t.gano ? "text-tinta/70" : "text-tinta/40"
-              }`}
-            >
-              {t.quien === "vos" ? "Yo" : "Él"}
-            </span>
-            <span
-              className={`font-[family-name:var(--font-mano)] leading-none ${
-                t.gano ? "text-[26px] text-bordo" : "text-[22px] text-tinta/45"
-              }`}
-            >
-              {t.valor}
-            </span>
-          </p>
-        ))}
-      </div>
     </div>
   );
 }

@@ -12,6 +12,537 @@
 
 ---
 
+## 2026-09-10 (noche) — El sonido: primero la lista de lo que hay que grabar, después las barras
+
+Sesión corta y de las que no se ven: **el juego sigue mudo al terminarla**. Lo
+que se hizo fue lo de antes de grabar —decidir cuántos archivos son, cómo se
+llama cada uno y dónde va— más los ajustes, que ahora guardan de verdad.
+
+El orden lo pidió Santiago y es el correcto: las voces las van a poner él y unos
+amigos, o sea que grabar es juntar gente una tarde. Lo peor que puede pasar es
+llegar a esa tarde sin la lista y tener que volver a juntarla porque faltaban
+dos.
+
+### LO QUE QUEDÓ
+
+- **`ideas/sonido.md`**, que es el entregable de verdad: las cuatro tablas de
+  qué grabar, con la de los 19 rivales pensada para ir tachando.
+- **`lib/sonido.ts` + su test**: los volúmenes, en `localStorage`.
+- **El panel del engranaje** ya no dice "Próximamente": tiene el interruptor de
+  silenciar y cuatro barras (General, Música, Voces, Efectos).
+- **`mirar-web.mjs`** los vigila, y `.gitignore` tiene su sección de audio.
+
+### LAS CUENTAS: 292 ARCHIVOS
+
+**266 voces** (14 cantos × 19 rivales), **9 músicas** y **17 efectos**.
+
+Los 14 cantos salen uno por uno de `partida.ts`, que es el único lugar donde se
+arma una línea hablada, así que **la lista está cerrada**: no hay ninguna otra
+frase que un rival pueda decir. Se verificó a máquina que los 19 `id` del
+documento son los mismos de `personalidades.ts` y en el mismo orden.
+
+**Tres cosas que faltaban en la lista que trajo Santiago**, y por eso se
+escriben acá:
+
+1. **`son buenas`**, que lo dice el pie cuando su tanto no le gana al del mano.
+   Se dice en casi todas las manos con envido querido.
+2. **El "no quiero" de la flor no es "no quiero"**: es **"con flor me achico"**.
+   Son dos grabaciones distintas.
+3. **"Flor en mesa" y "envido en mesa" NO son cantos.** Son los rótulos que
+   escribe el juego al cerrarse la mano (el rediseño de esta misma tarde):
+   nadie los dice. Si tienen que sonar, es un efecto.
+
+### LAS TRES DECISIONES
+
+- **Los números del tanto no se graban.** El envido va de 0 a 37 y la flor de 20
+  a 47: son 48 números, o sea **912 archivos de más** si van por personaje. Y en
+  una voz neutra compartida suena peor que no tenerlos —el canto lo dice el
+  personaje y el número, otro—. El número ya se lee en pantalla. Es la misma
+  decisión que se tomó esta tarde al borrar `versos.ts`, con el mismo motivo
+  escrito ahí: *"el día que haya voces, diecisiete coplas son diecisiete
+  grabaciones por rival"*.
+- **La música va por ambiente**: los 7 que ya existen en `lib/ambientes.ts` más
+  portada y gira. Se puede arrancar con tres sin tocar código, porque el mapa de
+  departamento a ambiente ya existe.
+- **Hoy no se escribió el motor que reproduce.** Era la otra opción y se
+  descartó a propósito: no se puede escribir bien sin el primer archivo en la
+  mano —el respaldo cuando a un rival le falta la voz, y el arranque de la
+  música, que los navegadores no dejan hasta que hubo un toque—.
+
+### DÓNDE VIVE EL VOLUMEN, QUE ES LA DECISIÓN QUE MÁS DURA
+
+**Clave propia, `truco-uy:sonido`, y NO un campo de `Progreso`.** Dos razones:
+
+1. `borrarProgreso()` es el botón de "empezar de nuevo", y que empezar la gira
+   de cero te deje además la música al 60% es un efecto que nadie pidió ni
+   relaciona con el botón que tocó;
+2. `CLAUDE.md` avisa dos veces que tocar dónde vive el progreso es de lo más caro
+   que hay acá. Una clave nueva es puramente aditiva y no puede romper una gira
+   que ya existe.
+
+`sanear()` se copió de `lib/progreso.ts` con una sola regla —entero de 0 a 100 o
+el valor de fábrica— y **se valida también al escribir, no sólo al leer**.
+
+`volumenReal()` es el único renglón de reglas que tiene el archivo: el maestro
+multiplica, el silencio manda. Se escribió hoy, con el motor sin existir,
+justamente para que el día que lleguen los tres reproductores lo consuman en vez
+de deducirlo cada uno por su lado y contradecirse.
+
+Y **silenciar no baja ningún volumen**: los deja donde estaban para que al
+desprenderlo vuelva todo como estaba. Tiene test.
+
+### EL BUG QUE ENCONTRÓ EL GUARDIÁN NUEVO, Y QUE NO SE VEÍA LEYENDO EL CÓDIGO
+
+Vale aparte porque es la razón por la que se escribe un guardián y no un
+comentario.
+
+Los volúmenes se leían en un `useEffect`, o sea que el panel **se dibujaba un
+cuadro con los valores de fábrica y recién después se corregía**. Quien tenía la
+música en 25 veía 60 al abrir, por un instante.
+
+`mirar-web.mjs` lee la barra apenas aparece el panel, sin esperar, y la encontró
+en 60 con 25 guardado. **Y la corrida anterior había pasado.** Pasó por suerte:
+el efecto le había ganado de mano. O sea que el bug estuvo dando verde una vez.
+
+El arreglo saca la carrera entera en vez de acomodarla: la lectura pasa al toque
+que abre el panel (`setSonido(leerSonido()); setAbierto(true);`). React agrupa
+las dos, así que **cuando el panel existe el estado ya es el bueno** y no hay
+nada que corregir después. Sigue sin leerse al montar, que era el motivo de
+ponerlo en un efecto: esto vive adentro de la barra, que no se desmonta nunca.
+
+Y el guardián se partió en dos, porque son dos fallas con arreglos distintos y
+un mensaje que diga sólo "no se guardó" manda a buscar al lugar equivocado:
+
+    mal ya y mal después   → no se guardó nada
+    mal ya y bien después  → se guardó, pero el panel lo muestra tarde
+
+Saboteado a propósito, ahora dice: *"el panel abre con los valores de fábrica y
+se corrige después (música 60 y a los 400ms 25): leelos AL ABRIR, no en un
+useEffect"*.
+
+### DOS VECES QUE UNA MEDICIÓN DIO "OK" SIN MEDIR NADA
+
+Es el tema recurrente de este proyecto y volvió a pasar dos veces, las dos
+agarradas antes de creerles:
+
+1. **El extractor de resultados del sabotaje no matcheaba nada.** Buscaba
+   `^# pass` y `node --test` imprime `ℹ pass`. Las seis corridas informaron una
+   línea vacía y quedaba leerlo como "ninguna falló". Ahora, si no puede leer el
+   número, dice **"NO SE PUDO MEDIR"** en vez de callarse.
+2. **El test del `Object.hasOwn` pasaba con el arreglo sacado.** Miraba lo que
+   después devolvía `leerSonido()`, y `JSON.stringify` descarta las funciones al
+   guardar: la ida y vuelta por `localStorage` tapaba el agujero y el test daba
+   verde sobre código roto. Ahora mira **lo que devuelve `guardarVolumen`**, que
+   además es el camino real —el panel hace `setSonido(guardarVolumen(...))`, así
+   que ese objeto entra derecho al estado de React—. Con el arreglo sacado ahora
+   falla con "se devolvió una función bajo constructor".
+
+### LOS SABOTAJES
+
+`lib/sonido.ts`, **seis**, y los seis se agarraron: el validador sin validar
+(3 fallas), `volumenReal` ignorando el silencio (2), silenciar pisando los
+volúmenes (1), guardar sin escribir (3), un valor de fábrica que la barra no
+puede alcanzar (1) y el maestro sin multiplicar (2).
+
+`mirar-web.mjs`, **tres a la vez** sobre el panel, y salieron once fallas: tres
+barras en vez de cuatro, la barra de 16px que no se agarra con el dedo, y el
+volumen que no sobrevive a recargar. Y una cuarta aparte, para la rama nueva:
+volver a leer los volúmenes en un efecto, que da el mensaje del "se muestra
+tarde". El guardián nuevo sirve, y además ya encontró un bug de verdad.
+
+### EL REPASO DE SEGURIDAD
+
+`security-review` sobre lo nuevo. **Ningún hallazgo HIGH ni MEDIUM**, y el
+informe vino con lo que se descartó y por qué, que es lo que lo hace auditable:
+el escape de validación (imposible, `sanear` construye un objeto nuevo con seis
+claves conocidas), XSS (no hay `dangerouslySetInnerHTML` en todo el repo) y
+terceros (el cambio no agrega un solo pedido de red).
+
+**Un retoque, y se aplicó**: `SONIDO_POR_DEFECTO[barra]` era un acceso indexado
+sin `Object.hasOwn`, o sea que con `barra = "constructor"` el "valor por
+defecto" salía siendo una **función** de la cadena de prototipos. No era
+explotable —`barra` sale siempre de `BARRAS` y TypeScript no deja otra cosa—
+pero es exactamente el agujero que `anotarPartida` ya tapó en `progreso.ts`, y
+ahí el comentario dice que *"ya mordió a este proyecto una vez"*. El patrón se
+copia, no se reinventa.
+
+**No se corrió `17-mobile-security`**: no se tocó Capacitor, ni el manifest, ni
+nada del APK. Se dice en vez de correrla por costumbre.
+
+**La CSP no hubo que tocarla, y queda escrito por qué** en `ideas/sonido.md`:
+`media-src` no está declarada y por la regla de CSP cae en `default-src 'self'`,
+así que el audio propio ya está permitido y el de terceros ya está bloqueado.
+
+### EL PESO, QUE ES LA DECISIÓN ESCONDIDA
+
+Medido contra el APK de hoy, que pesa **6,8 MB**:
+
+    266 voces (1,5 s, mono 64 kbps)   ~3,5 MB
+    17 efectos                        ~0,2 MB
+    9 músicas de 2 minutos           ~13 MB   ← el 80% del total
+    9 músicas de 40 segundos          ~4,5 MB
+
+O sea que **la música sola puede más que duplicar la app** y las voces no son el
+problema. Las tres salidas están anotadas en el documento; la buena es loops
+cortos y bien cerrados.
+
+### ESTADO AL CERRAR
+
+`npm test` **195/195** (180 + 15 de `sonido`) · `tsc` limpio ·
+`mirar-web` TODO OK en los tres tamaños, con el bloque nuevo
+"el volumen se guarda" · los dos builds OK · `out-app` sigue pesando 6,0 MB, o
+sea que las barras no le agregaron peso al sitio.
+
+Archivos tocados: `components/MenuAjustes.tsx`, `herramientas/mirar-web.mjs`,
+`.gitignore` y este archivo.
+Nuevos: `ideas/sonido.md`, `lib/sonido.ts`, `lib/sonido.test.ts`.
+
+**Sin commitear.**
+
+### PENDIENTE
+
+1. **Las historias de los 19.** Era la otra mitad del pedido de Santiago y
+   arranca después de esto: hoy `Personalidad.descripcion` es un renglón sobre
+   cómo juega y sale en `app/jugar/gira/page.tsx:198` y en
+   `app/jugar/mesa/page.tsx:2106`. Lo que se quiere es que al tocar el
+   departamento haya algo del lugar donde vive y una historia propia. **Son dos
+   campos y no uno**: `descripcion` se queda —es información de juego, "a qué
+   atenerte"— y se agrega `historia`. Mezclarlos hace que no sirva para ninguna
+   de las dos cosas. Falta decidir dónde se despliega: la ficha de la gira es
+   una franja de alto reservado y tres renglones más empujan el mapa.
+2. **Grabar `luki` primero** y probar con eso que el sistema anda, antes de
+   grabar las otras 252.
+3. Sigue lo de la tarde: mirar el cierre de mano en el Redmi, el APK con
+   `.pantalla-fija .carta`, `ALTURA`/`APOYO` de `objetos.ts` sin consumidor, las
+   cromáticas del mapa y prender AdMob.
+
+## 2026-09-10 (tarde) — Se aligera la mesa: sin versos, sin objetos, y el tanto se enseña EN LA MESA
+
+Primera sesión desde que se cerraron las manchitas que no es de bugs sino de
+diseño. El hilo de todo es uno solo y lo puso Santiago: **la pantalla se llena**.
+Se sacaron tres cosas y se cambió una cuarta por algo más chico.
+
+Es también una sesión con **dos rediseños tirados a la basura después de
+implementarlos**, y eso salió bien: se implementaron, se fotografiaron, se
+miraron y se descartaron. Costó menos que discutirlos en el aire.
+
+### 1. LOS VERSOS SE FUERON, TODOS
+
+`lib/motor/versos.ts` (306 líneas, 17 coplas) y su test (11 casos) están
+borrados. También el campo `verso` de `personalidades.ts` y su test.
+
+El archivo estaba escrito para poder sacarse —*"si sacás este archivo entero, la
+partida sigue funcionando igual"*, decía su encabezado— y era cierto: los cantos
+pelados los arma `textoCanto()` en `partida.ts` y salen por `p.eventos` a la
+chapa del diálogo. **Ahora todos los rivales cantan igual, "¡Truco!",
+"¡Envido!"**, y el globo de la copla en `Dialogo.tsx` se fue con ellos.
+
+La razón no es sólo minimalismo: el día que haya voces, diecisiete coplas son
+diecisiete grabaciones por rival.
+
+### 2. LA FLOR YA NO CANTA SU NÚMERO SI NADIE SE LA DISCUTIÓ
+
+`revelarFlores()` se llamaba en los cuatro caminos por los que se resuelve una
+flor. Ahora sólo en los dos donde **hubo que comparar dos flores**
+(`resolverFlorASecas` y el "quiero" de una contraflor o un con flor envido).
+
+Si la flor se cobró sola, o si el otro se achicó, no hay nada que contar en voz
+alta: decir "Flor: 39" era repetir en la mesa algo que nadie preguntó. El número
+se ve igual, pero al cerrarse la mano.
+
+El envido no cambia: se siguen cantando los tantos y el "Son buenas".
+
+### 3. EL TANTO SE ENSEÑA EN LA MESA. Y ANTES DE ESO, DOS RECUADROS QUE SE CAYERON
+
+Lo que se pidió primero fue reemplazar el cartel *"Acá está mi envido · 31"* por
+algo que mostrara **las cartas**. Se hicieron **dos diseños completos**, se
+eligieron por `?variante=` y se fotografiaron:
+
+- **A, el cuadro**: un recuadro arriba a la izquierda con los dos lados adentro.
+- **B, los dos papeles**: uno colgando del medallón y otro sobre tus cartas.
+
+**Santiago descartó los dos**, y con el mismo argumento: llenaban la pantalla. En
+su lugar pidió lo que se hace en la mesa de verdad — que el que tiene que
+mostrar **dé vuelta lo que le quedaba y lo apoye**.
+
+Eso es lo que quedó:
+
+    t = 0     se cierra la mano
+    t = 450   caen las cartas del que tiene que enseñar, escalonadas 90ms
+              + el rótulo "ENVIDO EN MESA" / "FLOR EN MESA"
+              + los dos tantos en número, bajo el medallón
+    t = 2000  todo al mazo
+    t = 2760  el cartel de fin de mano
+
+**No hay ningún reloj nuevo suelto**: el `setTimeout` de las cartas va en el
+MISMO `useEffect` que los otros dos, con las mismas dependencias `[p, manoNro]`
+y su `clearTimeout` en el mismo `return`. Abrir un efecto aparte es lo que haría
+que una mano rápida herede el reloj de la anterior, que es el bug que el
+comentario de `manoNro` ya evitó una vez.
+
+#### La decisión que más protege el juego: esto NO pasa por el motor
+
+`aplicar()` no se llama, `p.bazas` no se toca, los puntos no se mueven. La mano
+YA TERMINÓ y lo que se agrega es **pintura sobre una partida cerrada**.
+
+Hacerlo al revés —"tirar de verdad" las cartas que faltan— habría sido meter
+jugadas falsas en el historial de una mano ya resuelta. Acá es imposible por
+construcción: `lib/cartas-en-mesa.ts` devuelve una lista y no puede hacer nada
+más.
+
+#### Quién muestra, y las tres reglas
+
+- **La flor la enseña quien la cantó**, y si los dos la cantaron, los dos.
+- **El envido lo enseña SÓLO EL QUE LO GANÓ.** Lo eligió Santiago. El que dijo
+  "son buenas" no reveló su número, así que tampoco sus cartas; y el que perdió
+  habiendo cantado su tanto tampoco las da vuelta.
+- **Con la mano jugada entera no se apoya nada** —están las seis a la vista—
+  pero los dos tantos en número salen igual bajo el medallón.
+
+`lib/tantos-al-cierre.ts` se reescribió antes de todo esto: ahora devuelve
+`revelado`, `valor`, `cartas` y `cuentan`, y **el que no reveló llega con todo en
+`null`**, o sea que la puerta está cerrada aguas arriba y `cartas-en-mesa.ts` no
+tiene de dónde sacarlas.
+
+#### Dónde cae cada carta, que fue lo delicado
+
+`p.bazas` **no tiene siempre tres entradas**: arranca con una y se le hace `push`
+cuando la anterior se completa. Si la mano se cortó, las bazas que faltan **no
+existen**. Así que los lugares se sintetizan: primero los huecos que ya están en
+el array, después posiciones nuevas a la derecha.
+
+**Y el centro del grupo NO se recalcula.** `lugarDeBaza` centra sobre
+`bazasJugadas`: si estas cartas entraran en esa cuenta, todas las ya apoyadas se
+correrían de golpe en el mismo cuadro. "La mesa no se mueve" es exactamente lo
+que vigila `mirar-mesa-nueva.mjs` desde el 4/9. Caen al costado, que además es
+donde se apoyan de verdad.
+
+#### `cartasDelEnvido()`, que salió de deshacer una repetición
+
+Para resaltar las cartas que suman hacía falta saber cuáles son. Esa decisión
+estaba escrita **tres veces** en `lib/motor/tantos.ts`: en `valorEnvido`, en
+`explicarEnvido` y en la cabeza de quien lo leyera. Ahora se decide una sola vez
+y las otras dos se apoyan en ella, así que un número y las cartas que lo
+explican no pueden decir cosas distintas.
+
+Tiene test propio que **recorre la baraja y rehace la cuenta desde reglas 9.2**,
+sin preguntarle a la función que está probando.
+
+#### Un rótulo que se pisaba, y se vio en la captura
+
+La primera versión ponía "ENVIDO EN MESA" arriba del todo. A 320×568 se
+superponía con el registro de lo que dijo el rival, que en una pantalla baja
+ocupa toda la franja. **No se veía leyendo el código.** Dos arreglos: el rótulo
+bajó a la altura de las bazas, y `DialogoRival` gana un modo `compacto` —una sola
+línea en vez de tres— mientras hay cartas enseñadas.
+
+Y al rótulo **se le anula la escala** de `estiloEnMesa`: escalar texto chico por
+un factor fraccionario deja basura con forma de letras, que es una lección que
+este proyecto ya tenía escrita dos veces.
+
+### 4. LOS OBJETOS SE FUERON DE LA MESA, Y AHORA SON EL PREMIO
+
+Los diecinueve objetos del departamento —el vaso de Montevideo, el cajón de
+Canelones— salieron de la mesa. Santiago: ocupan espacio que la mesa necesita.
+
+**No desaparecieron**: los diecinueve siguen dibujados en
+`components/mesa/Objetos.tsx`, siguen siendo el trofeo de cada rival, y desde hoy
+**el cartel de fin de partida los entrega**: al ganarle a un rival de la gira por
+primera vez dice *"Ganaste el premio de {departamento}"* con el objeto dibujado.
+
+La primera victoria **se deduce, no se guarda**: `anotarPartida` devuelve el
+progreso ya actualizado, así que `ganadas === 1` es exactamente eso. No hace
+falta ningún campo nuevo en `localStorage`, y eso importa: tocar dónde vive el
+progreso es de lo más caro que hay en este proyecto.
+
+Va **adentro** del cartel que ya existe y no en uno propio: son dos noticias del
+mismo momento, y dos carteles seguidos son dos cosas montándose y desmontándose
+encima de la mesa.
+
+De paso se borró de `mirar-mesa-nueva.mjs` el bloque "objetos extremos de la
+gira" (63 líneas), que si no daba ocho fallas duras por "no se dibujó el objeto".
+
+### 5. LA PORTADA: TRES VARIANTES, GANÓ EL ESCUDO
+
+Santiago la describió como *"muy meh"*. Se hicieron tres con `?portada=`:
+
+1. **el escudo** — la marca arriba del nombre, sobre madera con vetas;
+2. **el cartucho** — el nombre en un marco con filete, como un cartel pintado;
+3. **el boliche** — con la textura horneada de la mesa de fondo.
+
+**Ganó la 1.** Las otras dos se borraron con el parámetro, y `app/page.tsx` volvió
+a ser un Server Component **sin un byte de JavaScript**.
+
+Dos cosas la sacaron del "meh":
+
+- **La marca** (`components/Marca.tsx`): dos cartas con el halo dorado. No es un
+  logo nuevo — es el mismo motivo que `generar-icono.mjs` hornea para el ícono de
+  Android desde el 2/9, con el aire que a 48px no había. Inventar otro habría
+  sido tener dos marcas.
+- **Las vetas** (`.vetas-madera`): `.tabla-mesa` sola es un `radial-gradient` y se
+  veía como un degradé. Tres `repeating-linear-gradient` con períodos primos
+  entre sí (37 y 91 px) en **una sola capa de pintura**.
+
+Y sigue **sin descargar una sola imagen**, que en la primera pantalla de la app
+importa más que en ninguna otra.
+
+Texto nuevo: *"Aprendé a jugar al truco uruguayo y recorré el país enfrentando a
+los mejores."* El "gratis" no se perdió: sigue en el `<title>` y en la
+`description`, que es donde lo lee Google.
+
+#### Lo que se probó y se cayó, para no reintentarlo
+
+**El fondo del boliche con `-fondo.webp` no sirve en vertical.** Mide 2000×750,
+o sea muy apaisado, y en un celular `object-cover` se queda con una franja del
+medio ampliada —justo la zona oscura—. Salía una pantalla marrón lisa. Con
+`-mesa.webp` (1400×900) sí se ve la madera. Igual perdió.
+
+### LO QUE SE MIDIÓ, Y LO QUE NO
+
+**Las capas compuestas, con control.** `capas.mjs` gana el estado del cierre de
+mano, y **el control `cierre-sin-tanto` no sobra**: al cerrarse la mano pasan
+varias cosas a la vez y sin él cualquier número se le atribuye al cambio.
+
+    cierre-sin-tanto   21 capas · 23 en total   ← el control
+    cierre-cuadro      21 capas · 23 en total   (el recuadro descartado)
+    cierre-papeles     21 capas · 23 en total   (el otro descartado)
+    cierre-con-tanto   25 capas · 27 en total   ← lo que quedó
+
+Los recuadros no promovían **nada**: listas idénticas elemento por elemento. Lo
+que quedó **sube 4, y se sabe cuáles**: cada `<CartaApoyada>` trae `anim-caer` y
+`anim-sombra`, o sea dos `ActiveTransformAnimation`. Dos cartas, cuatro capas.
+**Son las mismas que promueve cualquier carta que se tira.**
+
+Y subir no es malo por sí solo: el arreglo que APAGÓ las manchitas el 8/9 subió
+este número de 21 a 28.
+
+**Lo que NO se midió, dicho para que nadie lo lea de más: las manchitas en el
+teléfono.** Eso sólo lo contesta `rig-celular.mjs` con el Redmi enchufado, y esta
+sesión no lo tuvo. Queda como pendiente número uno.
+
+### CUATRO VECES QUE UNA MEDICIÓN DIO "OK" SIN MEDIR NADA
+
+Es el tema de la sesión, y las cuatro se descubrieron mirando en vez de creyendo:
+
+1. **El autoataque corría contra `out/`, que no existía.** `build:app` hace
+   `rm -rf out`, así que las 32 URLs daban 404 — y el guión informó **"ok"
+   dieciséis veces sobre la página de error de Python**. Ahora aborta si la
+   respuesta no viene 200.
+2. **El mismo ataque daba FALLA por coincidencia.** Buscaba el payload crudo en
+   todo el `innerHTML`, y "constructor", "prototype", "toString" y "escudo" son
+   palabras que aparecen solas en el JS de React. Ahora mira el texto visible y
+   los atributos.
+3. **`capas.mjs` midió el cierre sin `refrescar()`** y dio **0 capas nuestras y 0
+   EN TOTAL**. Cero en total es imposible: era el árbol de capas vacío, no una
+   medición. El propio archivo ya lo avisaba treinta líneas más arriba.
+4. **La prueba del premio se iba al mazo** para que la partida avanzara rápido.
+   Perdió las dos partidas, el premio no salió —lógico— y reportó "ok" las dos
+   veces. Ahora canta falta envido para ganar en una mano, y **si no se gana
+   ninguna partida, FALLA**.
+
+Y una quinta, al revés: la prueba del premio reportó **"ganó y no salió el
+premio"** sobre algo que funcionaba. `innerText` devuelve el texto ya
+transformado por el CSS, y la línea del premio va en `uppercase`. Se descubrió
+mirando la captura, donde el premio estaba en pantalla.
+
+### LOS SABOTAJES, QUE ES COMO SE LE CREE A UN GUARDIÁN
+
+Se rompió a propósito, y todos se agarraron:
+
+- **`tantos-al-cierre.ts`**, tres: filtrar las cartas del callado, volver a no
+  mostrar con la mano entera, y resaltar las tres cartas del envido. **El tercero
+  no se agarraba** —resaltar todo pasaba las 174 pruebas— y por eso se agregó la
+  aserción que cuenta cuántas se resaltan.
+- **`cartas-en-mesa.ts`**, cuatro: mostrar a cualquiera, mostrar al perdedor,
+  apoyar todo en el mismo lugar, y no mostrar nunca nada.
+- **`mirar-web.mjs`**: se le borró la función entera y el guardián **seguía en
+  verde**, imprimiendo "no se llegó a cerrar una mano" tres veces. Ahora falla si
+  no se enseñó en ninguno de los tres tamaños. Es el error del 7/9 con
+  `atajos === "Aprender·Jugar"`, otra vez.
+- **`mirar-web.mjs`** de nuevo: la comprobación nueva de "no se monta al
+  medallón" **medía el contenedor** de `w-[min(78%,340px)]`, que ocupa casi toda
+  la franja con la mitad izquierda vacía, y fallaba con el cuadro a 40px del
+  texto más cercano. Es el error que `mirar-rivales.mjs` ya cometió tres veces.
+  Ahora mide lo que realmente pinta.
+
+### EL REPASO DE SEGURIDAD
+
+`security-review` **dos veces** (una por mitad de la sesión) y `09-web-security`
+sobre la web. **No** `17-mobile-security`: no se tocó Capacitor, ni el manifest,
+ni nada del APK, y eso se dice en vez de correrla por costumbre.
+
+**Ningún hallazgo, y la invariante que importa se verificó empíricamente**, no
+leyendo: **181.380 estados** sobre 33.458 manos, llamando a `cartasEnMesa()` en
+CADA estado incluido a media mano. Se enseñaron cartas 9.876 veces, o sea que el
+camino positivo se ejercitó de verdad y no fue un pase vacío.
+
+Lo que se comprobó:
+
+- con `fase === "jugando"`, cero cartas, siempre;
+- toda carta enseñada es de alguien con `revelado === true`, está en su
+  `manoInicial` de ESA mano y en sus cartas sin jugar;
+- el que dijo "son buenas" y el que perdió el envido no enseñan nada;
+- **ninguna carta sobrevive a la mano siguiente**: `enMesa` se calcula fresco en
+  cada dibujado desde el `p` actual, nunca se guarda en estado.
+
+Un caso raro que apareció y se cerró: `sumar()` puede llevar a alguien a 30 **a
+media mano** (cobrando la flor), y ahí quedan cartas sin jugar con la partida
+terminada. Se verificó que no es explotable: `accionesPosibles()` devuelve `[]`
+para los dos y `aplicar()` es identidad.
+
+**El autoataque a los parámetros de URL**: 32 payloads —cadena de prototipos, XSS
+en cuatro contextos, path traversal, doble codificación— contra el build de
+producción. **Ninguno pasó**, y se comprobó saboteando la portada que el ataque
+sirve. Los dos parámetros ya no existen igual.
+
+#### Y el `.gitignore` tenía dos puertas abiertas
+
+Salió de una pregunta de Santiago sobre qué hay en el repo público. Los archivos
+de la raíz están todos bien —`next-env.d.ts` son cuatro líneas de tipos y no un
+archivo de secretos; `wrangler.jsonc` sólo tiene el nombre y la carpeta— pero
+preguntándole a `git check-ignore` por los archivos peligrosos que **todavía no
+existen** aparecieron dos que no estaban cubiertos:
+
+- **`key.properties`**, que es el nombre que usa la documentación oficial de
+  Android para el archivo con la contraseña del keystore. Estaba
+  `keystore.properties`, el de la plantilla de Capacitor, pero no el otro — y el
+  otro es el que va a existir el día que se firme para Play Store.
+- **`*.apk` y `*.aab` en la raíz.** `android/.gitignore` los cubre, pero sólo
+  dentro de esa carpeta: un `app-release.apk` copiado a la raíz para probarlo
+  entraba al repo, con la firma adentro.
+
+Ninguno de los dos existe hoy. Es cerrar la puerta antes, no después.
+
+### ESTADO AL CERRAR
+
+`npm test` **180/180** (174 antes, +6 de `cartas-en-mesa`) · `tsc` limpio ·
+`mirar-mesa` los siete tamaños · `mirar-mesa-nueva` los seis, con "la mesa no se
+mueve" en 0 · `mirar-web` TODO OK · `mirar-app-compilada` OK · los dos builds OK.
+
+Archivos tocados: `app/page.tsx`, `app/globals.css`, `app/jugar/mesa/page.tsx`,
+`components/mesa/Dialogo.tsx`, `lib/motor/{partida,tantos,personalidades}.ts` y
+sus tests, `lib/tantos-al-cierre.ts` y su test, `herramientas/{capas,mirar-web,
+mirar-mesa-nueva}.mjs`, `.gitignore` y este archivo.
+Nuevos: `components/Marca.tsx`, `components/mesa/Tantos.tsx`,
+`lib/cartas-en-mesa.ts` y su test.
+Borrados: `lib/motor/versos.ts` y `lib/motor/versos.test.ts`.
+
+**Sin commitear.**
+
+### PENDIENTE
+
+1. **Mirar todo esto en el Redmi.** Es lo único que no se pudo medir: las cuatro
+   capas nuevas del cierre de mano son las de cualquier carta que se tira, pero
+   eso es un argumento, no una medición. `rig-celular.mjs`, con el teléfono.
+2. **El pendiente del 10/9 a la mañana sigue abierto**: confirmar en el APK
+   compilado el arreglo de `.pantalla-fija .carta`.
+3. **`ALTURA` y `APOYO` de `lib/objetos.ts` quedaron sin consumidor de
+   producción** (sólo los usa su test). No se borran: son el dato de cómo se
+   apoya cada objeto el día que vuelva a haber uno sobre la mesa.
+4. Las cromáticas del mapa, el servidor de Capacitor y las carpetas, y
+   `bloques.mjs` con la causa mal escrita: los tres siguen de la lista anterior.
+5. Prender AdMob. Antes van los legales.
+
 ## 2026-09-10 — El menú de jugar: ARREGLADO. Y el modelo del bug era equivocado.
 
 Octava sesión con las manchitas y la que cierra el tema: **era el último bug de

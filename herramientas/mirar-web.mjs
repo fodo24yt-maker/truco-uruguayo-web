@@ -221,6 +221,34 @@ console.log("\nel panel de ajustes:");
           falla(etiqueta, `el panel de ajustes no ofrece ${destino}`);
         }
       }
+      /* ── LOS CONTROLES DE SONIDO ────────────────────────────────────
+         Desde el 10/9/2026 el panel tiene las cuatro barras y el interruptor
+         de silenciar. Se cuentan acá porque son el tipo de cosa que
+         desaparece sin que nadie se entere: no rompen ninguna otra pantalla,
+         no rompen el build y no rompen ningún test del motor.
+
+         Y se mide el ALTO de la barra, que no es un detalle estético: un
+         `<input type=range>` por defecto mide unos 16px y con el dedo en un
+         celular eso no se agarra. Es lo mismo que se le exige a cualquier
+         botón de la mesa. */
+      const barras = panel.locator('input[type="range"]');
+      const cuantas = await barras.count();
+      if (cuantas !== 4) falla(etiqueta, `hay ${cuantas} barras de sonido y tienen que ser 4`);
+      for (const cual of ["general", "musica", "voces", "efectos"]) {
+        if (!(await panel.locator(`#volumen-${cual}`).count())) {
+          falla(etiqueta, `falta la barra de ${cual}`);
+        }
+      }
+      if (!(await panel.locator('[role="switch"]').count())) {
+        falla(etiqueta, "falta el interruptor de silenciar todo");
+      }
+      if (cuantas > 0) {
+        const alto = await barras
+          .first()
+          .evaluate((el) => Math.round(el.getBoundingClientRect().height));
+        if (alto < 32) falla(etiqueta, `la barra de sonido mide ${alto}px: no se agarra con el dedo`);
+      }
+
       // Que se vea entero: un panel cuyo último botón queda abajo del borde es
       // un panel al que le falta una opción, y en un celular bajo pasa solo.
       const seSale = await pag.evaluate(
@@ -240,6 +268,87 @@ console.log("\nel panel de ajustes:");
     if (fallos === antes) console.log(`  ${etiqueta.padEnd(9)} OK`);
     await ctx.close();
   }
+}
+
+/* ══ 1ter. QUE EL VOLUMEN SOBREVIVA A CERRAR LA APP ════════════════════════
+   Las cuatro barras se mueven aunque no estén guardando nada: lo único que
+   distingue un control de un adorno es que lo que elegiste siga ahí mañana.
+
+   Se prueba como lo vive una persona —mover, cerrar la app, volver a abrirla—
+   y no leyendo `localStorage`, porque leer la clave probaría que ALGO se
+   escribió y no que el panel lo vuelve a mostrar. Igual se imprime lo que
+   quedó guardado, que es lo que sirve cuando esto falla.
+
+   Y de paso queda verificado que silenciar NO pisa los volúmenes: la música
+   tiene que seguir en 25 con el silencio puesto. */
+console.log("\nel volumen se guarda:");
+{
+  const ctx = await nav.newContext({ viewport: { width: 390, height: 844 } });
+  const pag = await ctx.newPage();
+  const antes = fallos;
+
+  const abrirPanel = async () => {
+    const panel = pag.locator('[role="dialog"][aria-modal="true"]');
+    if (!(await panel.count())) {
+      await pag.locator('header.barra-app button[aria-label="Ajustes"]').click();
+      await panel.waitFor({ timeout: 3000 }).catch(() => {});
+    }
+    return panel;
+  };
+
+  await abrir(pag, "/");
+  const panel = await abrirPanel();
+  if (!(await panel.count())) {
+    falla("guardado", "no se pudo abrir el panel para probar el guardado");
+  } else {
+    const musica = panel.locator("#volumen-musica");
+    const arranca = await musica.inputValue();
+    await musica.fill("25");
+    await musica.dispatchEvent("change");
+    await panel.locator('[role="switch"]').click();
+    await pag.waitForTimeout(60);
+
+    await pag.reload({ waitUntil: "domcontentloaded" });
+    await pag.addStyleTag({ content: "nextjs-portal{display:none!important}" });
+    const devuelta = await abrirPanel();
+
+    /* SE LEE APENAS APARECE EL PANEL, A PROPÓSITO Y SIN ESPERAR.
+       Es lo que destapó el bug del 10/9/2026: los volúmenes se leían en un
+       `useEffect`, o sea que el panel se dibujaba un cuadro con los valores de
+       fábrica y recién después se corregía. Esperar acá lo habría tapado.
+
+       Y si sale mal se vuelve a mirar despacio, porque son DOS fallas
+       distintas con arreglos distintos, y una que diga sólo "no se guardó"
+       manda a buscar al lugar equivocado:
+         · mal ya y mal después  → no se guardó nada;
+         · mal ya y bien después → se guardó, pero el panel lo muestra tarde. */
+    const quedo = await devuelta.locator("#volumen-musica").inputValue();
+    const callado = await devuelta.locator('[role="switch"]').getAttribute("aria-checked");
+    const guardado = await pag.evaluate(() => localStorage.getItem("truco-uy:sonido"));
+
+    if (quedo !== "25" || callado !== "true") {
+      await pag.waitForTimeout(400);
+      const luego = await devuelta.locator("#volumen-musica").inputValue();
+      const calladoLuego = await devuelta.locator('[role="switch"]').getAttribute("aria-checked");
+
+      if (luego === "25" && calladoLuego === "true") {
+        falla(
+          "guardado",
+          `el panel abre con los valores de fábrica y se corrige después ` +
+            `(música ${quedo} y a los 400ms ${luego}): leelos AL ABRIR, no en un useEffect`,
+        );
+      } else {
+        if (luego !== "25") {
+          falla("guardado", `la música arrancaba en ${arranca}, se movió a 25 y volvió a ${luego}`);
+        }
+        if (calladoLuego !== "true") falla("guardado", "el silencio no sobrevivió a recargar");
+      }
+    }
+    console.log(`  en localStorage quedó: ${guardado}`);
+  }
+
+  if (fallos === antes) console.log("  390x844   OK");
+  await ctx.close();
 }
 
 /* ══ 1bis. APRENDER EN UN CELULAR, Y EL HUECO DEL ANUNCIO ══════════════════
@@ -499,24 +608,46 @@ console.log("\nlevantar la mesa al terminar la mano:");
   await ctx.close();
 }
 
-/* ══ 4. LOS TANTOS QUE SE ENSEÑAN AL CERRAR LA MANO ════════════════════════
-   Cuando la mano se corta antes de jugarse las seis cartas y hubo un tanto
-   cantado, se enseña "Acá está mi envido" con los números, abajo del medallón.
+/* ══ 4. LO QUE SE ENSEÑA AL CERRAR LA MANO ════════════════════════════════
+   Al cerrarse la mano, si quedaron cartas sin ver y hubo envido ganado o flor
+   cantada, el juego DA VUELTA lo que le quedaba a quien tiene que mostrar y lo
+   apoya sobre la mesa, con un rótulo que dice "ENVIDO EN MESA" o "FLOR EN
+   MESA". Los dos tantos en número cuelgan del medallón.
 
-   Lo que se verifica no es que aparezca —eso ya lo prueba
-   `lib/tantos-al-cierre.test.ts`, y sin navegador— sino las TRES cosas que sólo
-   se ven en la pantalla de verdad:
+   Hasta el 10/9/2026 esto fue un papelito con los números, y un rato ese mismo
+   día fueron dos recuadros con las cartas dibujadas adentro. Los dos se
+   descartaron: llenaban la pantalla.
 
-     · que no se le monte a la libreta, que en la compu cae de ese mismo lado;
-     · que no se salga de la escena por el costado ni por abajo;
-     · que el texto no quede cortado adentro del cartel.
+   Lo que se verifica NO es que aparezca —eso lo prueban sin navegador
+   `lib/cartas-en-mesa.test.ts` y `lib/tantos-al-cierre.test.ts`— sino las seis
+   cosas que sólo se ven en la pantalla de verdad:
 
-   El camino para llegar al caso: cantar el envido, que se quiera, y después
-   cantar truco hasta que el rival no lo quiera. Ahí la mano se cierra con las
-   cartas todavía en la mano, que es exactamente cuando hay algo que enseñar.
-   Se reintenta porque nada de eso depende de nosotros. */
-console.log("\nlos tantos al cerrar la mano:");
+     · que las cartas enseñadas EXISTAN cuando corresponde;
+     · que no se salgan de la escena por el costado ni por abajo — es el riesgo
+       propio de este diseño, porque caen al costado de lo jugado y a `paso`
+       fijo, sin recentrar el grupo;
+     · que no se le monten a tu mano;
+     · que el rótulo no se pise con el registro de lo que dijo el rival, que en
+       una pantalla baja ocupa toda la franja de arriba;
+     · que la línea de tantos del medallón no empuje al globo del diálogo;
+     · y que la mesa no scrollee por nada de esto.
+
+   El camino para llegar al caso: cantar el envido o la flor, que se juegue, y
+   después cortar la mano con truco. Se reintenta porque nada de eso depende de
+   nosotros. */
+console.log("\nlo que se enseña al cerrar la mano:");
+/* SI NO SALIÓ EN NINGÚN TAMAÑO, ESO ES UNA FALLA.
+   Sin esto, el día que las cartas enseñadas dejaran de dibujarse el bloque
+   imprimiría tres veces "(no se llegó a cerrar una mano)" y la herramienta
+   seguiría diciendo TODO OK: un guardián que pasa en verde con la función
+   borrada. Es el error del 7/9/2026 con `atajos === "Aprender·Jugar"`, que
+   quedó mirando cero elementos.
+   Puede no salir en UN tamaño por azar del reparto —son 30 intentos y el caso
+   depende de que te toque flor o envido— pero que no salga en los tres es otra
+   cosa. */
+let seEnseñoAlguna = false;
 for (const [ancho, alto] of [
+  [320, 568],
   [390, 844],
   [1440, 900],
 ]) {
@@ -536,7 +667,7 @@ for (const [ancho, alto] of [
     await pag.waitForTimeout(1500);
   };
 
-  for (let intento = 0; intento < 25 && !visto; intento++) {
+  for (let intento = 0; intento < 30 && !visto; intento++) {
     await abrir(pag, "/jugar/mesa?depto=montevideo");
     await pag.waitForTimeout(2800);
 
@@ -549,12 +680,11 @@ for (const [ancho, alto] of [
       await apretar("envido");
     } else continue;
 
-    // si me contestaron subiendo, se quiere y listo: lo que importa es que se juegue
+    // si me contestaron subiendo, se quiere: lo que importa es que se JUEGUE
     if ((await cantos()).includes("quiero")) await apretar("quiero");
 
-    /* Y ahora a cortar la mano: truco hasta que no lo quieran. Si lo quieren se
-       sigue tirando cartas, que también puede cerrarla con cartas en la mano
-       cuando alguien gana las dos primeras bazas. */
+    /* Y ahora a cortar la mano con cartas todavía en la mano, que es cuando hay
+       algo que enseñar: truco hasta que no lo quieran. */
     for (let paso = 0; paso < 6; paso++) {
       const fase = await pag.getAttribute("[data-fase]", "data-fase").catch(() => null);
       if (fase && fase !== "jugando") break;
@@ -569,86 +699,101 @@ for (const [ancho, alto] of [
       }
     }
 
+    // las cartas se apoyan a los 450ms de cerrarse la mano
+    await pag.waitForTimeout(900);
+
     const m = await pag.evaluate(() => {
-      const cartel = document.querySelector("[data-tantos]");
-      if (!cartel) return null;
       const caja = (el) => {
         if (!el) return null;
         const r = el.getBoundingClientRect();
         return { arriba: r.top, abajo: r.bottom, izq: r.left, der: r.right };
       };
-      const escena = document.querySelector('[data-mesa="tabla"]')?.closest(".penumbra");
+      const unir = (cajas) =>
+        cajas.length === 0
+          ? null
+          : {
+              arriba: Math.min(...cajas.map((c) => c.arriba)),
+              abajo: Math.max(...cajas.map((c) => c.abajo)),
+              izq: Math.min(...cajas.map((c) => c.izq)),
+              der: Math.max(...cajas.map((c) => c.der)),
+            };
+
+      const enseñadas = [...document.querySelectorAll('[data-mesa="baza-enseñada"]')].map(caja);
+      const rotulo = document.querySelector('[data-mesa="cartel-tantos"]');
+      if (enseñadas.length === 0) return null;
+
+      /* El registro de lo que dijo el rival, medido por lo que REALMENTE pinta
+         y no por su contenedor: la columna del medallón es `w-[min(78%,340px)]`
+         con todo alineado a la derecha, así que su caja ocupa casi toda la
+         franja de arriba con la mitad izquierda vacía. Medir el contenedor daba
+         falsos positivos, que es el error que `mirar-rivales.mjs` ya cometió
+         tres veces. */
+      const col = document.querySelector('[data-encima="medallon"]');
+      const pinta = [...(col?.querySelectorAll("*") ?? [])].filter(
+        (el) =>
+          (el.children.length === 0 && el.textContent.trim() !== "") ||
+          el.tagName === "IMG" ||
+          el.tagName === "svg",
+      );
+
       return {
-        clase: cartel.dataset.tantos,
-        cartel: caja(cartel),
-        libreta: caja(document.querySelector('[data-mesa="libreta"]')),
-        escena: caja(escena),
-        /* ¿El TEXTO entra en el papel?
-           ── OJO: NO SE MIDE CON `scrollHeight`, Y ESO COSTÓ UNA FALLA ─────
-           Así estaba, y daba positivo siempre que la puntita del papel miraba
-           hacia ABAJO —o sea en TU cartel y no en el de él—. La puntita es un
-           `<span>` `absolute` girado 45° que SALE de la caja a propósito: es la
-           punta que apunta a quien está enseñando. Medido: se pasa 7,3px, que
-           son exactamente los que separaban `scroll=66` de `client=59`.
-
-           Un adorno que se sale por diseño no es un texto cortado. Es la misma
-           lección que ya dejó `mirar-rivales.mjs` tres veces —medía el
-           medallón, medía la libreta, medía una franja demasiado gruesa—: una
-           herramienta que mide de más da falsos positivos, y un falso positivo
-           tapa el defecto de verdad.
-
-           Ahora se miran LOS HIJOS EN FLUJO, que son el título y la fila de
-           números: si alguno se pasa del borde interior del papel, ahí sí el
-           texto está cortado. */
-        cortadoAncho: (() => {
-          const r = cartel.getBoundingClientRect();
-          return [...cartel.children]
-            .filter((el) => getComputedStyle(el).position !== "absolute")
-            .some((el) => {
-              const h = el.getBoundingClientRect();
-              return h.right > r.right + 1 || h.left < r.left - 1;
-            });
+        cuantas: enseñadas.length,
+        cartas: unir(enseñadas),
+        rotulo: caja(rotulo),
+        textoRotulo: rotulo?.textContent.trim() ?? "",
+        dialogo: unir(pinta.map((el) => caja(el)).filter((c) => c && c.der - c.izq > 0)),
+        mano: caja(document.querySelector(".mano-abanico")),
+        escena: caja(document.querySelector('[data-mesa="tabla"]')?.closest(".penumbra")),
+        tantos: document.querySelector("[data-tantos]")?.textContent.trim() ?? "",
+        // la franja de los tantos NO puede cambiar de alto: si crece, empuja el globo
+        altoTantos: (() => {
+          const t = document.querySelector("[data-tantos]");
+          return t ? Math.round(t.getBoundingClientRect().height) : 0;
         })(),
-        cortadoAlto: (() => {
-          const r = cartel.getBoundingClientRect();
-          return [...cartel.children]
-            .filter((el) => getComputedStyle(el).position !== "absolute")
-            .some((el) => {
-              const h = el.getBoundingClientRect();
-              return h.bottom > r.bottom + 1 || h.top < r.top - 1;
-            });
-        })(),
-        texto: cartel.textContent.trim().replace(/\s+/g, " "),
+        scroll:
+          document.documentElement.scrollHeight - document.documentElement.clientHeight,
       };
     });
 
     if (!m) continue;
     visto = true;
+    seEnseñoAlguna = true;
 
     const solapan = (a, b) =>
       a && b && a.izq < b.der && a.der > b.izq && a.arriba < b.abajo && a.abajo > b.arriba;
 
-    if (solapan(m.cartel, m.libreta)) {
-      falla(etiqueta, `el cartel de tantos se le monta a la libreta`);
+    if (m.escena && (m.cartas.der > m.escena.der + 1 || m.cartas.izq < m.escena.izq - 1)) {
+      falla(etiqueta, `las cartas enseñadas se salen de la escena de costado`);
     }
-    if (m.escena && (m.cartel.der > m.escena.der + 1 || m.cartel.izq < m.escena.izq - 1)) {
-      falla(etiqueta, `el cartel de tantos se sale de la escena de costado`);
+    if (m.escena && m.cartas.abajo > m.escena.abajo + 1) {
+      falla(etiqueta, `las cartas enseñadas se salen de la escena por abajo`);
     }
-    if (m.escena && m.cartel.abajo > m.escena.abajo + 1) {
-      falla(etiqueta, `el cartel de tantos se sale de la escena por abajo`);
+    if (solapan(m.cartas, m.mano)) {
+      falla(etiqueta, `las cartas enseñadas se le montan a tu mano`);
     }
-    if (m.cortadoAncho) falla(etiqueta, `el texto del cartel queda cortado de ancho`);
-    if (m.cortadoAlto) falla(etiqueta, `el texto del cartel queda cortado de alto`);
+    if (!m.rotulo) falla(etiqueta, `hay cartas enseñadas pero no salió el rótulo`);
+    else if (solapan(m.rotulo, m.dialogo)) {
+      falla(etiqueta, `el rótulo "${m.textoRotulo}" se pisa con lo que dijo el rival`);
+    }
+    /* El alto de la franja de tantos está fijado en el CSS (18px, 20 en `sm`).
+       Si alguna vez crece con el contenido, empuja el globo del diálogo hacia
+       abajo cada vez que aparece y la mesa salta. */
+    if (m.altoTantos > 22) {
+      falla(etiqueta, `la línea de tantos creció a ${m.altoTantos}px y va a empujar el globo`);
+    }
+    if (m.scroll > 1) falla(etiqueta, `la mesa scrollea ${m.scroll}px al enseñar`);
 
     await pag.screenshot({ path: path.join(SALIDA, `tantos-${etiqueta}.png`) });
     console.log(
-      `  ${etiqueta.padEnd(9)} ${m.clase.padEnd(6)} "${m.texto}"  ` +
-        `${Math.round(m.cartel.der - m.cartel.izq)}x${Math.round(m.cartel.abajo - m.cartel.arriba)}px` +
-        `${m.libreta ? " · con libreta en pantalla" : ""}`,
+      `  ${etiqueta.padEnd(9)} ${String(m.cuantas).padStart(2)} cartas enseñadas · ` +
+        `"${m.textoRotulo}" · medallón dice "${m.tantos}" (${m.altoTantos}px)`,
     );
   }
   if (!visto) console.log(`  ${etiqueta.padEnd(9)} (no se llegó a cerrar una mano con tanto cantado)`);
   await ctx.close();
+}
+if (!seEnseñoAlguna) {
+  falla("los tres tamaños", "NUNCA se enseñaron cartas al cerrar la mano");
 }
 
 await nav.close();

@@ -288,10 +288,136 @@ console.log("\nla mesa:");
   await ctx.close();
 }
 
+/* ══ EL CIERRE DE LA MANO ═════════════════════════════════════════════════
+   Entró el 10/9/2026, con el recuadro que enseña las cartas del envido y de la
+   flor. Hacía falta porque los cinco estados de arriba son todos con la mano EN
+   CURSO: ninguno tiene el recuadro puesto, así que el total de 28 no decía nada
+   sobre él.
+
+   Y es justo el momento de riesgo: un elemento que aparece encima de la mesa,
+   con seis cartas adentro, y que a los dos segundos desaparece. Lo que hay que
+   ver acá es si promueve algo que antes no se promovía. Se miden las dos
+   variantes; cuando Santiago elija una, se borra la otra de la lista. */
+console.log("\nel cierre de la mano (el recuadro de tantos):");
+/* `sin-tanto` ES EL CONTROL Y NO SOBRA. Al cerrarse una mano pasan varias cosas
+   a la vez: las seis cartas se van al mazo animadas, el cartel de fin de mano
+   se prepara, y —si alguien cantó— aparece el recuadro. Midiendo sólo el
+   recuadro, cualquier número se le atribuye a él.
+
+   Es la regla que dejó escrita el rig del 8/9/2026: cada tanda con su propio
+   control, porque si no no se distingue el efecto del momento. */
+for (const variante of ["sin-tanto", "con-tanto"]) {
+  const { ctx, pag, cdp, capas, refrescar } = await abrirConCapas();
+  let visto = false;
+
+  for (let intento = 0; intento < 22 && !visto; intento++) {
+    await pag.goto(`${SITIO}/jugar/mesa?depto=montevideo`, { waitUntil: "domcontentloaded" });
+    await pag.addStyleTag({ content: "nextjs-portal{display:none!important}" });
+    await pag.waitForTimeout(3000);
+
+    // cantar algo, para que haya tanto que enseñar. El control no canta nada.
+    const hay = variante === "sin-tanto" ? [] : await cantos(pag);
+    if (variante === "sin-tanto") {
+      // nada: se juega la mano pelada y se cierra sola
+    } else if (hay.includes("flor")) {
+      await pag.locator('[data-canto="flor"]').click().catch(() => {});
+      await pag.waitForTimeout(1200);
+    } else if (hay.includes("abrir-envido")) {
+      await pag.locator('[data-canto="abrir-envido"]').click().catch(() => {});
+      await pag.waitForTimeout(400);
+      await pag.locator('[data-canto="envido"]').first().click().catch(() => {});
+      await pag.waitForTimeout(1600);
+      if ((await cantos(pag)).includes("quiero")) {
+        await pag.locator('[data-canto="quiero"]').click().catch(() => {});
+        await pag.waitForTimeout(1400);
+      }
+    } else continue;
+
+    // y ahora tirar cartas hasta que se cierre
+    for (let paso = 0; paso < 8; paso++) {
+      const fase = await pag.getAttribute("[data-fase]", "data-fase").catch(() => null);
+      if (fase && fase !== "jugando") break;
+      const cartas = pag.locator(".mano-abanico button:not([disabled])");
+      if ((await cartas.count()) === 0) break;
+      await cartas.first().click().catch(() => {});
+      await pag.waitForTimeout(1300);
+    }
+
+    /* ── HAY QUE `refrescar()`, Y ADEMÁS COMPROBAR QUE LLEGUÉ A TIEMPO ──────
+       La primera versión de esto no refrescaba, con el argumento de que el
+       recuadro dura dos segundos y no había que perderlo. Dio
+       **0 capas nuestras y 0 en total**, en las dos variantes.
+
+       Cero EN TOTAL es imposible: una mesa con cartas tiene capas. Lo que pasa
+       es lo que este mismo archivo ya avisa treinta líneas más arriba: `goto`
+       tira el árbol, y sin apagar y prender `LayerTree` el árbol que queda es
+       el de la página anterior o ninguno. O sea que era un cero del método, no
+       una medición — el mismo error que el 9/9 hizo dar "0 sucias" con la
+       pantalla rota.
+
+       `refrescar()` no recarga nada: apaga y prende el dominio y fuerza un
+       cuadro con capturas de 8x8. Pero puede tardar hasta 1,8 s, y el recuadro
+       vive 2. Por eso se comprueba que SIGA EN PANTALLA después, y si no se
+       reintenta la mano: un número tomado con el recuadro ya barrido sería el
+       de la mesa vacía disfrazado de medición del recuadro. */
+    await pag.waitForTimeout(900);
+
+    const sel =
+      variante === "sin-tanto"
+        ? '[data-fase]:not([data-fase="jugando"])'
+        : '[data-mesa="baza-enseñada"]';
+    /* Y el control tiene que estar LIMPIO: si en esa mano alguien cantó igual
+       —el bot canta solo—, el recuadro está puesto y deja de ser control. */
+    if (variante === "sin-tanto") {
+      const conTanto = await pag.locator('[data-mesa="baza-enseñada"]').count();
+      if (conTanto > 0) continue;
+    }
+    if ((await pag.locator(sel).count()) === 0) continue;
+    await refrescar();
+    if ((await pag.locator(sel).count()) === 0) continue; // llegué tarde
+    visto = true;
+    await anotar(`cierre-${variante}`, cdp, capas);
+  }
+
+  if (!visto) console.log(`  cierre-${variante}: (no salió en 22 manos)`);
+  await ctx.close();
+}
+
 await nav.close();
 
 const suma = resultados.reduce((s, r) => s + r.nuestras, 0);
 console.log(`\nTotal de capas nuestras en las ${resultados.length} pantallas medidas: ${suma}`);
 console.log("Sirve para ver QUÉ se promueve y por qué, no para predecir manchitas:");
 console.log("el arreglo del 8/9/2026 SUBIÓ este número de 21 a 28 y las apagó.");
+console.log("OJO CON SUMAR: los dos `cierre-*` valen ~21 cada uno porque ahí las");
+console.log("cartas están volando al mazo, y son las MISMAS dos veces. Comparalos");
+console.log("entre sí —con-tanto contra sin-tanto—, no contra el resto.");
 console.log("Las manchitas se miden con `node herramientas/rig-celular.mjs`.\n");
+
+/* ── LO QUE DIO EL 10/9/2026, PARA NO TENER QUE VOLVER A CORRERLO ──────────
+
+   Con los DOS RECUADROS que se probaron primero (y se descartaron):
+
+       cierre-sin-tanto   21 capas · 5.48 Mpx · 23 en total
+       cierre-cuadro      21 capas · 5.48 Mpx · 23 en total
+       cierre-papeles     21 capas · 5.48 Mpx · 23 en total
+
+   Las tres listas salieron IDÉNTICAS, elemento por elemento. Un papel con
+   cartas dibujadas adentro no promueve nada.
+
+   Con el diseño que quedó —las cartas APOYADAS sobre la mesa—:
+
+       cierre-sin-tanto   21 capas · 5.48 Mpx · 23 en total
+       cierre-con-tanto   25 capas · 5.61 Mpx · 27 en total
+
+   **Sube 4, y se sabe exactamente cuáles**: cada `<CartaApoyada>` trae
+   `anim-caer` y `anim-sombra`, que son dos `ActiveTransformAnimation`. Dos
+   cartas enseñadas, cuatro capas. Son **las mismas que promueve cualquier
+   carta que se tira**: si eso fuera un problema, lo sería el juego entero.
+
+   Y subir no es malo por sí solo: el arreglo que APAGÓ las manchitas el 8/9
+   subió este número de 21 a 28. Este archivo sirve para ver qué se promueve y
+   por qué, no para predecir manchitas.
+
+   Lo que esto NO dice es si en el Redmi aparecen manchitas: eso sólo lo
+   contesta `rig-celular.mjs`, con el teléfono enchufado. */
