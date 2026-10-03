@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { ProgresoAprender } from "@/components/ProgresoAprender";
 import { LECCIONES } from "@/lib/lecciones";
 
 export const metadata: Metadata = {
@@ -47,6 +48,10 @@ export default function Aprender() {
         </p>
       </div>
 
+      {/* En la app, mientras la Gira esté cerrada: cuánto falta para abrirla.
+          En la web no dibuja nada. */}
+      <ProgresoAprender />
+
       {/* Ocho tarjetas de tres renglones son novecientos píxeles: en un celular
           eso es scrollear tres pantallas para ver la lista entera. Se aprietan
           el relleno y la separación, y LOS MINUTOS PASAN AL LADO DEL TÍTULO en
@@ -85,11 +90,10 @@ export default function Aprender() {
           escribir— siguen en Términos y en Privacidad, que es donde Play Store
           los va a buscar.
 
-          Y EL HUECO DEL ANUNCIO NO VA ACÁ, aunque parezca el lugar natural: lo
-          lleva el pie, que está en esta misma pantalla dos centímetros más
-          abajo. Puestos los dos quedaban PEGADOS, sin una línea de contenido en
-          el medio, y eso además de verse mal está prohibido por las políticas
-          de AdMob. Uno por pantalla. */}
+          Y ACÁ NO VA NINGÚN ANUNCIO. Hasta el 2/10/2026 el pie reservaba el
+          hueco de un banner; ese día los banners se sacaron de la app, y
+          Aprender quedó sin publicidad de ningún tipo: lo cuida
+          `lib/anuncios.ts`, que no muestra nada en estas pantallas. */}
     </div>
   );
 }

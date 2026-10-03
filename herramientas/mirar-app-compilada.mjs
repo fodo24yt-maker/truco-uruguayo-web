@@ -60,6 +60,11 @@ console.log("recarga dura en cada ruta, sobre el export de la app:\n");
 for (const ruta of RUTAS) {
   bloqueos.length = 0;
   const resp = await pag.goto(`${RAIZ}${ruta}`, { waitUntil: "domcontentloaded" });
+  // La pantalla de carga de la app tapa todo al abrir (3/10/2026): hasta que
+  // se va no hay nada que mirar. Si no se fuera, es una falla en sí misma.
+  await pag
+    .waitForSelector("[data-pantalla-carga]", { state: "detached", timeout: 8000 })
+    .catch(() => falla(ruta, "la pantalla de carga no se fue"));
   await pag.waitForTimeout(ruta.includes("mesa") ? 3200 : 700);
 
   const m = await pag.evaluate(() => {

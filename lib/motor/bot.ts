@@ -20,10 +20,17 @@ import {
   type Jugador,
   type Partida,
   accionesPosibles,
-  laFalta,
 } from "./partida.ts";
 import { LUKI, type Personalidad } from "./personalidades.ts";
 import { type Ficha, ajustePorLectura, fichaVacia } from "./lectura.ts";
+import {
+  ajustePorMarcador,
+  convieneLaFalta,
+  creditoDe,
+  mentiraEfectiva,
+  situacion,
+  umbralDeLaFalta,
+} from "./plan.ts";
 
 /**
  * ¿Esta baza ya está perdida?
@@ -76,27 +83,72 @@ function trucoTieneSentido(
 }
 
 /**
+ * Cuánto excedente sobre el umbral ya es "tengo muchísimo", en cada escala.
+ *
+ * El envido se mide en puntos de tanto y el truco en calidad de 0 a 1, así que
+ * no hay un número que sirva para los dos y hay que decírselo.
+ */
+export const MUCHO_DE_MAS = { envido: 8, truco: 0.25 } as const;
+
+/**
  * Decide si canta aunque no tenga con qué.
  *
  * Es toda la mentira del bot: si le falta poco para el umbral, con cierta
  * probabilidad canta igual. Cuanto peor es su mano, menos probable es que se
  * anime, así que un mentiroso no canta vale cuatro con un cuatro cada vez,
  * sino de a ratos, que es lo que lo hace creíble.
+ *
+ * ─── Y EL SILENCIO, QUE NO ES UNA MONEDA ────────────────────────────────────
+ *
+ * Guardarse un canto que se podía hacer sirve para no ser transparente: si
+ * cantaran siempre que pueden, les leerías el tanto exacto. Pero hasta el
+ * 11/9/2026 el silencio se tiraba a la moneda sin mirar CUÁNTO se tenía, y eso
+ * salía carísimo: entre dos ★2, la callada (silencio 0,35) sacaba 36,6% y el
+ * hablador (0,15) 45,6%. Nueve puntos de winrate por un rasgo de carácter, y
+ * encima los personajes "callados" son de los lindos.
+ *
+ * Ahora el silencio se diluye con lo que sobra sobre el umbral. Callarse con el
+ * tanto justo es oficio —es lo que hace el que espera para subir—; callarse un
+ * 33 no es misterioso, es distraído. El carácter se conserva y el precio se va.
  */
 function seAnima(
   tiene: number,
   necesita: number,
   personalidad: Personalidad,
   azar: () => number,
+  mentira: number,
+  muchoDeMas: number = MUCHO_DE_MAS.envido,
 ): boolean {
-  if (tiene >= necesita) return azar() > personalidad.silencio;
-  if (personalidad.mentira === 0) return false;
+  if (tiene >= necesita) {
+    const deMas = Math.max(0, tiene - necesita);
+    return azar() > personalidad.silencio / (1 + deMas / muchoDeMas);
+  }
+  if (mentira <= 0) return false;
 
   const leFalta = necesita - tiene;
   // Cuanto más lejos está del umbral, más difícil que se mande
-  const ganas = personalidad.mentira / (1 + leFalta * 0.5);
+  const ganas = mentira / (1 + leFalta * 0.5);
   return azar() < ganas;
 }
+
+/**
+ * Cuánto más exigente se pone por el solo hecho de que le subieron la apuesta.
+ *
+ * Un jugador con oficio mira sus cartas y decide: si el truco lo quería con
+ * esta mano, el vale cuatro también, porque hay MÁS para ganar, no menos. Un
+ * principiante no: ve el vale cuatro y se achica aunque tenga.
+ *
+ * `p.truco.nivel` vale 1 en el truco, 2 en el retruco y 3 en el vale cuatro, y
+ * el miedo cuenta escalones por encima del primero: al truco pelado nadie le
+ * tiene miedo.
+ */
+function miedoALaSubida(p: Partida, personalidad: Personalidad): number {
+  const escalones = Math.max(0, p.truco.nivel - 1);
+  return (1 - personalidad.aguante) * MIEDO_POR_ESCALON * escalones;
+}
+
+/** Cuánto sube el umbral de querer, por escalón, el que no aguanta nada. */
+const MIEDO_POR_ESCALON = 0.12;
 
 /**
  * Qué haría el bot en el lugar de `quien`. Por defecto juega de rival, pero
@@ -105,6 +157,10 @@ function seAnima(
  *
  * `ficha` es lo que tiene anotado del rival. Si no se le pasa nada, juega sin
  * prejuicios: es lo que hacen los primeros de la gira, que no leen a nadie.
+ *
+ * `espejo` es lo contrario: lo que el RIVAL pudo anotar de él. Es la misma
+ * ficha corrida al revés, y de ahí sale si le van a creer la próxima mentira
+ * (ver plan.ts). Sin ella juega como si recién se sentara, que es lo correcto.
  */
 export function decidirJugada(
   p: Partida,
@@ -112,6 +168,7 @@ export function decidirJugada(
   azar: () => number = Math.random,
   personalidad: Personalidad = LUKI,
   ficha: Ficha = fichaVacia(),
+  espejo: Ficha = fichaVacia(),
 ): Accion | null {
   const posibles = accionesPosibles(p, quien);
   if (posibles.length === 0) return null;
@@ -124,10 +181,30 @@ export function decidirJugada(
 
   // Lo que tiene anotado del rival corre los umbrales. Con `lectura` en 0 —los
   // niveles 1 y 2— el ajuste es exactamente cero y juega como jugó siempre.
-  const ajuste = ajustePorLectura(ficha, personalidad.lectura);
-  const cantaEnvidoCon = personalidad.cantaEnvidoCon + ajuste.cantaEnvido;
-  const quiereEnvidoCon = personalidad.quiereEnvidoCon + ajuste.quiereEnvido;
-  const quiereTrucoCon = personalidad.quiereTrucoCon + ajuste.quiereTruco;
+  const lectura = ajustePorLectura(ficha, personalidad.lectura);
+  // Y cómo va la partida, que hasta el 11/9/2026 no se miraba nunca.
+  const mesa = situacion(p.puntos, quien);
+  const marcador = ajustePorMarcador(mesa, personalidad.plan);
+
+  const cantaEnvidoCon = personalidad.cantaEnvidoCon + lectura.cantaEnvido;
+  const quiereEnvidoCon =
+    personalidad.quiereEnvidoCon + lectura.quiereEnvido + marcador.quiereEnvido;
+  const quiereTrucoCon =
+    personalidad.quiereTrucoCon + lectura.quiereTruco + marcador.quiereTruco;
+  const cantaTrucoCon = personalidad.cantaTrucoCon + lectura.cantaTruco + marcador.cantaTruco;
+  // La mentira no es una moneda que se tira en cada mano: se administra según
+  // la cara que uno viene poniendo. Con `plan` en 0 es la de siempre.
+  const mentira = mentiraEfectiva(
+    personalidad.mentira,
+    creditoDe(espejo),
+    mesa,
+    personalidad.plan,
+  );
+  /* La subida se corre con el MISMO ajuste que el canto, y es acá donde se
+     cobra de verdad al que se achica: el que le tiene miedo al vale cuatro no
+     se delata cuando le cantan truco, se delata cuando le suben. Subirle a un
+     cobarde con mano mediana es la jugada que su miedo paga. */
+  const subeTrucoCon = personalidad.subeTrucoCon + lectura.cantaTruco + marcador.cantaTruco;
 
   // ── Tiene flor: la canta ─────────────────────────────────────────────────
   // Son 3 puntos seguros; guardársela es regalarlos. Lo único que decide es si
@@ -150,7 +227,7 @@ export function decidirJugada(
     }
     if (
       puede("flor-canto") &&
-      seAnima(miFlor, personalidad.conFlorEnvidoCon, personalidad, azar)
+      seAnima(miFlor, personalidad.conFlorEnvidoCon, personalidad, azar, mentira)
     ) {
       return { tipo: "flor-canto", canto: "con-flor-envido" };
     }
@@ -162,12 +239,14 @@ export function decidirJugada(
     if (p.pendiente.tipo === "envido") {
       // Con la falta en juego se pone exigente: se juega la partida
       const enJuegoLaFalta = p.pendiente.cadena.includes("falta-envido");
-      const umbral = enJuegoLaFalta ? quiereEnvidoCon + 4 : quiereEnvidoCon;
+      const umbral = enJuegoLaFalta
+        ? umbralDeLaFalta(personalidad.quiereEnvidoCon, lectura.quiereEnvido, mesa, personalidad.plan)
+        : quiereEnvidoCon;
 
       if (
         tanto >= personalidad.subeEnvidoCon &&
         !enJuegoLaFalta &&
-        laFalta(p.puntos) > 4
+        convieneLaFalta(mesa, personalidad.plan)
       ) {
         return { tipo: "envido", canto: "falta-envido" };
       }
@@ -185,7 +264,7 @@ export function decidirJugada(
     if (
       p.pendiente.tipo === "truco" &&
       puedeCantar(posibles, "envido") &&
-      seAnima(tanto, cantaEnvidoCon, personalidad, azar)
+      seAnima(tanto, cantaEnvidoCon, personalidad, azar, mentira)
     ) {
       return tanto >= personalidad.subeEnvidoCon
         ? { tipo: "envido", canto: "real-envido" }
@@ -195,13 +274,15 @@ export function decidirJugada(
     // Truco: quiere con cartas, sube sólo con cartas muy buenas. Y no sube
     // nunca si la baza que está sobre la mesa ya la perdió.
     if (
-      calidad > personalidad.subeTrucoCon &&
+      calidad > subeTrucoCon &&
       puede("truco") &&
       trucoTieneSentido(p, quien, personalidad, azar)
     ) {
       return { tipo: "truco" };
     }
-    return calidad > quiereTrucoCon ? { tipo: "quiero" } : { tipo: "no-quiero" };
+    return calidad > quiereTrucoCon + miedoALaSubida(p, personalidad)
+      ? { tipo: "quiero" }
+      : { tipo: "no-quiero" };
   }
 
   // ── Turno libre ──────────────────────────────────────────────────────────
@@ -210,7 +291,7 @@ export function decidirJugada(
   // guarde: si cantara siempre que puede, le leerías el tanto exacto.
   if (
     puedeCantar(posibles, "envido") &&
-    seAnima(tanto, cantaEnvidoCon, personalidad, azar)
+    seAnima(tanto, cantaEnvidoCon, personalidad, azar, mentira)
   ) {
     if (tanto >= personalidad.subeEnvidoCon) {
       return { tipo: "envido", canto: "real-envido" };
@@ -220,13 +301,11 @@ export function decidirJugada(
 
   // Canta truco con mano fuerte, o con mano mediana si ya ganó la primera
   const ganoLaPrimera = p.bazas[0]?.ganador === quien;
-  const umbralTruco = ganoLaPrimera
-    ? personalidad.cantaTrucoCon - 0.23
-    : personalidad.cantaTrucoCon;
+  const umbralTruco = ganoLaPrimera ? cantaTrucoCon - 0.23 : cantaTrucoCon;
   if (
     puede("truco") &&
     trucoTieneSentido(p, quien, personalidad, azar) &&
-    seAnima(calidad, umbralTruco, personalidad, azar)
+    seAnima(calidad, umbralTruco, personalidad, azar, mentira, MUCHO_DE_MAS.truco)
   ) {
     return { tipo: "truco" };
   }

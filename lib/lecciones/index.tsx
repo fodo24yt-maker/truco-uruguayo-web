@@ -53,6 +53,7 @@ function LaBaraja() {
       </Dato>
 
       <Ejercicio
+        id="la-baraja"
         pregunta="De estas tres cartas, ¿cuál vale CERO para contar el envido?"
         mano={["7C", "12O", "3B"]}
         opciones={[
@@ -140,6 +141,7 @@ function Jerarquia() {
       </p>
 
       <Ejercicio
+        id="jerarquia"
         pregunta="Tirás una sola carta para ganar la baza. ¿Cuál de las tres es la más fuerte?"
         mano={["3E", "1B", "12O"]}
         opciones={[
@@ -241,6 +243,7 @@ function LaMuestra() {
       </Dato>
 
       <Ejercicio
+        id="la-muestra-1"
         pregunta="Él tiró el ancho de espada, la carta más brava sin piezas. ¿Con cuál se lo tapás?"
         muestra="3B"
         enMesa="1E"
@@ -268,6 +271,7 @@ function LaMuestra() {
       />
 
       <Ejercicio
+        id="la-muestra-2"
         pregunta="La muestra es el 5 de oro. ¿Cuál de tus cartas es pieza?"
         muestra="5O"
         mano={["12O", "2E", "5C"]}
@@ -364,6 +368,7 @@ function LaMano() {
       </p>
 
       <Ejercicio
+        id="la-mano"
         pregunta="La primera baza fue parda y la segunda la ganaste vos. ¿Quién se lleva la mano?"
         opciones={[
           {
@@ -496,6 +501,7 @@ function ElEnvido() {
       </Dato>
 
       <Ejercicio
+        id="el-envido-1"
         pregunta="Se cantó envido y los dos mostraron. Contá los dos tantos: ¿quién gana?"
         muestra="3B"
         manoRival={["2B", "1C", "10O"]}
@@ -523,6 +529,7 @@ function ElEnvido() {
       />
 
       <Ejercicio
+        id="el-envido-2"
         pregunta="La muestra es el 6 de espada. ¿Cuánto es tu tanto?"
         muestra="6E"
         mano={["4E", "7C", "3B"]}
@@ -647,6 +654,7 @@ function LaFlor() {
       </Dato>
 
       <Ejercicio
+        id="la-flor"
         pregunta="Los dos cantaron flor. ¿De quién es la más alta?"
         muestra="3O"
         manoRival={["7C", "6C", "3C"]}
@@ -737,6 +745,7 @@ function ElTruco() {
       </Dato>
 
       <Ejercicio
+        id="el-truco-1"
         pregunta="Cantaste truco y él respondió “¡retruco!”. ¿Qué podés hacer?"
         opciones={[
           {
@@ -761,6 +770,7 @@ function ElTruco() {
       />
 
       <Ejercicio
+        id="el-truco-2"
         pregunta="Él tiró el 2 de la muestra y a vos te quedan un 4, un 5 y un 6. ¿Cantás truco?"
         muestra="3O"
         enMesa="2O"
@@ -853,6 +863,7 @@ function PuntosYPartida() {
       </ol>
 
       <Ejercicio
+        id="puntos-y-partida-1"
         pregunta="Vas 25 a 22 y cantás falta envido. ¿Cuánto vale?"
         opciones={[
           {
@@ -877,6 +888,7 @@ function PuntosYPartida() {
       />
 
       <Ejercicio
+        id="puntos-y-partida-2"
         pregunta="Tenés flor y él canta envido antes que vos. ¿Qué pasa?"
         opciones={[
           {

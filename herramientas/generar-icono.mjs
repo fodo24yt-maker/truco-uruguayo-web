@@ -251,3 +251,78 @@ await rm(path.join(RES, "drawable-v24"), { recursive: true, force: true });
 
 console.log(`${hechos} archivos horneados en android/app/src/main/res`);
 console.log("y afuera el robot verde de Android Studio");
+
+/* ══ EL MATERIAL DE LA FICHA DE PLAY STORE ═════════════════════════════════
+   `node herramientas/generar-icono.mjs --tienda`
+
+   ── Por qué vive ACÁ y no en una herramienta aparte ──────────────────────
+
+   Porque el dibujo del logo tiene que estar escrito UNA sola vez. Si el ícono
+   de la tienda lo dibujara `branding.mjs`, serían dos logos que se van
+   separando de a poco, y el día que alguien corrija el oro en un lado el otro
+   se queda viejo. Es el mismo argumento con el que `components/Marca.tsx`
+   explica no haber inventado un segundo logo para la portada.
+
+   ── Es aditivo, y eso se verifica ────────────────────────────────────────
+
+   Sin el flag, este archivo hace exactamente lo de siempre. Con el flag, hace
+   lo de siempre Y ADEMÁS escribe dos PNG en `app branding/`, que está en el
+   `.gitignore`. En `android/` no toca un solo byte de más: se comprueba con
+   `git diff --stat android/` después de correrlo.  */
+
+if (process.argv.includes("--tienda")) {
+  const TIENDA = path.join(AQUI, "..", "app branding", "ficha-play");
+
+  /* El ícono de la ficha NO lleva las esquinas redondeadas de `legado`.
+     Play Store pide el cuadrado lleno y el redondeo lo aplica ella, distinto
+     en cada lugar donde muestra la app —la ficha, los resultados de búsqueda,
+     la lista de instaladas—. Redondearlo acá es redondearlo dos veces: queda
+     un borde de madera sobrando afuera del recorte de Google. */
+  const tienda = (lado) => envolver(lado, `${madera()}${carta({ alto: 78 })}`);
+
+  /* El gráfico destacado: el banner ancho de arriba de la ficha.
+
+     Se recorta distinto en cada tamaño de pantalla y en la tele de Android TV,
+     así que lo que tiene que sobrevivir —la carta y el nombre— va junto y al
+     medio, lejos de los bordes. El fondo es el mismo NOCHE del splash, o sea
+     que el primer golpe de vista de la ficha y el primer golpe de vista al
+     abrir la app son el mismo. */
+  const destacado = (ancho, alto) => {
+    const lado = alto * 0.72;
+    /* El bloque de texto se centra en vez de arrancar en un punto: así, si la
+       palabra cambia de largo, sobra lo mismo de cada lado en vez de salirse
+       por la derecha. Se salió la primera vez, con "URUGUAYO" cortado al
+       medio de la O. */
+    const ejeTexto = ancho * 0.64;
+    const cuerpo = alto * 0.125;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${ancho}" height="${alto}" viewBox="0 0 ${ancho} ${alto}">
+      <rect width="${ancho}" height="${alto}" fill="${NOCHE}"/>
+      <g transform="translate(${ancho * 0.25 - lado / 2} ${(alto - lado) / 2}) scale(${lado / 108})">
+        ${carta({ alto: 74 })}
+      </g>
+      <g font-family="Georgia, 'Times New Roman', serif" text-anchor="middle">
+        <text x="${ejeTexto}" y="${alto * 0.42}" fill="${PAPEL}"
+              font-weight="bold" font-size="${cuerpo}">TRUCO</text>
+        <text x="${ejeTexto}" y="${alto * 0.60}" fill="${DORADO}"
+              font-weight="bold" font-size="${cuerpo}">URUGUAYO</text>
+        <text x="${ejeTexto}" y="${alto * 0.76}" fill="${PAPEL_SOMBRA}"
+              font-size="${alto * 0.058}" letter-spacing="${alto * 0.011}">APRENDÉ Y JUGÁ</text>
+      </g>
+    </svg>`;
+  };
+
+  await mkdir(TIENDA, { recursive: true });
+
+  /* El ícono SÍ lleva alfa (Play lo pide de 32 bits) y el destacado NO: se le
+     aplana el fondo contra el negro de la noche, porque un PNG con canal alfa
+     ahí lo rechaza la consola. */
+  await png(tienda(512), path.join(TIENDA, "icono-512.png"));
+  await sharp(Buffer.from(destacado(1024, 500)))
+    .flatten({ background: NOCHE })
+    .png({ compressionLevel: 9 })
+    .toFile(path.join(TIENDA, "grafico-destacado-1024x500.png"));
+
+  console.log("\ny en 'app branding/ficha-play' (que NO sube a GitHub):");
+  console.log("  icono-512.png                    512x512, con alfa");
+  console.log("  grafico-destacado-1024x500.png   1024x500, sin alfa");
+}

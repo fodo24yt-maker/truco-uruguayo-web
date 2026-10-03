@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/legales/terminos" },
 };
 
-const ULTIMA_ACTUALIZACION = "26 de agosto de 2026";
+const ULTIMA_ACTUALIZACION = "2 de octubre de 2026";
 
 export default function Terminos() {
   return (
@@ -34,7 +34,7 @@ export default function Terminos() {
           <p>
             Un sitio gratuito para aprender a jugar al truco uruguayo y
             practicar contra un bot. Es un proyecto personal, hecho porque no
-            existía algo así y no porque haya un negocio atrás.
+            existía algo así.
           </p>
 
           <h2>Es gratis y va a seguir siéndolo</h2>
@@ -43,6 +43,13 @@ export default function Terminos() {
             versión paga. <strong>No hay apuestas con dinero</strong>, ni fichas
             que se compren, ni compras dentro del juego. Nada de lo que pasa en
             esta web tiene valor monetario.
+          </p>
+          <p>
+            En la app de Android, <strong>el anotador y la Gira nacional se
+            desbloquean gratis</strong>: el anotador mirando un video una sola
+            vez, y la Gira terminando la sección Aprender o mirando un video.
+            Lo desbloqueado se guarda en tu teléfono: si borrás los datos de la
+            app o la desinstalás, se pierde y hay que volver a desbloquearlo.
           </p>
 
           <h2>Sin garantías</h2>
@@ -95,8 +102,12 @@ export default function Terminos() {
 
           <h2>Publicidad</h2>
           <p>
-            No hay, y no está previsto que la haya. Si eso cambiara, se avisa
-            antes en la{" "}
+            <strong>La web no tiene publicidad.</strong> La app de Android sí:
+            anuncios de Google AdMob, de pantalla completa antes de empezar una
+            partida (como mucho uno cada tres minutos, nunca en medio de una
+            partida ni en Aprender) y videos que vos elegís mirar para
+            desbloquear algo. No hay banners. Qué datos usan esos anuncios está
+            en la{" "}
             <Link
               href="/legales/privacidad"
               className="text-bordo underline underline-offset-2"
@@ -105,7 +116,11 @@ export default function Terminos() {
             >
               política de privacidad
             </Link>
-.
+            .
+          </p>
+          <p>
+            Cuánto dura cada anuncio y si se puede saltar lo decide la red de
+            anuncios, no la app.
           </p>
 
           <h2>Cambios</h2>

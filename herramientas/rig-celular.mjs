@@ -100,6 +100,12 @@ import { bloquesDe, cromaticasDe } from "./bloques.mjs";
 const morir = (...m) => { console.error("\n✗", ...m, "\n"); process.exit(1); };
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/* La pantalla de carga de la app (desde el 3/10/2026) tapa todo al abrir una
+   página: hasta 4 s, y la red del CSS la saca a los 6. Ninguna foto puede
+   salir antes de que se vaya, o se mide la pantalla de carga. */
+const sinPantallaCarga = (pag) =>
+  pag.waitForSelector("[data-pantalla-carga]", { state: "detached", timeout: 8000 }).catch(() => {});
+
 /** La banda del mapa. La de la mesa (por omisión de `bloques.mjs`) da 0 acá. */
 const BANDA_MAPA = [0.15, 0.68];
 const BANDA_MESA = [0.27, 0.72];
@@ -317,7 +323,7 @@ async function recorridoMapa(cuantos, cdp) {
        seis rutas del sitio. `mirar-app-compilada.mjs` no lo ve porque prueba
        contra `python3 -m http.server`, que sí resuelve las carpetas.
        De paso, entrar por clicks es lo que hace una persona. */
-    await pagina.goto("https://localhost/", { waitUntil: "load" });
+    await pagina.goto("https://localhost/", { waitUntil: "load" }); await sinPantallaCarga(pagina);
     await pagina.click('a[href="/jugar/"]');
     await pagina.click('a[href="/jugar/gira/"]');
     await pagina.waitForSelector(".depto", { state: "attached", timeout: 10000 });
@@ -438,12 +444,20 @@ const IDS_DE_LA_GIRA = [
    alguna vez se corre contra un teléfono con progreso de verdad, guardar el
    valor viejo antes y devolverlo al terminar. */
 async function abrirLaGira(pag, base) {
-  await pag.goto(`${base}/`, { waitUntil: "load" });
+  await pag.goto(`${base}/`, { waitUntil: "load" }); await sinPantallaCarga(pag);
   await pag.evaluate((ids) => {
     const rivales = {};
     for (const id of ids) rivales[id] = { ganadas: 1, jugadas: 1 };
     localStorage.setItem("truco-uy:progreso", JSON.stringify({
       version: 1, rivales, leccionesLeidas: [], ayudas: true, ultimoRival: null,
+    }));
+    /* Desde el 2/10/2026 la Gira tiene candado en la app (se abre terminando
+       Aprender o mirando un video). Sin esto, el toque a la Gira abre el
+       diálogo de desbloqueo y `.depto` no aparece nunca. Y la primera partida
+       de cada sesión no lleva anuncio: como cada vuelta recarga, el rig no se
+       cruza con un intersticial. */
+    localStorage.setItem("truco-uy:desbloqueos", JSON.stringify({
+      version: 1, anotador: true, gira: true,
     }));
   }, IDS_DE_LA_GIRA);
 }
@@ -454,7 +468,7 @@ async function abrirLaGira(pag, base) {
    servidor local de Capacitor NO resuelve `/jugar/mesa/` a su `index.html` y
    devuelve la PORTADA. Medido el 8/9 en las seis rutas del sitio. */
 async function entrarPorLaGira(pag, depto, base) {
-  await pag.goto(`${base}/`, { waitUntil: "load" });
+  await pag.goto(`${base}/`, { waitUntil: "load" }); await sinPantallaCarga(pag);
   await pag.click('a[href="/jugar/"]');
   await pag.click('a[href="/jugar/gira/"]');
   await pag.waitForSelector(".depto", { timeout: 15000 });
@@ -701,7 +715,7 @@ async function entrarAlMenu(pag, css, id) {
   /* La rama se inyecta EN LA PORTADA. Si se agregara ya estando en `/jugar`,
      la rasterización que se quiere medir ya pasó. La navegación de Next es del
      lado del cliente y no toca el `<head>`: la regla sobrevive el recorrido. */
-  await pag.goto("https://localhost/", { waitUntil: "load" });
+  await pag.goto("https://localhost/", { waitUntil: "load" }); await sinPantallaCarga(pag);
   if (css) await pag.addStyleTag({ content: css });
   await pag.click('a[href="/jugar/"]');
   await pag.waitForSelector(".halo-pieza", { state: "attached" });
@@ -1300,7 +1314,7 @@ async function verCapas(cdp, ruta) {
   const { chromium } = await import("playwright");
   const navegador = await chromium.connectOverCDP(cdp);
   const pagina = navegador.contexts()[0].pages()[0];
-  if (ruta) { await pagina.goto(`https://localhost${ruta}`, { waitUntil: "load" }); await dormir(1200); }
+  if (ruta) { await pagina.goto(`https://localhost${ruta}`, { waitUntil: "load" }); await sinPantallaCarga(pagina); await dormir(1200); }
 
   const sesion = await pagina.context().newCDPSession(pagina);
   await sesion.send("DOM.enable");

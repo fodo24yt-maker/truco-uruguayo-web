@@ -59,6 +59,39 @@ export interface Personalidad {
    */
   criterio: number;
   /**
+   * Cuánto juega la PARTIDA y no sólo la mano, de 0 a 1. Ver `lib/motor/plan.ts`.
+   *
+   * En 0 mira sus cartas y nada más: le da lo mismo ir ganando 27 a 10 que
+   * perdiendo 10 a 27, y miente cuando le toca el número. Más arriba empieza a
+   * mirar el marcador —la falta envido es una escopeta que apunta siempre al
+   * que va arriba— y a administrar cuándo miente, para mentir cuando le van a
+   * creer y no cuando lo acaban de agarrar.
+   */
+  plan: number;
+  /**
+   * Cuántas partidas anteriores tuyas mira, de 0 a 1. Ver `lib/legajo.ts`.
+   *
+   * En 0 se sienta sin saber nada de vos y te tiene que mirar jugar: es lo que
+   * hace enseñables a los primeros tres niveles, y es a propósito que llegue
+   * hasta el ★3 —contra él alcanza con cambiar de estrategia para despistarlo—.
+   * Los ★4 y ★5 te tienen visto de otras mesas, así que la primera mentira ya
+   * te la cobran.
+   */
+  memoria: number;
+  /**
+   * Cuánto aguanta que le suban la apuesta, de 0 a 1.
+   *
+   * En 1 el vale cuatro no le da más miedo que el truco: mira sus cartas y
+   * decide, que es lo correcto —con más puntos sobre la mesa hay más para ganar
+   * queriendo, no menos—. En 0 cada escalón le sube el umbral y se achica
+   * aunque tenga con qué.
+   *
+   * Es lo que hace que MENTIRLE A LOS PRIMEROS RINDA, que es el objetivo de que
+   * existan: contra un ★1 el retruco con un cuatro es una jugada que funciona, y
+   * ésa es la lección. Contra El Turco no.
+   */
+  aguante: number;
+  /**
    * Cuánto te lee, de 0 a 1. Multiplica todo el ajuste de lectura.ts.
    *
    * En 0 no mira nada de lo que hacés: juega sus cartas y ya. En 1 te tiene
@@ -106,11 +139,11 @@ function segunNivel(nivel: 1 | 2 | 3 | 4 | 5) {
   //
   // Los de arriba juegan los dos en el punto y encima te leen.
   const tabla = {
-    1: { cantaEnvidoCon: 30, quiereEnvidoCon: 20, subeEnvidoCon: 34, cantaTrucoCon: 0.82, quiereTrucoCon: 0.58, subeTrucoCon: 0.88, sentidoComun: 0.15 },
-    2: { cantaEnvidoCon: 29, quiereEnvidoCon: 22, subeEnvidoCon: 33, cantaTrucoCon: 0.78, quiereTrucoCon: 0.5, subeTrucoCon: 0.82, sentidoComun: 0.35 },
-    3: { cantaEnvidoCon: 28, quiereEnvidoCon: 24, subeEnvidoCon: 32, cantaTrucoCon: 0.73, quiereTrucoCon: 0.44, subeTrucoCon: 0.75, sentidoComun: 0.6 },
-    4: { cantaEnvidoCon: 26, quiereEnvidoCon: 26, subeEnvidoCon: 31, cantaTrucoCon: 0.67, quiereTrucoCon: 0.36, subeTrucoCon: 0.68, sentidoComun: 0.85 },
-    5: { cantaEnvidoCon: 25, quiereEnvidoCon: 28, subeEnvidoCon: 30, cantaTrucoCon: 0.62, quiereTrucoCon: 0.29, subeTrucoCon: 0.55, sentidoComun: 1 },
+    1: { cantaEnvidoCon: 30, quiereEnvidoCon: 20, subeEnvidoCon: 31, cantaTrucoCon: 0.82, quiereTrucoCon: 0.58, subeTrucoCon: 0.88, sentidoComun: 0.15 },
+    2: { cantaEnvidoCon: 29, quiereEnvidoCon: 22, subeEnvidoCon: 32, cantaTrucoCon: 0.78, quiereTrucoCon: 0.5, subeTrucoCon: 0.82, sentidoComun: 0.35 },
+    3: { cantaEnvidoCon: 28, quiereEnvidoCon: 24, subeEnvidoCon: 33, cantaTrucoCon: 0.73, quiereTrucoCon: 0.44, subeTrucoCon: 0.75, sentidoComun: 0.6 },
+    4: { cantaEnvidoCon: 26, quiereEnvidoCon: 26, subeEnvidoCon: 34, cantaTrucoCon: 0.67, quiereTrucoCon: 0.36, subeTrucoCon: 0.68, sentidoComun: 0.85 },
+    5: { cantaEnvidoCon: 25, quiereEnvidoCon: 28, subeEnvidoCon: 35, cantaTrucoCon: 0.62, quiereTrucoCon: 0.29, subeTrucoCon: 0.55, sentidoComun: 1 },
   } as const;
   return tabla[nivel];
 }
@@ -147,11 +180,14 @@ const OFICIO_POR_NIVEL = {
   // Repartido parejo, cada escalón vuelve a ganarle al anterior por 51-54% y
   // el ★5 le gana al ★1 por 62%. Medido con 3.600 partidas por escalón:
   //     node herramientas/medir-bots.mjs
-  1: { criterio: 0.3, lectura: 0 },
-  2: { criterio: 0.46, lectura: 0 },
-  3: { criterio: 0.62, lectura: 0.3 },
-  4: { criterio: 0.8, lectura: 0.55 },
-  5: { criterio: 1, lectura: 1 },
+  // `plan` está en CERO para todos, y eso está medido y contado en plan.ts:
+  // la administración de la mentira no se pudo demostrar ni siquiera contra el
+  // rival que más debería premiarla. El dial queda listo para encenderse.
+  1: { criterio: 0.3, lectura: 0, aguante: 0, memoria: 0, plan: 0 },
+  2: { criterio: 0.46, lectura: 0, aguante: 0.2, memoria: 0, plan: 0 },
+  3: { criterio: 0.62, lectura: 0.3, aguante: 0.5, memoria: 0, plan: 0 },
+  4: { criterio: 0.8, lectura: 0.55, aguante: 0.8, memoria: 0.6, plan: 0 },
+  5: { criterio: 1, lectura: 1, aguante: 1, memoria: 1, plan: 0 },
 } as const;
 
 interface Semilla {
@@ -179,7 +215,7 @@ const SEMILLAS: Semilla[] = [
   {
     id: "luki", nombre: "Luquita", departamento: "Montevideo", lugar: "La Blanqueada",
     nivel: 1, mentira: 0.02, silencio: 0.05,
-    descripcion: "Juega en el liceo y no salió nunca de ahí. Si canta, tiene: no sabe mentir.",
+    descripcion: "Juega en el liceo y no salió nunca de ahí. Si canta, tiene. Y si le subís la apuesta, se achica.",
   },
   {
     id: "la-coca", nombre: "La Porota", departamento: "Canelones", lugar: "Las Piedras",
@@ -189,14 +225,14 @@ const SEMILLAS: Semilla[] = [
   {
     id: "el-rulo", nombre: "El Gallego", departamento: "San José", lugar: "Ciudad del Plata",
     nivel: 1, mentira: 0.08, silencio: 0.2,
-    descripcion: "Tranquilo y previsible. Si no canta, no tiene.",
+    descripcion: "Tranquilo y previsible. Si no canta, no tiene, y el vale cuatro lo asusta.",
   },
 
   // ── ★2 · El este y la costa ─────────────────────────────────────────────
   {
     id: "tito", nombre: "Tito", departamento: "Florida", lugar: "Sarandí Grande",
     nivel: 2, mentira: 0.15, silencio: 0.05,
-    descripcion: "Juega siempre igual. Agarrale el ritmo y lo tenés.",
+    descripcion: "Juega siempre igual. Agarrale el ritmo y lo tenés: subile y se va.",
   },
   {
     id: "la-nelly", nombre: "La Pocha", departamento: "Lavalleja", lugar: "Minas",
@@ -240,7 +276,7 @@ const SEMILLAS: Semilla[] = [
   {
     id: "el-tucho", nombre: "El Tucho", departamento: "Colonia", lugar: "Carmelo",
     nivel: 4, mentira: 0.38, silencio: 0.4,
-    descripcion: "Carmelero de mesa larga. Miente cuando conviene, y nunca cuando no.",
+    descripcion: "Carmelero de mesa larga. Miente cuando conviene, y se acuerda de cómo jugaste la vez pasada.",
   },
   {
     id: "el-fray", nombre: "Cacho", departamento: "Río Negro", lugar: "Fray Bentos",
@@ -265,19 +301,19 @@ const SEMILLAS: Semilla[] = [
   {
     id: "joao", nombre: "El Chicharra", departamento: "Rivera", lugar: "Rivera",
     nivel: 4, mentira: 0.4, silencio: 0.2,
-    descripcion: "Mitad y mitad, como la frontera. Nunca sabés si te está cargando.",
+    descripcion: "Mitad y mitad, como la frontera. Nunca sabés si te carga, pero él ya sabe cómo jugás vos.",
   },
 
   // ── ★5 · El norte gaucho: los últimos dos ───────────────────────────────
   {
     id: "peralta", nombre: "El Gaucho Peralta", departamento: "Tacuarembó", lugar: "Paso de los Toros",
     nivel: 5, mentira: 0.18, silencio: 0.35,
-    descripcion: "De la Patria Gaucha. Aguanta, aguanta, y te liquida en la tercera.",
+    descripcion: "De la Patria Gaucha. Aguanta, aguanta, y te liquida en la tercera. Viene con los deberes hechos.",
   },
   {
     id: "el-melo", nombre: "El Turco", departamento: "Cerro Largo", lugar: "Melo",
     nivel: 5, mentira: 0.35, silencio: 0.15,
-    descripcion: "El último de la gira. Te canta truco mirándote a los ojos con un cuatro.",
+    descripcion: "El último de la gira. Te canta truco mirándote a los ojos con un cuatro, y ya sabe cuándo mentís.",
   },
 ];
 

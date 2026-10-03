@@ -139,9 +139,9 @@ Para publicar en Play Store:
 - La **clave de firma** (keystore). Hoy el APK se firma con la clave de
   depuración, que sirve para instalarlo a mano y no para publicarlo. La de
   verdad no se puede perder ni rotar: si se pierde, se pierde la app.
-- El **banner de anuncios**, que hoy es un hueco reservado y nada más. Los
-  trámites, el consentimiento y qué edad conviene declarar están explicados paso
-  por paso en *Publicidad*, más abajo.
+- **Los anuncios** ya están hechos y andan con los de prueba de Google; falta
+  la parte de las consolas (Play y AdMob). La lista exacta está en
+  *Publicidad*, más abajo.
 
 Del juego:
 
@@ -191,6 +191,7 @@ la mesa, que está medida para entrar exacta.
 
     npm run build:app && npm run servir:app
     node herramientas/mirar-app-compilada.mjs  prueba EL BUILD DE LA APP
+    node herramientas/mirar-carga.mjs          la pantalla de carga y la mesa entera
 
 Lo segundo es lo que encuentra los bugs que `next dev` no puede mostrar: la CSP
 de producción —que en desarrollo no se inyecta—, las rutas con barra final y la
@@ -253,6 +254,8 @@ herramientas/
   mirar-web.mjs         El armazón de app: la barra, el volver y las pantallas
   mirar-rivales.mjs     Los bordes de las siete escenas horneadas
   mirar-app-compilada.mjs  Prueba el build de la app, no el de desarrollo
+  mirar-carga.mjs       La pantalla de carga de la app, y que la mesa entre
+                        con sus imágenes ya listas en el primer cuadro
   celular.mjs           Una ventana con forma de celular
   celular-usb.mjs       Compila, instala y abre la app en un teléfono por USB.
                         `--foto` y `--vigilar` sacan la imagen del framebuffer
@@ -364,86 +367,178 @@ usos educativos y sin fines de lucro se ven con muy buenos ojos.
 
 ## Publicidad
 
-Vale la pena decirlo con precisión, porque este archivo antes prometía otra cosa.
+Desde el 2/10/2026. **La web no tiene publicidad, ni candados**: el código de
+los anuncios ni siquiera viaja en el build de la web (`NEXT_PUBLIC_DESTINO`, ver
+`lib/plataforma.ts`). Todo esto es sólo la app de Android.
 
-**Hoy no hay publicidad y no hay nada que la cargue.** Ni un script de terceros,
-ni una cookie, ni una sola petición de red: el juego corre entero en tu
-navegador. Eso se puede comprobar mirando la pestaña de red.
+### Qué hay, y qué no
 
-**Lo que sí hay es el lugar reservado.** `components/EspacioAnuncio.tsx` es un
-hueco medido —abajo de la mesa, en el pie y abajo de cada lección— y nada más:
-un `<div>` con una altura y, si está prendida, una silueta dibujada con CSS.
+- **Sin banners.** Se sacaron todos: en un juego de cartas molestan y casi no
+  pagan. Tampoco hay anuncios al abrir ni al salir de la app.
+- **Intersticial** (pantalla completa, unos 5 s, saltable): sólo al ENTRAR a
+  una partida —Partida rápida, el "Jugar" de cada parada de la Gira, la
+  revancha y el cambio de rival—. Nunca en medio de una partida, nunca en
+  Aprender. Con tope: ver las perillas.
+- **Video con recompensa** (unos 30 s, lo elige el usuario): desbloquea PARA
+  SIEMPRE el anotador, o la Gira nacional (que también se abre acertando los
+  doce ejercicios de Aprender). La recompensa se da sólo en el evento de
+  recompensa ganada, nunca al cerrar el video.
 
-Está desde ahora por una razón concreta: **la mesa está medida para entrar
-exacta en una pantalla que no scrollea nunca**, y un banner que aparece después
-le come 50px a las cartas. Con el hueco puesto, `mirar-mesa.mjs` mide la mesa
-CON el banner en los siete tamaños y el día que se encienda no se rompe nada.
+Cuánto dura cada anuncio y si se puede saltar a los 5 s lo decide AdMob, no la
+app.
 
-### Cómo se enciende, y qué significa cada trámite
+### Dónde está cada cosa
 
-Lo primero, porque cambia todo lo demás: **con el plugin nativo de Capacitor el
-anuncio NO corre adentro del WebView.** Es una vista de Android puesta abajo del
-todo. O sea que la CSP no se afloja, la parte web sigue sin pedirle nada a nadie,
-y el hueco que ya está reservado se llena por debajo. Si algún día alguien
-propone meter AdSense en un `<iframe>`, es exactamente lo contrario y no va.
+| Archivo | Qué hace |
+|---|---|
+| `lib/anuncios.ts` | **El gestor**: todas las reglas de tiempo y las perillas, arriba del archivo |
+| `lib/entrada.ts` | **El único punto de entrada**: `pedirPartida` y `pedirAnotador`. Candado → anuncio → entrar |
+| `lib/anuncios-admob.ts` | El único archivo que conoce el plugin de AdMob, y el consentimiento (UMP) |
+| `lib/desbloqueos.ts`, `lib/aprendido.ts` | Lo desbloqueado y los ejercicios acertados, en `localStorage`, validados como `progreso.ts` |
+| `components/EntradaJuego.tsx` | Los enlaces de jugar y del anotador, que preguntan al portero antes de navegar |
+| `components/DialogoDesbloqueo.tsx` | El diálogo "Ver video / Ir a Aprender / Ahora no" |
+| `android/app/admob.gradle` | Los IDs: de prueba en debug, de verdad en release, y el chequeo que frena el release |
+| `ConfigAnunciosPlugin.java` | Le pasa a la web los IDs que eligió Gradle |
 
-**1. AdMob.** Es la red de anuncios de Google para apps. Cuenta en
-`admob.google.com`, con la misma cuenta de Google que Play Console, y las dos
-vinculadas. Se registra la app —se puede antes de publicarla— y salen un **App
-ID** (`ca-app-pub-…~…`) y, creando una unidad de tipo *Banner*, un **Ad unit ID**
-(`ca-app-pub-…/…`).
+`lib/entradas-unicas.test.ts` lee el código y falla si aparece un camino a la
+mesa o al anotador que no pase por `lib/entrada.ts`.
 
-**2. "Yo no quiero recolectar datos de nadie."** Y no los vas a recolectar vos:
-los recolecta AdMob. Cuando el SDK pide un anuncio manda el identificador de
-publicidad del aparato, la IP (de donde sale la ubicación aproximada) y datos del
-dispositivo. Eso es justamente lo que se paga. No hay forma de tener anuncios sin
-eso, y por eso hay que declararlo.
+### Las perillas (arriba de `lib/anuncios.ts`)
 
-**3. El formulario de "Seguridad de los datos"** de Play Console es un
-cuestionario donde declarás qué recoge la app. Con AdMob adentro se declara
-*Identificadores del dispositivo → se recopilan · se comparten con terceros ·
-para publicidad*. Declararlo bien no cuesta nada; declararlo mal es de las
-razones más comunes por las que bajan una app.
+| Constante | Valor | Qué es |
+|---|---|---|
+| `MINUTOS_ENTRE_ANUNCIOS` | 3 | Tope entre un anuncio mostrado y el próximo intersticial. Era 6; se bajó a 3 después de probarlo en el teléfono |
+| `MINUTOS_SIN_INTERSTICIAL_TRAS_VIDEO` | 7 | Después de un video, ningún intersticial. Tiene que ser mayor que el tope de arriba (un test lo exige) |
+| `SEGUNDOS_ESPERA_QUE_APAREZCA` | 3 | Si el anuncio no aparece, el usuario pasa igual |
+| `SEGUNDOS_MAXIMOS_CARGA_VIDEO` | 15 | Cuánto dice "Cargando video…" antes de "no disponible" |
+| `SEGUNDOS_GRACIA_RECOMPENSA` | 1 | Margen para una recompensa que llegue después del cierre |
+| `SEGUNDOS_VOLVER_SIN_CIERRE` | 1,5 | Al volver a la app con un anuncio "abierto" sin aviso de cierre |
+| `MINUTOS_VIDA_ANUNCIO` | 55 | Un anuncio cargado hace más se recarga (Google los vence a la hora) |
+| `REINTENTOS_CARGA_SEGUNDOS` | 30, 60, 120, 300 | Reintentos cuando una carga falla |
+| `MS_TRABA_DOBLE_TOQUE` | 1000 | Dos toques seguidos cuentan como uno |
+| `SEGUNDOS_SIN_CARGAR_AL_ENTRAR` | 8 | Después de entrar a una partida (o de cerrarse el anuncio que iba antes), no se carga ningún anuncio: el plugin carga en el hilo principal de Android y hacía tardar la mesa |
+| `CLASIFICACION_MAXIMA` | `ParentalGuidance` | Tope de contenido de los anuncios |
+| `DIRIGIDA_A_MENORES` | `false` | La app no está dirigida a menores de 13 |
 
-**4. El consentimiento (UMP).** Para quien abra la app en Europa o el Reino
-Unido hay que mostrar un cartel de consentimiento ANTES de pedir el primer
-anuncio. Google lo da hecho: el SDK de *User Messaging Platform*, que se
-configura desde AdMob (Privacidad y mensajes). En Uruguay no aparece nada.
+Además: **la primera partida de cada sesión nunca lleva anuncio**, y el reloj
+arranca al abrir la app. Los tiempos viven en memoria: al cerrar la app se
+reinician.
 
-**5. La edad, que es la decisión que más plata mueve.** Play Console pregunta
-por el público objetivo:
+**El intersticial se carga al abrir la app**, durante la pantalla de carga, y
+no al entrar a la primera partida (desde el 3/10/2026; ver abajo *La pantalla
+de carga*).
 
-- Si incluís **menores de 13**, la app entra en *Diseñado para familias*: Google
-  obliga a anuncios **no personalizados**, que pagan bastante menos, y hay
-  revisión de contenido más estricta.
-- El truco, aunque no haya un peso de por medio, suele clasificar **12+** en el
-  cuestionario de IARC por "juego de apuestas simulado". Conviene contestarlo
-  con la verdad: mentir ahí es lo que hace que te bajen la app después.
+### Los IDs
 
-**Lo recomendado: público objetivo 13+ y la app marcada como NO dirigida a
-niños** (`tagForChildDirectedTreatment = false`). Es lo honesto —una app de truco
-es para gente que juega al truco—, mantiene los anuncios personalizados y no te
-achica el público. 18+ no aporta nada: te saca gente sin darte un peso más.
+- **Debug: siempre los de prueba de Google**, escritos en `android/app/admob.gradle`.
+- **Release: los de verdad**, en `android/admob.properties`, que **está en el
+  `.gitignore` y no sube**. La plantilla es `android/admob.properties.ejemplo`.
+- **El release no compila** si los IDs faltan, siguen en `REEMPLAZAR_…`, son los
+  de prueba o tienen mal la forma. Se prueba sin tocar el archivo de verdad:
+  `./gradlew preReleaseBuild -Padmob.archivo=otro.properties`.
+- Para cambiarlos se tocan **tres líneas** de `android/admob.properties`:
+  `ADMOB_APP_ID`, `ADMOB_INTERSTICIAL` y `ADMOB_RECOMPENSA`.
 
-**6. Lo que hay que tener escrito**: la política de privacidad (ya existe, en
-`/legales/privacidad`) con AdMob mencionado y cargada en Play Console, el
-cuestionario de clasificación, el público objetivo y la casilla "contiene
-anuncios". La política **se actualiza ANTES de encender nada, no después**.
+Ojo: `./gradlew build` arma también el release, así que en una máquina sin
+`admob.properties` falla. El CI y `celular-usb.mjs` hacen sólo `assembleDebug`.
 
-**7. Dos avisos que valen la cuenta entera.** Se prueba SIEMPRE con las unidades
-de prueba que publica AdMob: tocar tus propios anuncios reales es baneo
-definitivo y sin apelación. Y AdMob paga recién cuando pasás los **US$100**,
-contra una dirección y un formulario de impuestos de Estados Unidos (W-8BEN),
-porque el que paga es Google desde allá.
+### Cómo se prueba
 
-**Cuánto da, en serio.** Un banner en Uruguay anda entre US$0,20 y US$1 por cada
-mil veces que se muestra. Vale la pena ponerlo porque cuesta casi nada, no porque
-vaya a financiar algo al principio.
+- `npm test`: las reglas con un reloj de mentira (`lib/anuncios.test.ts`), el
+  portero, los desbloqueos y el guardián de las entradas.
+- `DESTINO=app npx next dev -p 3100` y `node herramientas/mirar-anuncios.mjs`:
+  recorre cada regla en un navegador, con una red de anuncios de mentira y el
+  reloj adelantado (`--fotos` saca las capturas). Lo de mentira existe sólo en
+  `next dev`: no viaja en ningún build.
+- En el teléfono: `node herramientas/celular-usb.mjs --apk`, con los anuncios
+  de prueba de Google. **Nunca tocar los anuncios reales propios**: es baneo
+  definitivo de la cuenta.
+
+### La pantalla de carga (sólo en la app)
+
+Desde el 3/10/2026. Al abrir la app, después del logo de Android, se ve una
+pantalla dibujada por código (`components/PantallaCarga.tsx`): la marca, el
+nombre y una barrita. Mientras tanto se precarga lo que la mesa necesita, para
+que al tocar "Partida rápida" sólo falte repartir:
+
+- **el código** de la mesa y de la Gira (`router.prefetch`, y se espera a que
+  Next lo baje de verdad: `esperarCodigo` en `lib/precarga.ts`);
+- **las imágenes** de las mesas probables, bajadas y decodificadas: la del
+  rival de la Partida rápida y la de la próxima parada de la Gira. Como mucho
+  2 departamentos (~10,5 MB cada uno una vez decodificado; los 19 serían
+  ~200 MB);
+- **el arranque de AdMob** con la carga del primer intersticial.
+
+Lo que NO se precarga: la mesa, el rival y la mano. Son dibujos de código, no
+hay nada que bajar.
+
+| Constante | Dónde | Valor |
+|---|---|---|
+| `MS_MINIMO_PANTALLA_CARGA` | `components/PantallaCarga.tsx` | 800 |
+| `MS_MAXIMO_PANTALLA_CARGA` | `components/PantallaCarga.tsx` | 4000 (y el CSS la esconde a los 6 s aunque no haya JavaScript) |
+| `MAX_DEPARTAMENTOS_A_PRECARGAR` | `lib/precarga.ts` | 2 |
+| `MAX_DEPARTAMENTOS_EN_MEMORIA` | `lib/precarga.ts` | 3 |
+| `MS_TOPE_ESPERA_ESCENA` | `lib/precarga.ts` | 1200 |
+
+Y **la mesa entra entera**: antes de repartir espera a que sus dos imágenes
+estén decodificadas (como mucho `MS_TOPE_ESPERA_ESCENA`), también al cambiar de
+rival. El mapa de la Gira precarga la escena de una parada apenas abrís su
+ficha, y el menú de jugar precarga las probables (en la web es lo único que se
+agrega: la web no tiene pantalla de carga).
+
+Se prueba con `npm run build:app`, `npm run servir:app` y
+`node herramientas/mirar-carga.mjs`, que mira, entre otras cosas, que el primer
+cuadro en que existe la escena ya tenga sus imágenes listas.
+
+### Lo que hay que completar a mano
+
+**En AdMob** (`admob.google.com`):
+
+1. Agregar la app, vincularla a Play cuando esté publicada → **App ID**. ✔ hecho.
+2. Dos unidades de anuncio, **Intersticial** y **Recompensado** → sus IDs. ✔ hecho.
+   (Los tres ya están en `android/admob.properties`.)
+3. **Privacidad y mensajes → Reglamentaciones europeas**: crear y publicar el
+   mensaje de consentimiento (GDPR) para la app. Sin eso, en Europa no hay
+   formulario y no se pueden pedir anuncios.
+4. **Configuración → Dispositivos de prueba**: agregar tu teléfono, así el
+   release con IDs reales te muestra anuncios de prueba y no tráfico inválido.
+5. **`app-ads.txt`**: AdMob lo pide para verificar la app. Es un archivo en la
+   raíz del sitio que figure como "sitio web del desarrollador" en la ficha de
+   Play, con una línea: `google.com, pub-XXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0`
+   (el `pub-…` es el número del medio de tus IDs). Se pondría en
+   `public/app-ads.txt`. **Es público por diseño**: decidir antes de subirlo.
+6. Pagos: datos de pago y el formulario de impuestos de Estados Unidos
+   (W-8BEN). AdMob paga recién al pasar los US$100.
+7. Opcional: **Controles de bloqueo** → categorías sensibles (por ejemplo,
+   apuestas), si no querés esos anuncios en una app de truco.
+
+**En Play Console**:
+
+1. **Contenido de la app → Anuncios**: "Sí, mi app contiene anuncios".
+2. **Contenido de la app → ID de publicidad**: declarar que se usa, para
+   *publicidad o marketing*. Hace falta porque el SDK agrega el permiso
+   `AD_ID`.
+3. **Seguridad de los datos**: declarar lo que recoge el SDK de AdMob —verificar
+   contra la guía oficial de Google, que es la que manda:
+   `developers.google.com/admob/android/privacy/play-data-disclosure`—.
+   En resumen: *Ubicación aproximada*, *Identificadores del dispositivo u
+   otros*, *Actividad en la app (interacciones)* y *Información y rendimiento
+   de la app (registros de fallas, diagnóstico)*; recopilados y compartidos,
+   para *publicidad*, *estadísticas* y *prevención de fraude*; cifrados en
+   tránsito.
+4. **Público objetivo**: 13 años o más, la app **no** dirigida a niños
+   (coincide con `DIRIGIDA_A_MENORES = false`).
+5. **Clasificación de contenido** (IARC): contestar con la verdad; el truco
+   suele salir 12+ por "juego de apuestas simulado".
+6. **Política de privacidad**: la URL pública de `/legales/privacidad`, que ya
+   nombra a AdMob. **Publicar la web con la política nueva ANTES de repartir
+   un APK con anuncios**: la página prometía actualizarse primero.
 
 ## Legales
 
-- [Política de privacidad](app/legales/privacidad/page.tsx) — hoy la app no
-  recoge ningún dato: sin cuentas, sin cookies, sin analítica.
+- [Política de privacidad](app/legales/privacidad/page.tsx) — nosotros no
+  recogemos ningún dato; en la app de Android, los anuncios de AdMob sí (está
+  explicado ahí, con nombre y apellido).
 - [Términos de uso](app/legales/terminos/page.tsx)
 
 Las dos se actualizan **antes** de agregar cualquier función que toque datos

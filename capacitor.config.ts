@@ -41,6 +41,12 @@ const config: CapacitorConfig = {
        la mesa scrollearía y la barra taparía las cartas. Es mejor pedirle a esa
        persona que actualice el WebView que darle una app rota. */
     minWebViewVersion: 105,
+
+    /* El fondo del WebView mismo, debajo de la página (3/10/2026). Por omisión
+       es BLANCO: si el splash de Android se va antes de que la página pinte su
+       primer cuadro —en un teléfono lento pasa—, asomaba un rectángulo blanco
+       entre el logo y la pantalla de carga. Del mismo color que los dos. */
+    backgroundColor: "#14100E",
   },
 
   plugins: {

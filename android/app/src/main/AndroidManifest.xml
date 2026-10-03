@@ -10,7 +10,14 @@
         declarar las reglas es obligatorio si la copia está prendida.
       · `usesCleartextTraffic="false"` — con `targetSdk` 36 ya es el valor por
         omisión; se escribe igual para que se vea que es una decisión y no un
-        descuido. La app no le habla a nadie: todo sale de adentro del APK.
+        descuido. El juego no le habla a nadie: todo sale de adentro del APK.
+        Lo ÚNICO que sale a internet son los anuncios, y los pide el SDK de
+        AdMob desde Android, no la página (por eso la CSP no se afloja), y
+        siempre por HTTPS.
+      · `com.google.android.gms.ads.APPLICATION_ID` — el App ID de AdMob. Sin
+        él, el SDK cierra la app al arrancar. El valor lo pone
+        `android/app/admob.gradle`: el de prueba en debug, el de verdad en
+        release. El permiso `AD_ID` lo agrega solo el SDK de anuncios.
       · `screenOrientation="portrait"` — la app es de celular y sólo de celular.
         De paso evita que `lib/pantalla.ts` salte del diseño de celular al de PC
         en medio de una mano, que es lo que pasaría al girar el teléfono.
@@ -25,6 +32,10 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
+
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="${admobAppId}" />
 
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"

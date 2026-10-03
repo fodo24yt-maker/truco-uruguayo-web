@@ -61,6 +61,16 @@ export interface Registro {
   canto?: CantoEnvido | CantoFlor;
   /** En qué baza pasó: 0, 1 ó 2. */
   baza: number;
+  /**
+   * Qué se estaba contestando. Sólo en `quiero` y `no-quiero`.
+   *
+   * Lo escribe el motor porque acá se sabe de verdad, y afuera hay que
+   * adivinarlo. `lectura.ts` lo adivinaba recorriendo el historial con una sola
+   * variable de "qué hay abierto", y eso SE EQUIVOCA cuando el envido va
+   * primero: ahí quedan dos cantos abiertos a la vez —el truco congelado en
+   * `trucoEnEspera` y el envido— y un `quiero` cerraba los dos.
+   */
+  sobre?: "envido" | "truco" | "flor";
 }
 
 export interface Partida {
@@ -512,6 +522,12 @@ export function aplicar(previo: Partida, accion: Accion, quien: Jugador): Partid
     tipo: accion.tipo,
     canto: accion.tipo === "envido" || accion.tipo === "flor-canto" ? accion.canto : undefined,
     baza: p.bazas.length - 1,
+    // Se anota ACÁ y no después porque acá `pendiente` todavía es lo que se
+    // está contestando: el `switch` de abajo es el que lo consume.
+    sobre:
+      accion.tipo === "quiero" || accion.tipo === "no-quiero"
+        ? p.pendiente?.tipo
+        : undefined,
   });
   if (GASTA_EL_TURNO.has(accion.tipo)) p.yaHablo[quien] = true;
 

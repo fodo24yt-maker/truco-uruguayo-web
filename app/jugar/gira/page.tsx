@@ -9,20 +9,25 @@
  * `desbloqueados` en el `localStorage` sería una segunda fuente de verdad que
  * puede contradecir a la primera.
  *
- * El `<Link>` a la mesa se renderiza SÓLO para las paradas abiertas o ganadas,
- * así que por el camino normal nunca se llega a un rival cerrado. Lo que no se
- * hace es bloquear `?rival=`: esto es un sitio estático, el chequeo correría en
- * el navegador —en el mismo lugar donde vive el `localStorage` que querría
- * proteger— y de paso rompería los enlaces directos. La Partida Rápida sigue
- * libre, y el README ya dice que el progreso es local.
+ * El enlace a la mesa (`EntradaPartida`) se renderiza SÓLO para las paradas
+ * abiertas o ganadas, así que por el camino normal nunca se llega a un rival
+ * cerrado. Lo que no se hace es bloquear `?rival=`: esto es un sitio
+ * estático, el chequeo correría en el navegador —en el mismo lugar donde vive
+ * el `localStorage` que querría proteger— y de paso rompería los enlaces
+ * directos. La Partida Rápida sigue libre, y el README ya dice que el
+ * progreso es local.
  */
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { EntradaPartida } from "@/components/EntradaJuego";
 import { MapaUruguay } from "@/components/mapa/MapaUruguay";
 import { Trofeos } from "@/components/Trofeos";
+import { portero } from "@/lib/entrada";
 import { armarGira, proximaParada, slugDepartamento } from "@/lib/gira";
+import { precargarDepartamento } from "@/lib/precarga";
 import { type Progreso, leerProgreso } from "@/lib/progreso";
 import { trofeosDe } from "@/lib/trofeos";
 
@@ -66,12 +71,30 @@ export default function Gira() {
     setMarcas(leerProgreso().rivales);
   }, []);
 
+  /* En la app la Gira tiene candado hasta terminar Aprender o mirar un video.
+     El botón de `/jugar` ya lo respeta; esto es para cuando se llega sin pasar
+     por él (una dirección escrita a mano): se vuelve al menú con el diálogo
+     abierto. En la web no hace nada. */
+  const router = useRouter();
+  useEffect(() => {
+    if (portero.rebotar("gira")) router.replace("/jugar");
+  }, [router]);
+
   const paradas = useMemo(() => armarGira(marcas), [marcas]);
   const parada = paradas.find((p) => p.personalidad.departamento === elegido) ?? null;
   const proximo = proximaParada(paradas);
   const ganadas = paradas.filter((p) => p.estado === "ganada").length;
   const trofeos = useMemo(() => trofeosDe(marcas), [marcas]);
   const rival = parada?.personalidad;
+
+  /* Tocar una parada abre su ficha: ahí ya se sabe adónde vas a jugar, así que
+     la escena de ese departamento se empieza a bajar y decodificar YA. Para
+     cuando tocás "Jugar", la mesa entra entera (ver `lib/precarga.ts`). Una
+     parada cerrada no se juega: no se precarga. */
+  const deptoAJugar = parada && parada.estado !== "cerrada" ? parada.personalidad.departamento : null;
+  useEffect(() => {
+    if (deptoAJugar) void precargarDepartamento(deptoAJugar);
+  }, [deptoAJugar]);
 
   // Pantalla completa, igual que la mesa: la gira es una pantalla de juego, no
   // una página para leer. Sin esto el mapa queda encajonado entre el pie de
@@ -165,9 +188,8 @@ export default function Gira() {
       {/* ── EL HUECO DE LA FICHA, RESERVADO SIEMPRE ─────────────────────
           Es la otra mitad del arreglo de arriba: esta caja se queda con TODO
           el alto que sobra, haya ficha o no. La franja y la ficha se turnan
-          adentro y el mapa nunca se entera. Es el mismo criterio que
-          `EspacioAnuncio`: se reserva el espacio desde el principio para que
-          después nada se mueva.
+          adentro y el mapa nunca se entera: se reserva el espacio desde el
+          principio para que después nada se mueva.
 
           `justify-end` deja la franja pegada abajo, donde estaba. */}
       <div className="flex min-h-0 flex-1 flex-col justify-end overflow-hidden">
@@ -213,12 +235,15 @@ export default function Gira() {
                 Cerrado
               </p>
             ) : (
-              <Link
-                href={`/jugar/mesa?depto=${slugDepartamento(rival.departamento)}`}
+              /* Pasa por `lib/entrada.ts`, como toda entrada a una partida: acá
+                 es donde sale el intersticial de la Gira, si toca (y no al
+                 entrar al mapa, que es mirar). */
+              <EntradaPartida
+                pedido={{ modo: "gira", depto: slugDepartamento(rival.departamento) }}
                 className="shrink-0 rounded bg-bordo px-6 py-3 text-center font-[family-name:var(--font-ui)] text-base uppercase tracking-wide text-crema transition-colors hover:bg-bordo-claro"
               >
                 {parada.estado === "ganada" ? "Jugar de nuevo" : "Jugar"}
-              </Link>
+              </EntradaPartida>
             )}
           </div>
         </div>

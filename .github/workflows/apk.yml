@@ -12,6 +12,12 @@
 # puede volver a generar: pierde la app para siempre. Meterla como secreto de un
 # repo público es superficie que hoy no hace falta. Se agrega el día que se vaya
 # a publicar, y ese día se agrega también el `bundleRelease`.
+#
+# ── Los anuncios ─────────────────────────────────────────────────────────────
+# Este APK es de debug y lleva SIEMPRE los IDs de prueba de AdMob, que están en
+# `android/app/admob.gradle`. El día del `bundleRelease` va a hacer falta
+# `android/admob.properties` con los de verdad —ese archivo NO está en el repo—;
+# sin él el release no compila, y es a propósito.
 name: APK
 
 on:

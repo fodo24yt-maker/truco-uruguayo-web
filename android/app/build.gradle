@@ -24,6 +24,10 @@ android {
     }
 }
 
+// Los IDs de AdMob (de prueba en debug, de verdad en release) y el chequeo que
+// no deja armar un release con IDs equivocados. Todo eso vive ahí.
+apply from: 'admob.gradle'
+
 repositories {
     flatDir{
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'

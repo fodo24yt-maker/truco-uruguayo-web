@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 
 import { Carta } from "@/components/Carta";
-import { EspacioAnuncio } from "@/components/EspacioAnuncio";
+import { BarraCarga } from "@/components/PantallaCarga";
+import { portero } from "@/lib/entrada";
 import { DialogoMio, DialogoRival } from "@/components/mesa/Dialogo";
 import { ObjetoDeMesa } from "@/components/mesa/Objetos";
 import { CartelEnMesa, TantosBajoMedallon } from "@/components/mesa/Tantos";
@@ -41,9 +42,11 @@ import {
   buscarPersonalidad,
   type Personalidad,
 } from "@/lib/motor/personalidades";
-import { fichaVacia, observarMano } from "@/lib/motor/lectura";
+import { fichaVacia, observarMano, sumarFichas } from "@/lib/motor/lectura";
+import { anotarEnLegajo, fichaSembrada, leerLegajo } from "@/lib/legajo";
 import { explicarEnvido, valorEnvido } from "@/lib/motor/tantos";
 import { ambienteDe, escenaDe, objetoDe } from "@/lib/ambientes";
+import { esperarEscena, precargarDepartamento } from "@/lib/precarga";
 import { estiloEnMesa } from "@/lib/mesa-perspectiva";
 import { caraDe } from "@/lib/caras";
 import { porSlugDeDepartamento } from "@/lib/gira";
@@ -318,12 +321,21 @@ export default function Jugar() {
   );
 }
 
+/**
+ * Lo que se ve mientras la mesa espera su escena (`esperarEscena`, como mucho
+ * `MS_TOPE_ESPERA_ESCENA`). Con la escena ya precargada no se ve nunca: el
+ * texto y la barrita aparecen recién a los 250 ms (`.aparece-tarde`), así una
+ * espera corta no parpadea.
+ */
 function Cargando() {
   return (
     <div className="tabla-mesa flex min-h-0 flex-1 items-center justify-center">
-      <p className="font-[family-name:var(--font-ui)] uppercase tracking-widest text-crema/60">
-        Repartiendo…
-      </p>
+      <div className="aparece-tarde flex flex-col items-center gap-3">
+        <p className="font-[family-name:var(--font-ui)] uppercase tracking-widest text-crema/60">
+          Repartiendo…
+        </p>
+        <BarraCarga />
+      </div>
     </div>
   );
 }
@@ -353,6 +365,14 @@ function Mesa() {
    */
   const rivalDelDepto = porSlugDeDepartamento(parametros.get("depto"));
   const esHistoria = rivalDelDepto !== null;
+  const router = useRouter();
+
+  /* En la app, la Gira tiene candado. Los botones ya lo respetan (pasan por
+     `lib/entrada.ts`); esto es para la mesa abierta a mano con `?depto=`: si
+     la Gira está cerrada, se vuelve al menú con el diálogo abierto. */
+  useEffect(() => {
+    if (esHistoria && portero.rebotar("gira")) router.replace("/jugar");
+  }, [esHistoria, router]);
 
   const [p, setP] = useState<Partida | null>(null);
   const [ayudas, setAyudas] = useState(true);
@@ -366,14 +386,57 @@ function Mesa() {
     Record<string, { ganadas: number; jugadas: number }>
   >({});
   const anotada = useRef<Partida | null>(null);
+  /** El último rival elegido en el selector, mientras su escena termina de cargar. */
+  const ultimoPedido = useRef<symbol | null>(null);
 
   /**
    * Lo que el rival tiene anotado de cómo jugás. Dura lo que dura la partida:
    * no se guarda en el navegador ni viaja a ningún lado. Va en un `useRef` y no
    * en el estado porque cambiarla no tiene que redibujar la mesa.
    */
-  const ficha = useRef(fichaVacia());
+  /**
+   * Lo que el rival tiene anotado de vos, en DOS PARTES que no se mezclan.
+   *
+   * `sembrada` es lo que se acuerda de otras partidas (sale del legajo, y trae
+   * decimales porque lo viejo pesa menos). `observada` es lo de esta partida, en
+   * cuentas enteras. El bot decide con la suma de las dos; al legajo va sólo
+   * `observada`.
+   *
+   * Separadas y no en una sola, porque juntas se guardaba la suma al terminar:
+   * lo de esta partida más el eco de las anteriores, y con decimales, que el
+   * saneador del legajo rechaza. O sea que contra los ★4 y ★5 —los únicos que
+   * siembran— después de la primera partida no se guardaba ninguna más, sin que
+   * nada avisara.
+   */
+  const sembrada = useRef(fichaVacia());
+  const observada = useRef(fichaVacia());
+  /**
+   * Y lo que VOS pudiste anotar de ÉL. Es la misma ficha corrida al revés, y de
+   * ahí sale si le vas a creer la próxima (ver `lib/motor/plan.ts`). Se lleva
+   * siempre, aunque hoy los diales que la consumen estén en cero: llevarla no
+   * cuesta nada y no llevarla es lo que hace que prenderlos sea un lío.
+   */
+  const comoLoVes = useRef(fichaVacia());
   const manoObservada = useRef<Partida | null>(null);
+
+  /**
+   * Empezar de cero con este rival: se olvida lo de la partida anterior y se
+   * siembra lo que el legajo diga que él se acuerda de vos.
+   *
+   * Va en una función porque hay TRES lugares que reparten una partida nueva
+   * —montarse, la revancha y cambiar de rival— y hasta el 11/9/2026 sólo el
+   * primero limpiaba la ficha. O sea que la revancha arrancaba con todo lo que
+   * el rival te había visto hacer en la partida anterior, justo lo contrario de
+   * lo que promete el encabezado de `lectura.ts`. Ahora la memoria entre
+   * partidas existe, tiene reglas y pasa por el legajo: colarse por atrás ya no
+   * es un descuido, es saltearse las reglas.
+   */
+  const reiniciarMemoria = (persona: Personalidad) => {
+    sembrada.current = fichaSembrada(leerLegajo(), persona.memoria);
+    observada.current = fichaVacia();
+    comoLoVes.current = fichaVacia();
+    manoObservada.current = null;
+  };
   /** Se prende cuando las ayudas te salvan una flor que ibas a perder. */
   const [florSalvada, setFlorSalvada] = useState(false);
   /**
@@ -482,16 +545,34 @@ function Mesa() {
 
   // El reparto se hace en el navegador: si se hiciera al generar la página,
   // todos verían siempre las mismas cartas.
+  //
+  // LA ESCENA ENTRA ENTERA (3/10/2026). Antes de repartir se espera a que las
+  // dos imágenes de la mesa estén decodificadas (o al tope, 1,2 s). Si no, se
+  // pintaba un color liso y la textura "saltaba" encima un rato después: un
+  // segundo redibujado de toda la escena justo después del cambio de
+  // pantalla, que es el terreno del bug de los píxeles. Casi siempre ya están:
+  // las precarga la pantalla de carga de la app, o el menú de jugar.
+  //
+  // Hasta que se reparte se ve `Cargando`, y el reloj del reparto arranca con
+  // la escena ya puesta: la animación no se pierde.
   useEffect(() => {
     const progreso = leerProgreso();
     setAyudas(progreso.ayudas);
     setMarcas(progreso.rivales);
-    // Sólo para el modo libre: en historia el rival ya salió del departamento.
-    if (rivalPedido) setRivalElegido(buscarPersonalidad(rivalPedido));
-    else if (progreso.ultimoRival)
-      setRivalElegido(buscarPersonalidad(progreso.ultimoRival));
-    ficha.current = fichaVacia();
-    repartirNueva(nuevaPartida());
+    const contra =
+      rivalDelDepto ?? buscarPersonalidad(rivalPedido ?? progreso.ultimoRival ?? "");
+    let vigente = true;
+    void esperarEscena(escenaDe(contra.departamento)).then(() => {
+      if (!vigente) return; // se fue de la mesa, o cambió el rival mientras tanto
+      // Sólo para el modo libre: en historia el rival ya salió del departamento.
+      if (rivalPedido) setRivalElegido(buscarPersonalidad(rivalPedido));
+      else if (progreso.ultimoRival) setRivalElegido(buscarPersonalidad(progreso.ultimoRival));
+      reiniciarMemoria(contra);
+      repartirNueva(nuevaPartida());
+    });
+    return () => {
+      vigente = false;
+    };
     // Sólo se vuelve a repartir de cero si cambió a quién enfrentás: si acá
     // entrara `repartirNueva`, se rearmaría la partida en cada dibujado.
   }, [rivalPedido, rivalDelDepto]);
@@ -520,7 +601,8 @@ function Mesa() {
         "rival",
         Math.random,
         rival,
-        ficha.current,
+        sumarFichas(sembrada.current, observada.current),
+        comoLoVes.current,
       );
       if (!accion) return;
       /* Canta pelado, y eso es todo lo que hay que hacer acá: el texto del
@@ -538,7 +620,9 @@ function Mesa() {
   useEffect(() => {
     if (!p || p.fase === "jugando" || manoObservada.current === p) return;
     manoObservada.current = p;
-    ficha.current = observarMano(ficha.current, p, "vos");
+    observada.current = observarMano(observada.current, p, "vos");
+    // Y lo que vos le viste a él, que es lo que él supone que vos sabés.
+    comoLoVes.current = observarMano(comoLoVes.current, p, "rival");
   }, [p]);
 
   /* Cuando termina una partida se anota, una sola vez.
@@ -555,6 +639,13 @@ function Mesa() {
       vos: p.puntos.vos,
       rival: p.puntos.rival,
     });
+
+    /* Y al legajo, que es lo que los rivales duros se acuerdan de vos en la
+       próxima. Se anota SIEMPRE, contra cualquiera y gane quien gane: el legajo
+       es tuyo, no del rival, así que también lo llenan las partidas contra
+       Luquita —que no lee nada— y por eso El Turco te conoce antes de que te
+       sientes con él. */
+    anotarEnLegajo(rival.id, gane, observada.current);
 
     /* ── EL PREMIO DEL DEPARTAMENTO, DESDE EL 10/9/2026 ──────────────────
        Los objetos salieron de la mesa y pasaron a ser lo que se gana. Este es
@@ -578,6 +669,14 @@ function Mesa() {
       nuevas.rivales,
     );
   }, [p, rival]);
+
+  /* Le avisa al gestor de anuncios si hay una partida en juego. Con partida
+     en juego no sale NINGÚN anuncio: ni en medio de una mano ni mientras se
+     canta. Terminada (el cartel de "Otra contra…"), sí puede, si toca. */
+  useEffect(() => {
+    portero.marcarPartidaEnCurso(p !== null && p.fase !== "partida-terminada");
+  }, [p]);
+  useEffect(() => () => portero.marcarPartidaEnCurso(false), []);
 
   if (!p) return <Cargando />;
 
@@ -1612,19 +1711,6 @@ function Mesa() {
         )}
       </div>
 
-      {/* ─── El hueco del anuncio ──────────────────────────────────────
-          Abajo del todo, después de los cantos, que es donde va en todos los
-          juegos. Es la cuarta hermana `shrink-0` de la columna: la escena es
-          `flex-1 min-h-0` y cede sola, igual que ya cede cuando a la barra de
-          cantos le aparece una fila.
-
-          Hoy no carga nada de nadie: es un hueco medido. El porqué completo
-          está en el propio componente. */}
-      <EspacioAnuncio
-        donde="mesa"
-        className="relative z-30 border-t border-crema/10 bg-[#0d0906]"
-      />
-
       {p.fase !== "jugando" && carteleada && !eligiendo && (
         <Cartel
           partida={p}
@@ -1632,12 +1718,30 @@ function Mesa() {
           desdeLaGira={esHistoria}
           premio={premio}
           onSeguir={() => {
-            anotada.current = null;
-            repartirNueva(
-              p.fase === "partida-terminada"
-                ? nuevaPartida()
-                : siguienteMano(p),
-            );
+            if (p.fase === "partida-terminada") {
+              /* PARTIDA NUEVA: entra por la puerta de todos (`lib/entrada.ts`),
+                 que decide si antes va un anuncio. Y TODO lo que reparte va
+                 adentro de la función que se llama después: si
+                 `anotada.current = null` corriera antes del anuncio, con la
+                 partida terminada todavía en pantalla, el efecto que anota
+                 los resultados la volvería a anotar.
+
+                 El rival se olvida de ésta y arranca con lo que el legajo
+                 diga. Una mano más de la MISMA partida, no: ahí lo que te vio
+                 hacer sigue valiendo, que es todo el asunto. */
+              const deptoActual = parametros.get("depto");
+              portero.pedirPartida(
+                esHistoria && deptoActual ? { modo: "gira", depto: deptoActual } : { modo: "rapida" },
+                () => {
+                  anotada.current = null;
+                  reiniciarMemoria(rival);
+                  repartirNueva(nuevaPartida());
+                },
+              );
+            } else {
+              anotada.current = null;
+              repartirNueva(siguienteMano(p));
+            }
           }}
           onCambiarRival={() => setEligiendo(true)}
         />
@@ -1652,11 +1756,32 @@ function Mesa() {
           actual={rival}
           marcas={marcas}
           onElegir={(nuevo) => {
-            setRivalElegido(nuevo);
-            guardarPreferencia("ultimoRival", nuevo.id);
-            anotada.current = null;
-            repartirNueva(nuevaPartida());
-            setEligiendo(false);
+            /* Elegir rival es empezar OTRA partida, también a mitad de una
+               (desde el medallón). La que quedaba a medias se da por
+               terminada acá, al elegir —no al abrir el selector: con "Volver"
+               la partida sigue y no pasa nada—, y la nueva entra por la
+               puerta de todos. Si toca un anuncio, sale ENTRE las dos.
+               Decisión de Santiago, 2/10/2026. */
+            portero.marcarPartidaEnCurso(false);
+            // La escena del rival nuevo se empieza a bajar YA, al tocar: si
+            // sale un anuncio, para cuando se cierra ya está.
+            void precargarDepartamento(nuevo.departamento);
+            const pedido = Symbol(nuevo.id);
+            ultimoPedido.current = pedido;
+            portero.pedirPartida({ modo: "rapida" }, () => {
+              // Y entra entera, como al llegar a la mesa (ver el primer reparto).
+              void esperarEscena(escenaDe(nuevo.departamento)).then(() => {
+                // Si mientras tanto se eligió otro, gana el último.
+                if (ultimoPedido.current !== pedido) return;
+                setRivalElegido(nuevo);
+                guardarPreferencia("ultimoRival", nuevo.id);
+                anotada.current = null;
+                // Es otra persona: no puede heredar lo que anotó la anterior.
+                reiniciarMemoria(nuevo);
+                repartirNueva(nuevaPartida());
+                setEligiendo(false);
+              });
+            });
           }}
           onCerrar={() => setEligiendo(false)}
         />

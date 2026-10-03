@@ -35,9 +35,25 @@
 # cerrar la puerta antes, no después.
 keystore.properties
 key.properties
-# La configuración de los servicios de Google (AdMob, si algún día se prende).
-# Trae el id del proyecto y las claves de las APIs que estén habilitadas.
+# La configuración de los servicios de Google. Trae el id del proyecto y las
+# claves de las APIs que estén habilitadas. (AdMob NO lo usa: ver abajo.)
 google-services.json
+# Los IDs de AdMob de verdad (app, intersticial y video con recompensa). Los lee
+# `android/app/admob.gradle` SÓLO para el build de release; el de debug usa
+# siempre los de prueba de Google, que están escritos en ese mismo archivo.
+#
+# No son una contraseña —viajan adentro del APK—, pero con ellos cualquiera
+# puede pedir anuncios a nombre de la cuenta, y el tráfico inválido lo paga la
+# cuenta con una suspensión. En un repo público no hay por qué regalarlos.
+#
+# La plantilla `admob.properties.ejemplo` SÍ sube: tiene `REEMPLAZAR_…` en vez
+# de los números. Por eso la regla es el nombre exacto y no `admob.properties*`,
+# que se comería también la plantilla. Verificado con `git check-ignore -v`.
+admob.properties
+# El 2/10/2026 los IDs llegaron en un .md suelto en la raíz, que Git NO
+# ignoraba. Se pasaron a `android/admob.properties` y el .md se borró; esto
+# queda por si alguna vez vuelve a aparecer un archivo así.
+/IDS ADS.md
 # Dónde está el SDK de Android en ESTA máquina. No es un secreto pero tiene la
 # ruta de casa adentro, y este repo es público.
 local.properties
@@ -232,3 +248,17 @@ _*.mjs
 # Los reportes que Santiago deja mientras se trabaja: adentro hay capturas y
 # fotos de WhatsApp. Mismo criterio que DISENO-NIVEL/: no se suben.
 /Bugs a arreglar/
+
+# Material de la ficha de Play Store: el ícono a 512, el gráfico destacado y las
+# capturas de las ocho slides, en tres tamaños de aparato y en dos tandas.
+#
+# NO SUBE, y no es por secreto sino por las dos razones de siempre. Son PNG
+# pesados (la tanda entera pasa los 30 MB) y son SALIDA: los rehace entero
+# `herramientas/branding.mjs`, que sí sube. Es el mismo reparto que ya tiene el
+# dibujo de la mesa —`herramientas/escena/` es el código y sube, lo horneado de
+# 2800px no existe más— y el mismo que tiene el ícono de Android.
+#
+# Anclado con "/" a la raíz, como `/DISENO-NIVEL/` y `/Bugs a arreglar/`. El
+# nombre lleva un espacio adentro y Git lo toma igual: lo único que habría que
+# escapar es un espacio AL FINAL, y acá no hay.
+/app branding/

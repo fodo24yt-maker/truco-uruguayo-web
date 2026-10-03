@@ -4,6 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { Candado } from "@/components/Candado";
+import { EntradaAnotador, useCandados } from "@/components/EntradaJuego";
+import { gestor } from "@/lib/anuncios";
+import { RUTA_ANOTADOR, portero } from "@/lib/entrada";
 import { seccionDe, type Seccion } from "@/lib/navegacion";
 import {
   BARRAS,
@@ -99,7 +103,7 @@ const DESTINOS: { href: string; texto: string; detalle: string; seccion: Seccion
     seccion: "jugar",
   },
   {
-    href: "/anotador",
+    href: RUTA_ANOTADOR,
     texto: "Anotador",
     detalle: "La tablita, para cuando jugás con cartas de verdad",
     seccion: "anotador",
@@ -126,6 +130,11 @@ export function MenuAjustes() {
   const seccion = seccionDe(ruta);
   const cerrar = useRef<HTMLButtonElement>(null);
   const [sonido, setSonido] = useState<Sonido>(SONIDO_POR_DEFECTO);
+  const candados = useCandados();
+  /* "Privacidad de los anuncios" existe sólo si Google lo exige: en Europa y
+     el Reino Unido, el formulario de consentimiento (UMP) obliga a dejar una
+     forma de cambiar lo que se eligió. En Uruguay y en la web, no aparece. */
+  const [pidePrivacidad, setPidePrivacidad] = useState(false);
 
   /**
    * Abrir el panel: primero los volúmenes, después el panel.
@@ -149,6 +158,7 @@ export function MenuAjustes() {
    */
   const abrirPanel = () => {
     setSonido(leerSonido());
+    setPidePrivacidad(gestor.pidePrivacidad());
     setAbierto(true);
   };
 
@@ -158,6 +168,17 @@ export function MenuAjustes() {
   useEffect(() => {
     setAbierto(false);
   }, [ruta]);
+
+  /* Si desde acá se toca algo bloqueado (el anotador, en la app), se abre el
+     diálogo de desbloqueo y este panel se cierra. Sin esto quedarían DOS
+     diálogos apilados, y un solo "atrás" de Android cerraría los dos. */
+  useEffect(
+    () =>
+      portero.suscribir(() => {
+        if (portero.leerDialogo()) setAbierto(false);
+      }),
+    [],
+  );
 
   useEffect(() => {
     if (!abierto) return;
@@ -232,23 +253,54 @@ export function MenuAjustes() {
             <div className="mx-auto flex w-full max-w-md flex-col gap-2">
               {DESTINOS.map((d) => {
                 const acá = seccion === d.seccion;
-                return (
-                  <Link
-                    key={d.href}
-                    href={d.href}
-                    aria-current={acá ? "page" : undefined}
-                    className={`rounded border-2 px-4 py-3 transition-colors ${
-                      acá
-                        ? "border-dorado bg-black/40"
-                        : "border-crema/15 bg-black/25 hover:border-dorado/60 hover:bg-black/40"
-                    }`}
-                  >
+                const clase = `rounded border-2 px-4 py-3 transition-colors ${
+                  acá
+                    ? "border-dorado bg-black/40"
+                    : "border-crema/15 bg-black/25 hover:border-dorado/60 hover:bg-black/40"
+                }`;
+                const contenido = (
+                  <>
                     <span className="block font-[family-name:var(--font-ui)] text-base uppercase tracking-wide text-crema">
                       {d.texto}
                     </span>
                     <span className="mt-0.5 block text-sm leading-snug text-crema/60">
                       {d.detalle}
                     </span>
+                  </>
+                );
+                /* El anotador entra por la puerta de todos (`lib/entrada.ts`):
+                   en la app tiene candado hasta mirar un video, una vez. */
+                if (d.seccion === "anotador") {
+                  return (
+                    <EntradaAnotador
+                      key={d.href}
+                      etiquetaBloqueado="Anotador, bloqueado: se desbloquea una sola vez mirando un video corto"
+                      className={clase}
+                    >
+                      {candados.anotador ? (
+                        <>
+                          <span className="flex items-center gap-2 font-[family-name:var(--font-ui)] text-base uppercase tracking-wide text-crema">
+                            {d.texto}
+                            <Candado className="h-4 w-4 text-dorado" />
+                          </span>
+                          <span className="mt-0.5 block text-sm leading-snug text-dorado/80">
+                            Se desbloquea una vez, con un video corto
+                          </span>
+                        </>
+                      ) : (
+                        contenido
+                      )}
+                    </EntradaAnotador>
+                  );
+                }
+                return (
+                  <Link
+                    key={d.href}
+                    href={d.href}
+                    aria-current={acá ? "page" : undefined}
+                    className={clase}
+                  >
+                    {contenido}
                   </Link>
                 );
               })}
@@ -365,6 +417,23 @@ export function MenuAjustes() {
                   `/aprender` (ver `components/PieLegales.tsx`): adentro de
                   ajustes es donde los busca cualquiera que use una app, y Play
                   Store pide que se encuentren. */}
+              {pidePrivacidad && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void gestor.abrirPrivacidad().then(() => setPidePrivacidad(gestor.pidePrivacidad()));
+                  }}
+                  className="mt-4 rounded border-2 border-crema/15 bg-black/25 px-4 py-3 text-left transition-colors hover:border-dorado/60 hover:bg-black/40"
+                >
+                  <span className="block font-[family-name:var(--font-ui)] text-base uppercase tracking-wide text-crema">
+                    Privacidad de los anuncios
+                  </span>
+                  <span className="mt-0.5 block text-sm leading-snug text-crema/60">
+                    Cambiá lo que elegiste sobre los anuncios personalizados
+                  </span>
+                </button>
+              )}
+
               <nav className="mt-4 flex items-center justify-center gap-x-4 font-[family-name:var(--font-ui)] text-xs uppercase tracking-wide text-crema/45">
                 <Link href="/legales/privacidad" className="hover:text-crema">
                   Privacidad

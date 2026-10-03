@@ -157,10 +157,32 @@ export function desdeTexto(txt: string): Carta {
  * sobre la mesa, si el que cantó truco tenía con qué o estaba mintiendo.
  */
 export function calidadDeMano(cartas: readonly Carta[], muestra: Carta): number {
+  return calidadConHuecos(cartas, muestra, cartas.length);
+}
+
+/**
+ * La misma cuenta, pero sabiendo que faltan cartas por ver.
+ *
+ * `sobreCuantas` es de cuántas cartas era la mano de verdad. Las que faltan
+ * cuentan como cero, o sea como un cuatro, que es la carta más floja que hay.
+ *
+ * Eso la convierte en una **cota inferior** de la calidad real, y esa palabra
+ * es toda la razón por la que esta función existe: con dos cartas sobre la mesa
+ * se puede probar que alguien TENÍA una mano brava, pero nunca que no la tenía.
+ * Por eso `lectura.ts` la usa para anotar que un rival se calló una mano buena,
+ * y NUNCA para acusarlo de haber mentido. Un bot que dedujera lo segundo de una
+ * cota inferior estaría inventando lo que no vio.
+ */
+export function calidadConHuecos(
+  cartas: readonly Carta[],
+  muestra: Carta,
+  sobreCuantas: number,
+): number {
   if (cartas.length === 0) return 0;
   // fuerza va de 82 (el cuatro) a 100 (el 2 de la muestra)
   const normalizar = (c: Carta) => (fuerza(c, muestra) - 82) / 18;
   const mejor = Math.max(...cartas.map(normalizar));
-  const promedio = cartas.reduce((t, c) => t + normalizar(c), 0) / cartas.length;
+  const sobre = Math.max(sobreCuantas, cartas.length);
+  const promedio = cartas.reduce((t, c) => t + normalizar(c), 0) / sobre;
   return mejor * 0.6 + promedio * 0.4;
 }

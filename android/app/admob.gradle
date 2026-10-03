@@ -1,0 +1,115 @@
+/*
+ * Los IDs de AdMob, en un solo lugar.
+ *
+ *   · DEBUG   → SIEMPRE los de prueba de Google, que están escritos acá abajo.
+ *               Son públicos y no generan plata ni tráfico inválido: con ellos
+ *               se puede tocar un anuncio cien veces sin que pase nada.
+ *   · RELEASE → los de verdad, que se leen de `android/admob.properties`.
+ *               Ese archivo NO sube a GitHub (está en el .gitignore de la
+ *               raíz); la plantilla es `android/admob.properties.ejemplo`.
+ *
+ * El build de release FALLA si los IDs siguen en `REEMPLAZAR_…`, si son los de
+ * prueba o si tienen mal la forma. Es la única barrera entre "probé con los de
+ * prueba" y "publiqué con los de prueba", que es una app en Play Store que no
+ * cobra un peso. Ojo: `./gradlew build` arma también el release, así que en
+ * una máquina sin `admob.properties` va a fallar. El CI y
+ * `herramientas/celular-usb.mjs` hacen sólo `assembleDebug` y no se enteran.
+ *
+ * Para probar el chequeo sin tocar el archivo de verdad:
+ *     ./gradlew preReleaseBuild -Padmob.archivo=/ruta/a/otro.properties
+ *
+ * Los IDs llegan a la web por `ConfigAnunciosPlugin.java`, que los lee de
+ * BuildConfig. Así el JavaScript, que es el mismo en debug y en release (se
+ * compila una vez, antes que Gradle), no tiene ningún ID adentro.
+ */
+
+// Los de prueba oficiales: https://developers.google.com/admob/android/test-ads
+def ADMOB_PRUEBA = [
+    appId       : 'ca-app-pub-3940256099942544~3347511713',
+    intersticial: 'ca-app-pub-3940256099942544/1033173712',
+    recompensa  : 'ca-app-pub-3940256099942544/5224354917',
+]
+def EDITOR_DE_PRUEBA = '3940256099942544'
+
+def FORMATO_APP = ~/^ca-app-pub-\d{16}~\d{10}$/
+def FORMATO_UNIDAD = ~/^ca-app-pub-\d{16}\/\d{10}$/
+// El "hashed device id" que imprime logcat al pedir el consentimiento
+def FORMATO_DISPOSITIVO = ~/^[0-9A-Fa-f]{32}$/
+
+def archivoAdmob = rootProject.file(findProperty('admob.archivo') ?: 'admob.properties')
+def propiedadesAdmob = new Properties()
+if (archivoAdmob.exists()) {
+    archivoAdmob.withInputStream { propiedadesAdmob.load(it) }
+}
+
+/*
+ * Sólo pasa lo que tiene la forma exacta; lo demás queda en `REEMPLAZAR_…`,
+ * que el chequeo de release hace fallar. Por eso un valor raro en el archivo
+ * —unas comillas, un salto de línea— no puede meterse en el Java que genera
+ * `buildConfigField` ni en el manifest.
+ */
+def leerIdAdmob = { String clave, formato, String siFalta ->
+    def v = (propiedadesAdmob.getProperty(clave) ?: '').trim()
+    return (v ==~ formato) ? v : siFalta
+}
+
+def ADMOB_REAL = [
+    appId       : leerIdAdmob('ADMOB_APP_ID', FORMATO_APP, 'REEMPLAZAR_APP_ID'),
+    intersticial: leerIdAdmob('ADMOB_INTERSTICIAL', FORMATO_UNIDAD, 'REEMPLAZAR_INTERSTICIAL'),
+    recompensa  : leerIdAdmob('ADMOB_RECOMPENSA', FORMATO_UNIDAD, 'REEMPLAZAR_RECOMPENSA'),
+]
+def dispositivoPruebaUmp = leerIdAdmob('ADMOB_DISPOSITIVO_PRUEBA_UMP', FORMATO_DISPOSITIVO, '')
+
+android {
+    buildFeatures {
+        // AGP 8 ya no genera BuildConfig si no se le pide
+        buildConfig true
+    }
+    defaultConfig {
+        // El placeholder tiene que existir en TODAS las variantes o el manifest
+        // no se arma: por defecto, el de prueba.
+        manifestPlaceholders.admobAppId = ADMOB_PRUEBA.appId
+        buildConfigField 'String', 'ADMOB_INTERSTICIAL', "\"${ADMOB_PRUEBA.intersticial}\""
+        buildConfigField 'String', 'ADMOB_RECOMPENSA', "\"${ADMOB_PRUEBA.recompensa}\""
+        buildConfigField 'String', 'ADMOB_DISPOSITIVO_PRUEBA_UMP', '""'
+    }
+    buildTypes {
+        debug {
+            buildConfigField 'String', 'ADMOB_DISPOSITIVO_PRUEBA_UMP', "\"${dispositivoPruebaUmp}\""
+        }
+        release {
+            manifestPlaceholders.admobAppId = ADMOB_REAL.appId
+            buildConfigField 'String', 'ADMOB_INTERSTICIAL', "\"${ADMOB_REAL.intersticial}\""
+            buildConfigField 'String', 'ADMOB_RECOMPENSA', "\"${ADMOB_REAL.recompensa}\""
+        }
+    }
+}
+
+// ── El chequeo del release ──
+def problemasAdmob = []
+ADMOB_REAL.each { nombre, valor ->
+    if (valor.startsWith('REEMPLAZAR')) {
+        problemasAdmob << "  · ${nombre}: falta, o no tiene la forma de un ID de AdMob"
+    } else if (valor.contains(EDITOR_DE_PRUEBA)) {
+        problemasAdmob << "  · ${nombre}: es el ID de PRUEBA de Google"
+    }
+}
+def mensajeAdmob = """
+No se arma un release con IDs de AdMob equivocados.
+
+${problemasAdmob.join('\n')}
+
+Qué hacer: copiá `android/admob.properties.ejemplo` a `android/admob.properties`
+(ese nombre está en el .gitignore y no sube) y completá las tres líneas con los
+IDs de la consola de AdMob. Archivo leído: ${archivoAdmob.name}
+""".stripIndent()
+
+tasks.configureEach { tarea ->
+    if (tarea.name == 'preReleaseBuild') {
+        tarea.doFirst {
+            if (!problemasAdmob.isEmpty()) {
+                throw new GradleException(mensajeAdmob)
+            }
+        }
+    }
+}

@@ -186,6 +186,10 @@ con el brillo al 40%.
 
 ## Nada de publicidad
 
+> **Superado el 2/10/2026, para la app de Android:** ver README → *Publicidad*.
+> La web sigue sin anuncios, y "dentro de la mesa no va nada" se mantiene: el
+> intersticial sale sólo al ENTRAR a una partida, nunca durante.
+
 **Decisión tomada: el sitio no lleva anuncios.**
 
 Se evaluó poner AdSense y no vale la pena. En un sitio chico paga centavos por

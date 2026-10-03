@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { Candado } from "@/components/Candado";
+import { EntradaAnotador } from "@/components/EntradaJuego";
 import { Marca } from "@/components/Marca";
 
 export const metadata: Metadata = {
@@ -48,11 +50,17 @@ export const metadata: Metadata = {
  * Eso importa acá más que en ninguna otra pantalla, porque es la primera que
  * abre la app.
  *
- * ── ESTO NO LLEVA JAVASCRIPT, Y ES A PROPÓSITO ────────────────────────────
+ * ── CASI SIN JAVASCRIPT, Y ES A PROPÓSITO ─────────────────────────────────
  *
  * Mientras duró la elección, esta página tuvo un componente cliente adentro
- * para poder leer `?portada=`. Volvió a ser un Server Component puro: es la
- * primera pantalla que se abre y no tiene nada que decidir en el navegador.
+ * para poder leer `?portada=`. Volvió a ser un Server Component: es la primera
+ * pantalla que se abre y no tiene casi nada que decidir en el navegador.
+ *
+ * Lo único que se decide allá, desde el 2/10/2026, es el candado del
+ * anotador: en la app está bloqueado hasta mirar un video, una vez. Por eso
+ * esa puerta es `EntradaAnotador`, el enlace que pasa por `lib/entrada.ts`. El
+ * dibujo del candado sigue siendo de servidor: se prende con
+ * `group-data-[bloqueado=true]`, un atributo que pone el enlace.
  */
 export default function Inicio() {
   return (
@@ -102,15 +110,24 @@ export default function Inicio() {
 
               Y es la única que sirve SIN la app: es para cuando estás jugando
               con las cartas en la mano. */}
-          <Link
-            href="/anotador"
-            className="rounded border-2 border-crema/15 px-7 py-[clamp(0.55rem,2vh,0.85rem)] font-[family-name:var(--font-ui)] text-[clamp(0.85rem,2.1vh,1rem)] uppercase tracking-wide text-crema/70 transition-colors hover:border-dorado/50 hover:bg-black/25 hover:text-crema"
+          {/* BLOQUEADO EN LA APP, DESDE EL 2/10/2026: se abre una vez mirando un
+              video y queda abierto para siempre. El candado va adelante del
+              nombre y la línea de abajo dice cómo se abre, así se entiende
+              ANTES de tocar. En la web no hay candado: no se dibuja nada de
+              esto. Lo de abajo cambia con CSS según `data-bloqueado`. */}
+          <EntradaAnotador
+            etiquetaBloqueado="Anotador, bloqueado: se desbloquea una sola vez mirando un video corto"
+            className="group rounded border-2 border-crema/15 px-7 py-[clamp(0.55rem,2vh,0.85rem)] font-[family-name:var(--font-ui)] text-[clamp(0.85rem,2.1vh,1rem)] uppercase tracking-wide text-crema/70 transition-colors hover:border-dorado/50 hover:bg-black/25 hover:text-crema data-[bloqueado=true]:border-dorado/35"
           >
             Anotador
-            <span className="mt-0.5 block font-[family-name:var(--font-texto)] text-[clamp(0.68rem,1.5vh,0.78rem)] normal-case tracking-normal text-crema/45">
+            <Candado className="relative -top-px ml-1.5 hidden h-[1.05em] w-[1.05em] align-middle text-dorado group-data-[bloqueado=true]:inline-block" />
+            <span className="mt-0.5 block font-[family-name:var(--font-texto)] text-[clamp(0.68rem,1.5vh,0.78rem)] normal-case tracking-normal text-crema/45 group-data-[bloqueado=true]:hidden">
               La tablita, para jugar con cartas de verdad
             </span>
-          </Link>
+            <span className="mt-0.5 hidden font-[family-name:var(--font-texto)] text-[clamp(0.68rem,1.5vh,0.78rem)] normal-case tracking-normal text-dorado/80 group-data-[bloqueado=true]:block">
+              Se desbloquea una vez, con un video corto
+            </span>
+          </EntradaAnotador>
         </div>
       </div>
     </section>

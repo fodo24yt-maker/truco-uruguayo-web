@@ -139,6 +139,11 @@ para no perderlo, sin tocarlo todavía.
 
 ## Sobre la publicidad: decidido que no
 
+> **Superado el 2/10/2026, para la app de Android.** La web sigue sin
+> publicidad, como dice abajo. La app tiene AdMob (intersticial con tope y videos
+> que desbloquean): está todo en el README, sección *Publicidad*. Lo de abajo
+> queda como registro de por qué la web no lleva AdSense, que sigue valiendo.
+
 Se evaluó poner AdSense y **se descartó**. Los números no daban: en un sitio
 chico paga del orden de centavos de dólar por cada mil visitas, y a cambio
 había que abrir la política de seguridad para dejar entrar scripts de Google,

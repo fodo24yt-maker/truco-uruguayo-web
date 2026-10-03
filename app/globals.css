@@ -164,8 +164,8 @@ body {
 
 /* ── LA ESCENA ES LA UNIDAD DE MEDIDA, DESDE EL 5/9/2026 ───────────────────
    Todo lo apoyado en la mesa medía en `vh`, o sea contra la VENTANA, pero vive
-   adentro de la ESCENA, que es lo que queda después de la barra de arriba, la
-   de cantos y el hueco del anuncio. Por eso el mismo número se veía bien de un
+   adentro de la ESCENA, que es lo que queda después de la barra de arriba y
+   la de cantos (y, hasta el 2/10/2026, el hueco del banner). Por eso el mismo número se veía bien de un
    lado y perdido del otro, y por eso hubo que escribir DOS tablas de medidas,
    una para el celular y otra para la compu.
 
@@ -224,9 +224,13 @@ body {
   padding-top: env(safe-area-inset-top, 0px);
 }
 
-/* El pie, del otro lado: la barra de gestos de Android se le monta encima. */
+/* El pie, del otro lado: la barra de gestos de Android se le monta encima.
+   El relleno de abajo va ACÁ y entero (el aire + la barra de gestos): esta
+   regla no está en una capa, así que le gana a cualquier `pb-…` de Tailwind,
+   y hasta el 2/10/2026 el aire de abajo lo ponía de rebote el hueco del
+   banner, que ya no existe. */
 footer {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: calc(clamp(0.75rem, 2vh, 1.5rem) + env(safe-area-inset-bottom, 0px));
 }
 
 /* Una hoja que tapa la pantalla entera: hoy, el panel de ajustes.
@@ -855,6 +859,70 @@ body:has(.pantalla-fija) {
 }
 body:has(.pantalla-fija) footer {
   display: none;
+}
+
+/* ── LA PANTALLA DE CARGA DE LA APP (2/10/2026) ────────────────────────────
+   La dibuja `components/PantallaCarga.tsx`, sólo en la app.
+
+   La red de seguridad va acá y no en el componente: `carga-se-va` la esconde a
+   los 6 s AUNQUE EL JAVASCRIPT NO HAYA CORRIDO NUNCA. Es duración 0 con 6 s de
+   demora, y el bloque de `prefers-reduced-motion` acorta duraciones, no
+   demoras: la red sigue en pie para quien pidió menos movimiento.
+
+   `touch-action` y `overscroll-behavior`: que un dedo apoyado mientras carga
+   no arrastre la página de abajo. */
+.pantalla-carga {
+  touch-action: none;
+  overscroll-behavior: contain;
+  animation: carga-se-va 0s linear 6s forwards;
+}
+@keyframes carga-se-va {
+  to {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+/* La misma cura que en `.pantalla-fija`: un dibujo grande que aparece en un
+   cambio de escena, en su propio búfer. */
+.pantalla-carga .marca {
+  opacity: 0.999;
+}
+
+/* La barrita. `scaleX` y no `width`: no recalcula el diseño en cada cuadro.
+   Avanza sola y va frenando hasta el 92% en el tiempo máximo de la pantalla
+   (4 s); cuando la carga termina de verdad, el componente pone
+   `data-completa` y la barra se llena del todo, partiendo de donde iba. */
+.barra-carga-relleno {
+  transform-origin: left center;
+  transform: scaleX(0.04);
+  animation: carga-avanza 4s cubic-bezier(0.15, 0.75, 0.35, 1) forwards;
+}
+@keyframes carga-avanza {
+  to {
+    transform: scaleX(0.92);
+  }
+}
+.pantalla-carga[data-completa="true"] .barra-carga-relleno {
+  animation: none;
+  transform: scaleX(1);
+  transition: transform 180ms ease-out;
+}
+
+/* Algo que aparece recién si la espera se hace notar: el "Repartiendo…" de la
+   mesa. `visibility` y no `opacity`: no crea una capa para animarse. Es una
+   demora con duración 0, así que el bloque de `prefers-reduced-motion` (que
+   acorta duraciones) no lo apura. */
+.aparece-tarde {
+  animation: aparece-tarde 0s linear 250ms both;
+}
+@keyframes aparece-tarde {
+  from {
+    visibility: hidden;
+  }
+  to {
+    visibility: visible;
+  }
 }
 
 /* ── SE LEVANTA LA MESA AL TERMINAR LA MANO ────────────────────────────────

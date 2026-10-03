@@ -12,6 +12,681 @@
 
 ---
 
+## 2026-10-03 — La pantalla de carga, y la mesa que entra entera
+
+**El pedido.** Santiago notó que al tocar Partida rápida la mesa tardaba unos
+segundos y se veía mal mientras tanto, **sobre todo en la primera partida**.
+Propuso una pantalla de carga al abrir la app que precargue la mesa. Eligió:
+pantalla nueva dibujada por código, con una barrita animada; arreglar esto
+primero y ver los píxeles después; y aprobó el diseño con captura antes del
+resto.
+
+### Lo que se encontró leyendo el código (antes de tocar nada)
+
+- **La pantalla del logo que ya existía es el splash de Android** (tema
+  `Theme.SplashScreen` + `@capacitor/splash-screen`): 400 ms fijos y 200 ms de
+  fundido. No carga nada ni espera a nadie.
+- **En la primera partida, la app le pedía a AdMob el intersticial en el mismo
+  toque que entraba a la mesa**, y el plugin carga en el HILO PRINCIPAL de
+  Android (`AdInterstitialExecutor.java`), el que también dibuja. La primera
+  carga del proceso además arma el navegador interno de los anuncios. Encaja
+  con "sobre todo la primera".
+- **Las texturas de la mesa recién se pedían con la escena ya montada**: color
+  liso y la textura "saltando" encima. Un segundo redibujado de toda la escena
+  justo después del cambio de pantalla, que es el terreno del bug de los píxeles.
+
+### Lo que se hizo
+
+- **`components/PantallaCarga.tsx`**: sólo en la app. La marca, el nombre y una
+  barrita que mueve el CSS (anda antes del JavaScript). Mínimo 800 ms, máximo
+  4 s, y la red del CSS la esconde a los 6 s aunque no corra el JavaScript. Se
+  va de golpe, sin fundido: una capa de pantalla completa que se funde no está
+  medida contra el bug de los píxeles. `capacitor.config.ts` gana
+  `android.backgroundColor` oscuro: si el splash se iba antes de que la página
+  pintara, asomaba blanco.
+- **`lib/precarga.ts`**: qué precargar (el rival de la Partida rápida y la
+  próxima parada de la Gira, como mucho 2: cada departamento son ~10,5 MB
+  decodificado y los 19 serían ~200 MB), bajarlo y decodificarlo, y esperar el
+  código de Next. Como mucho 3 departamentos en memoria.
+- **La mesa entra entera**: antes del primer reparto, y al cambiar de rival,
+  espera a que sus imágenes estén decodificadas (tope 1,2 s). El mapa de la
+  Gira precarga la escena al abrir la ficha de una parada, y el menú de jugar
+  las probables (en la web es lo único que se agrega).
+- **Los anuncios**: el intersticial se carga al arrancar (durante la pantalla
+  de carga) y no en la primera partida. Nueva perilla
+  `SEGUNDOS_SIN_CARGAR_AL_ENTRAR = 8`: nada se carga en los 8 s siguientes a
+  entrar a una partida, **contados desde que se cierra el anuncio si hubo uno**
+  (si no, un anuncio de 15 s agotaba la ventana y la carga caía al entrar). El
+  video que la persona pidió en el diálogo no espera.
+
+### Lo que se midió (y lo que engañó)
+
+**La herramienta mintió dos veces y las dos se agarraron mirando, no
+creyendo.**
+
+1. `mirar-carga.mjs` decía que al entrar a la mesa se bajaban cuatro .js. Un
+   diagnóstico por CDP mostró que el prefetch termina a los **~125 ms** de abrir
+   (en frío y en caliente) y que al entrar no se baja nada: el evento `request`
+   de Playwright también avisa de pedidos que el navegador resuelve con su
+   caché. La herramienta ahora mide por CDP y separa caché de descarga.
+2. "No se pudo cambiar de rival": la herramienta elegía rival menos de 1 s
+   después de entrar y el portero lo tomaba por doble toque. Era el portero
+   haciendo su trabajo.
+
+Y una que sí era real: **`router.prefetch` de Next no devuelve promesa**, así
+que la pantalla no sabía cuándo terminaba. `esperarCodigo` mira las descargas
+(`PerformanceObserver`) hasta ver la PÁGINA de la mesa y de la Gira
+(`…__PAGE__.txt`) y la ráfaga que sigue. Esperar "a la red quieta" no
+alcanzaba (al principio está quieta) ni esperar cualquier archivo de la ruta
+(el primero es el índice `__next._tree.txt`). Si Next cambia ese nombre, la
+espera se va al tope de 2,5 s y `mirar-carga` lo avisa.
+
+**El código de la pantalla viajaba en la web** dentro del paquete que la web
+baja en cada página, aunque nunca se montara. Ahora `PantallaCarga` devuelve
+`null` si no es la app, con la condición fijada al compilar: el minificador la
+tira. Verificado con `grep` sobre `out/`.
+
+`mirar-carga.mjs`, TODO OK en frío y en caliente:
+
+    la pantalla viene en el HTML y se va a los ~1000 ms
+    ir a la mesa no baja nada nuevo
+    Partida rápida: las 4 imágenes listas en su primer cuadro
+    cambio de rival a OTRO departamento (no precargado): las 2 listas
+    Gira, desde la ficha (Gira entera ganada, sin precarga de arranque): listas
+    sin JavaScript: a los 6 s se esconde sola
+
+**Sabotajes que se agarraron:** sacarle la espera de la escena al cambio de
+rival (`mirar-carga`: "2 de 2 imágenes NO estaban listas"); sacarle la ventana
+al gestor (5 tests); contar la ventana desde el toque y no desde el cierre (2
+tests).
+
+### Estado
+
+`npm test` **313/313** · `tsc` limpio · `mirar-carga`, `mirar-app-compilada`,
+`mirar-web`, `mirar-mesa`, `mirar-mesa-nueva` y `mirar-anuncios` (21/21)
+**TODO OK** · la web no trae ni la pantalla ni código de anuncios.
+
+Las herramientas que miran la app (`mirar-app-compilada`, `mirar-anuncios`,
+`rig-celular`) esperan a que se vaya `[data-pantalla-carga]` antes de medir.
+
+Seguridad: `security-review` sin hallazgos (una nota menor, arreglada: un
+`new URL` fuera del `try` en `esperarCodigo`); `09-web-security` limpio (CSP
+igual, sin sumideros, las 38 rutas de imagen son fijas, el progreso se lee
+saneado); `17-mobile-security` limpio (sólo cambió el color del WebView; ni
+origen, ni depuración, ni permisos, ni nada nativo). Barrido de datos
+sensibles limpio; el índice de Git, vacío.
+
+### Pendiente
+
+1. **Probarlo en el teléfono**: `node herramientas/celular-usb.mjs --apk`. La
+   primera partida tiene que entrar sin demora ni texturas que salten.
+2. **Después, los píxeles**: si siguen, sesión con el cable y `rig-celular.mjs
+   --a-mano` (Santiago toca, Claude mide). Lo de hoy saca del cambio de escena
+   dos cosas que coincidían con él; no está probado que sean la causa.
+3. Si un día la pantalla de carga empieza a tardar siempre 2,5 s, es que Next
+   cambió el nombre `__PAGE__` (`mirar-carga.mjs` lo dice).
+
+## 2026-10-02 (segunda pasada) — Tiempos de anuncios a 3 y 7, y el bug de los píxeles que volvió
+
+**Tiempos.** Santiago lo probó en el teléfono: seis minutos era mucho.
+`MINUTOS_ENTRE_ANUNCIOS` 6→3 y `MINUTOS_SIN_INTERSTICIAL_TRAS_VIDEO` 15→7. La
+primera partida sigue sin anuncio. Los tests y `mirar-anuncios.mjs` ahora se
+escriben EN FUNCIÓN de las constantes (la herramienta las importa de
+`lib/anuncios.ts`), así un ajuste futuro no rompe nada; un test nuevo exige que
+la ventana del video sea mayor que el tope. Legales y README dicen "tres
+minutos". `npm test` 299/299, `tsc` limpio, `mirar-anuncios` 21/21.
+
+**El bug de los píxeles (color de la pantalla anterior) volvió, dice Santiago.**
+Revisado, sin teléfono:
+
+- Las cuatro reglas del arreglo (`.mapa-gira > *`, `.escena > *`,
+  `.pantalla-fija .carta` y `.marca`) **siguen aplicadas**: medido con
+  `getComputedStyle` en el build de la app, simulando el teléfono, entrando
+  directo y navegando. Todas en 0.999. Nada de hoy tocó `Carta`, `Marca`, el
+  mapa ni la escena.
+- **Desde el arreglo del 10/9 a la mañana, nadie volvió a medir en el teléfono.**
+  El 10/9 a la tarde cambió la portada (la marca, "no medida") y la mesa, y lo
+  dejó como pendiente número uno. Eso está commiteado.
+- Lo de hoy que cambia pantallas medidas: en la mesa se fue la franja del
+  banner (la escena quedó más alta) y en la app los candados cambian textos de
+  la portada y del menú de jugar después de cargar.
+- **Sospechoso nuevo y fuerte: el SDK de AdMob.** Carga los anuncios en WebViews
+  propios dentro del mismo proceso, que comparten GPU y memoria de mosaicos con
+  el juego. El modelo del bug es "un mosaico viejo que se reusa": más presión de
+  memoria encaja.
+
+**Pendiente:** medir con `rig-celular.mjs --a-mano` (Santiago toca, Claude
+mide). Primero, que Santiago diga en qué pantalla lo vio y si fue después de un
+anuncio; una prueba barata sin cable es jugar en modo avión (sin anuncios
+cargados) y ver si aparece.
+
+## 2026-10-02 — Los anuncios: sin banners, intersticial con tope y videos que desbloquean
+
+Cambio de planes en la monetización, y la primera vez que la app tiene AdMob de
+verdad. **Hasta hoy no había una sola línea de AdMob**: sólo los tres huecos de
+`EspacioAnuncio.tsx`. El pedido de Santiago venía con todas las reglas escritas;
+lo que sigue es lo que hubo que decidir encima.
+
+### LO QUE QUEDÓ
+
+- **Banners: ninguno.** Se borró `EspacioAnuncio.tsx` con sus tres huecos.
+  `mirar-web.mjs` dio vuelta el guardián: ahora falla si ENCUENTRA un
+  `[data-anuncio]`. El pie pasó adentro de `PieLegales` (sin el hueco, en el 404
+  quedaba una franja de madera vacía).
+- **Intersticial sólo al ENTRAR a una partida**, con tope de 6 minutos desde el
+  último anuncio mostrado, 15 sin intersticial después de un video, y la primera
+  partida de cada sesión nunca.
+- **Video con recompensa** para desbloquear para siempre el anotador, y la Gira
+  nacional (que también se abre acertando los 12 ejercicios de Aprender).
+- **La web, libre**: sin anuncios ni candados. No es que los esconda: el build
+  de la web no los TIENE (`NEXT_PUBLIC_DESTINO`, verificado con `grep` sobre
+  `out/`: cero archivos).
+- **Un único punto de entrada**, `lib/entrada.ts`, y un gestor único,
+  `lib/anuncios.ts`, con las perillas arriba. El README → *Publicidad* tiene la
+  tabla de archivos y de perillas, y la checklist de Play Console y de AdMob.
+
+### LAS DECISIONES DE SANTIAGO (preguntadas, no supuestas)
+
+1. Web libre, candados sólo en la app (en la web no hay video posible).
+2. **La Gira se bloquea para todos**, también para quien ya la jugó. Sin migración.
+3. Un ejercicio cuenta cuando se **acierta** al menos una vez.
+4. En la Gira el intersticial sale al tocar "Jugar" en la parada, no al entrar al mapa.
+5. El pedido decía "la primera partida no lleva anuncio" Y "el reloj arranca al
+   abrir la app": se aplican las dos. Diez minutos en Aprender y después la
+   primera partida: sin anuncio.
+6. **Cambiar de rival a mitad de partida (medallón) SÍ pasa por el tope**: la
+   partida a medias se da por terminada al ELEGIR rival, y si toca, el anuncio
+   sale entre las dos. Con "Volver" no pasa nada.
+7. **Sin internet: no se toca.** Ver pendientes.
+8. Los IDs reales estaban en un `IDS ADS.md` suelto en la raíz que **Git no
+   ignoraba**. Se pasaron a `android/admob.properties` (ignorado, verificado con
+   `git check-ignore`) y el `.md` se borró. `app-ads.txt` NO se creó: lleva el
+   `pub-…` y es público; queda en la checklist para cuando publique.
+
+### TRES COSAS DEL PLUGIN QUE MANDAN CÓMO ESTÁ ESCRITO
+
+Leídas en el Java de `@capacitor-community/admob@8.1.0`, no supuestas:
+
+1. **`showRewardVideoAd()` sólo resuelve si se gana la recompensa.** Si el
+   usuario cierra antes, la promesa queda colgada para siempre. Por eso el gestor
+   va por EVENTOS, y la recompensa se da sólo en `onRewardedVideoAdReward`.
+2. **Precargar "apenas se muestra" el anterior rompía el plugin**: guarda los
+   anuncios en un mapa por ID de unidad y al cerrar BORRA la entrada, o sea el
+   nuevo. Se precarga al cerrarse o fallar. No cambia nada: el próximo no puede
+   salir antes de 6 minutos. Se le dijo a Santiago antes de decidirlo.
+3. Sin anuncio cargado, `show` rechaza y emite "falló la carga", no "falló al
+   mostrar". El vigilante de 3 s cubre el resto, y volver a la app con un anuncio
+   "abierto" sin aviso de cierre (`singleTask` + reabrir desde el ícono) lo da por
+   cerrado a los 1,5 s.
+
+### LOS IDs: UN ARCHIVO DE GRADLE Y UN PLUGIN DE DIEZ LÍNEAS
+
+El JavaScript es el mismo en debug y en release (se compila antes que Gradle), y
+los IDs no. Así que los decide `android/app/admob.gradle` (`buildConfigField` +
+`manifestPlaceholders`) y `ConfigAnunciosPlugin.java` se los pasa a la web. El
+JS no lleva ningún ID: verificado sobre `out-app/` y dentro del APK.
+
+**El release no compila con IDs equivocados.** Se probó en cuatro casos —la
+plantilla, los de prueba, sin archivo, y comillas metidas para inyectar Java—:
+los cuatro frenan con un mensaje que dice qué hacer. Con los reales pasa, y el
+`BuildConfig` de release los lleva.
+
+`play-services-ads` quedó anclado en **25.4.0** en `variables.gradle`: el plugin
+pide `25.4.+`, o sea un build que no se puede reproducir.
+
+### LO QUE SE MIDIÓ
+
+- `npm test` **298/298** (eran 237). Saboteados a propósito: sin la regla de la
+  primera partida, sin la ventana de 15, dando la recompensa al cerrar, un enlace
+  suelto a `/anotador`, un reparto sin portero y un ejercicio sin id. **Los seis
+  se agarran.**
+- **`herramientas/mirar-anuncios.mjs`** (nueva): recorre cada regla en un
+  navegador con una red de anuncios de mentira y `page.clock`. **21/21.**
+  Saboteado (enlaces que se saltean el portero): falla en "a los 7 minutos".
+  La red de mentira existe sólo en `next dev`: cero rastros en los builds.
+- `mirar-web`, `mirar-mesa`, `mirar-mesa-nueva` y `mirar-app-compilada`: TODO OK.
+  Con los candados a la vista, ninguna pantalla fija scrollea en cinco tamaños.
+- APK de debug compilado (14 MB). `out-app` pasó de 6,0 a 6,1 MB.
+
+### DOS TROPIEZOS DE LA SESIÓN
+
+1. **Se me coló un `git rm --cached`** al borrar `EspacioAnuncio.tsx`: dejó el
+   borrado preparado en el índice. Se deshizo en el acto con `git restore
+   --staged` y se le contó a Santiago. Quedó en la memoria: borrar es `rm`.
+2. **El `grep` de esta terminal saltea los archivos ignorados por Git.** Una
+   búsqueda de fugas con él da "limpio" sin haber mirado `admob.properties`. Para
+   eso, `/usr/bin/grep`. Anotado en `CLAUDE.md`.
+
+Y uno de la prueba, no de la app: con el reloj de Playwright el tiempo NO corre
+solo, así que la traba de 1 s contra el doble toque no se vencía nunca y el
+toque siguiente se tomaba como doble. Se arregló en la herramienta.
+
+### LA REVISIÓN DE SEGURIDAD
+
+- **`security-review`**: cero hallazgos HIGH o MEDIUM. Revisado: inyección en el
+  Java generado y en el manifest (cerrada por las regex), fuga de IDs (cero en
+  todo lo que Git ve y en toda la historia), que el motor simulado no viaje,
+  sumideros de HTML (ninguno), URLs armadas con `?depto=` (validadas dos veces),
+  el `sanear` de las dos claves nuevas, y las dependencias (sin scripts de
+  instalación).
+- **`09-web-security`**: nada. La CSP y `_headers` no cambiaron un byte.
+- **`17-mobile-security`**: nada explotable. El SDK agrega los permisos `AD_ID`,
+  `ACCESS_ADSERVICES_*` (3), `FOREGROUND_SERVICE` y `WAKE_LOCK`, y componentes
+  exportados que van protegidos por permisos del sistema (`BIND_JOB_SERVICE`,
+  `DUMP`). Los anuncios corren en su propia actividad, sin acceso al puente de
+  Capacitor. Dentro del APK: el editor real en 0 archivos, rutas de la máquina en 0.
+- **Aparte, no de esta sesión:** `npm audit` marca una vulnerabilidad CRÍTICA en
+  `next` 16.3.3 (RCE en `next/og`). Probablemente no aplica a un export
+  estático, pero no está verificado. Se le avisó a Santiago.
+
+### ESTADO AL CERRAR
+
+`npm test` **298/298** · `tsc` limpio · los dos builds OK · los cinco guardianes
+de Playwright TODO OK · APK de debug compila · `git diff --cached` vacío.
+
+**Sin commitear.**
+
+### PENDIENTE
+
+1. **Probar en el teléfono**, que no estaba enchufado: `node herramientas/celular-usb.mjs --apk`
+   y la checklist manual (anuncios de prueba de Google reales, sin internet,
+   atrás con el diálogo abierto, mandar la app al fondo con un anuncio, matar la
+   app después de desbloquear).
+2. **Publicar la web con la política nueva ANTES de repartir un APK con
+   anuncios**: la página prometía actualizarse primero.
+3. Lo de las consolas (README → *Publicidad*): mensaje GDPR en AdMob, dispositivo
+   de prueba, declaraciones de Play, `app-ads.txt` cuando se publique.
+4. **Sin internet = sin intersticiales.** Decidido no tocarlo: el tope se cuenta
+   desde el último anuncio MOSTRADO, así que al volver la conexión la próxima
+   partida ya lleva el suyo. Revisar con números cuando la app esté publicada.
+5. La vulnerabilidad de `next` 16.3.3, que es aparte de esto.
+6. Las historias de los 19, que siguen donde quedaron el 13/9.
+
+---
+
+## 2026-09-13 — El material de tienda, en una carpeta que no sube
+
+Sesión que empezó en un lado y terminó en otro. El pedido original era **sacar
+los espacios de publicidad**; se investigó entero y a mitad de camino Santiago
+lo frenó: *"deja todo lo de ads, despues decidire que hago"*. Así que el
+inventario quedó levantado y **sin tocar una línea**, y la sesión se fue a lo
+otro: el material por si la app va a Play Store, y arrancar las historias de
+los 19.
+
+### LA CARPETA, Y POR QUÉ LO PRIMERO FUE EL `.gitignore`
+
+`app branding/` en la raíz, con `ficha-play/` y `capturas/{limpias,compuestas}/`
+por aparato. **La regla del `.gitignore` se escribió ANTES de generar el primer
+PNG**, y no se dio por buena leyéndola: se le preguntó a Git con
+`git check-ignore -v` sobre rutas que todavía no existían, que es el método que
+este archivo ya registró el 10/9 para `key.properties`.
+
+Son 59 MB de PNG. No suben por lo de siempre: son salida y se rehacen solos.
+
+### `herramientas/branding.mjs`, Y EL NÚMERO QUE DECIDIÓ TODO
+
+**El perfil de celular es 360x640 y no el 390x844 de `celular.mjs`.** Play
+rechaza una captura cuyo lado mayor pase del DOBLE del menor: 390x844 a DPR 3 da
+1170x2532, o sea 2,16 veces, y rebota. 360x640 a DPR 3 da 1080x1920, que es 9:16
+clavado. Las 48 capturas se verificaron contra esa norma al generarlas: **0
+fuera de norma**.
+
+Tres decisiones que costaron una vuelta cada una, las tres porque **la captura
+salía correcta y aun así no servía**:
+
+1. **El marco salía cortado abajo.** Faltaba `box-sizing: border-box`: el
+   `padding` del marco se sumaba al `height: 100%`.
+2. **El mapa de la gira era medio pantallazo negro.** Sin nada elegido, la
+   franja de la ficha se reserva vacía —correcto en la app, que por eso el mapa
+   no se mueve al elegir— pero en una captura no enseña nada. Se agregó `accion`:
+   un toque antes de la foto. Se toca por `aria-label`, que es un agarre que
+   existe para ser leído, y no por una clase de Tailwind, que cambia sola.
+3. **El anotador salía 0 a 0**, o sea una hoja en blanco. Ahora se le dan 8 y 5
+   toques: pasan las malas de un lado y no del otro, así se ve el corte, que es
+   lo único que esa pantalla tiene para mostrar.
+
+**Las compuestas se arman sobre la propia página**: se abre el sitio, se le
+reemplaza el `<body>` y se fotografía eso. La alternativa era un HTML suelto con
+los colores y las tipografías copiados, o sea una segunda paleta que se separa
+de la primera. Las variables de fuente viven en el `<html>` (`layout.tsx:124`),
+así que vaciar el `<body>` no las pierde.
+
+### LA DECISIÓN INCÓMODA: EL HUECO DEL ANUNCIO NO SALE EN LAS CAPTURAS
+
+`branding.mjs` esconde `[data-anuncio]`. O sea que **la captura no muestra
+exactamente lo que hay en la app**, y eso es una decisión y no un descuido: hoy
+ese hueco es un rectángulo punteado que dice "espacio para anuncio" y en una
+ficha de tienda se lee como una pantalla a medio hacer. Está escrito adentro del
+archivo, en la constante `OCULTAR`. Si el hueco se saca de la app, la regla
+sobra y se borra sin romper nada.
+
+### EL ÍCONO: UN FLAG, NO UN ARCHIVO NUEVO
+
+`generar-icono.mjs --tienda` saca el ícono de 512 y el gráfico destacado de
+1024x500. Va ahí y no en `branding.mjs` porque **el logo tiene que estar
+dibujado una sola vez**: duplicarlo es tener dos que se separan. Es el mismo
+argumento con el que `Marca.tsx` explica no haber inventado un segundo logo.
+
+Es aditivo y se verificó como tal: después de correrlo, **`git diff android/`
+sale vacío**.
+
+Dos detalles que sólo aparecen mirando el PNG: el ícono **no lleva las esquinas
+redondeadas** de `legado` —el redondeo lo aplica Play, y redondear acá es
+redondear dos veces—, y el destacado va **sin canal alfa**, que la consola lo
+rechaza. La primera versión del destacado tenía "URUGUAYO" **cortado por el
+borde derecho**: el bloque de texto ahora se centra, así que si la palabra
+cambia de largo sobra lo mismo de cada lado.
+
+### UNA MANCHA QUE NO ERA
+
+Revisando la captura de la mesa apareció algo rojizo sobre la madera. En este
+proyecto eso no se deja pasar, así que **se midió en vez de mirarlo**: máscara
+de píxeles rojizos sobre toda la imagen. Eran el mazo, el 6 de copas y **el
+brillo del mate**. Las capturas están limpias.
+
+### LA REVISIÓN DE SEGURIDAD
+
+`security-review` con un pase adversarial sobre lo nuevo. **Cero hallazgos
+explotables.** Se verificó corriendo comandos y no leyendo: inyección en
+`page.evaluate` (el titular sale de una constante del archivo; ni `--solo` ni
+`SITIO` la alcanzan, y el `data:` es base64, que no puede cerrar el atributo),
+path traversal (la ruta se arma con claves propias, no con el argumento),
+ejecución de comandos (sin `exec`/`spawn`/`eval`), y **metadatos en los PNG**
+—que importa porque ésos sí serían públicos—: sólo `IHDR`, `pHYs` e `IEND`, sin
+un `tEXt` ni un `eXIf`.
+
+**Dos cosas se arreglaron igual, ninguna explotable:**
+
+1. **`SALIDA` colgaba del directorio desde el que se corría.** Parado en
+   `herramientas/`, escribía en `herramientas/app branding/`, o sea FUERA de lo
+   que protege `/app branding/`. No se filtraba porque la regla vieja
+   `capturas/` lo tapaba de rebote — pero eso es que la protección real no era
+   la que el comentario dice que es, y una que anda de casualidad se cae el día
+   que alguien renombre algo. Ahora se ancla en `import.meta.url`, como
+   `generar-icono.mjs`.
+2. **`!APARATOS[x]` validaba por la cadena de prototipos**: `--solo constructor`
+   pasaba y después no hacía nada, en silencio. Es **el mismo agujero que
+   `progreso.ts` y `sonido.ts` ya taparon dos veces**, y ahí está escrito que el
+   patrón se copia. Ahora es `Object.hasOwn`.
+
+`09-web-security` acotada al cambio: **nada**. La CSP no se tocó, no cambió una
+línea servida al navegador, y el sumidero de HTML sólo recibe constantes del
+propio archivo. **`17-mobile-security` no corresponde**: no se tocó Capacitor ni
+el manifest, y que el flag no escriba en `android/` está verificado con el
+`git diff`. Se dice en vez de correrla por costumbre.
+
+### LAS HISTORIAS DE LOS 19: SE ENTREGÓ EL PUNTO DE PARTIDA
+
+Santiago las quiere **escritas por él**: pidió ver las actuales para ir tirando
+ideas. Se le pasaron las 19 transcritas, y de leerlas juntas salieron tres cosas
+que valen para cuando arranque:
+
+- **Siete ya tienen gancho de lugar** (el feriante, el pescador, el citricultor,
+  las amatistas de Bella Unión, la frontera, la Patria Gaucha, el liceo).
+- **Cinco no tienen nada de dónde agarrarse** —Tito, Marito, Cacho, Beto y Don
+  Ramón son sólo una forma de jugar—: ésos son los que más hay que inventar.
+- **Hay material sin usar que no se puede contradecir**: `lib/caras.ts` ya les
+  puso ropa y rasgos, `lib/ambientes.ts` le dio un objeto a cada departamento, e
+  `ideas/sonido.md` el tipo de voz.
+
+Sigue en pie lo decidido el 10/9: **son dos campos y no uno** —`descripcion` se
+queda, `historia` se agrega— y falta decidir dónde se despliega, que se resuelve
+con el texto real en la mano y no antes.
+
+### ADSENSE, QUE ERA UNA PREGUNTA Y NO UNA TAREA
+
+Se explicó el trámite. Lo que hay que recordar de eso son dos cosas, porque
+cambian la decisión entera:
+
+1. **AdSense es para webs y AdMob para apps, y Google prohíbe AdSense adentro de
+   un WebView.** O sea que AdSense no cubre el APK ni aunque la app sea la misma
+   web: para eso está AdMob, que es lo que el README ya documenta.
+2. **El dominio es el obstáculo.** AdSense pide que el dominio sea tuyo, y
+   `workers.dev` es de Cloudflare. Habría que comprar uno antes de intentarlo.
+
+`ideas/publicar.md` ya había descartado AdSense con la cuenta hecha. Nada de lo
+de hoy cambia esa conclusión; lo del dominio la refuerza.
+
+### ESTADO AL CERRAR
+
+`npm test` **237/237** · `tsc` limpio · 48 capturas, **0 fuera de la norma de
+Play** · `git diff android/` vacío · `git status` no ve **ni un archivo** de
+`app branding/`.
+
+Archivos tocados: `.gitignore`, `herramientas/generar-icono.mjs`.
+Nuevo: `herramientas/branding.mjs`.
+`next-env.d.ts` lo reescribió `next dev` solo (Next 16 movió los tipos a
+`.next/dev/`): no es de esta sesión, pero está en el árbol.
+
+**Sin commitear.**
+
+### PENDIENTE
+
+1. **Las historias**, que es lo que sigue: Santiago tira las ideas y se escriben.
+2. **Decidir qué pasa con los espacios de publicidad.** El inventario está
+   levantado: el componente es `components/EspacioAnuncio.tsx`, se usa en tres
+   lugares (mesa, pie y anotador), no hay una sola línea de AdMob en `android/`
+   ni en la CSP, y el día que se saque hay que **dar vuelta** el guardián de
+   `mirar-web.mjs:354-406`, que hoy falla si NO encuentra el hueco.
+3. **Hay una contradicción a la vista del usuario que existe igual**, se saque o
+   no: Términos dice *"no hay, y no está previsto que la haya"* y Privacidad
+   promete un banner.
+
+## 2026-09-11 — Los bots: que las estrellas signifiquen algo
+
+Santiago lo reportó así: *"hay veces que Luquita puede ser más difícil que el
+mayor nivel de todo"*. **Tenía razón, y el problema era más grande de lo que se
+veía.** Al terminar, El Turco le gana a Luquita el **75,0%** de las veces; al
+empezar era el 64,0%, y había un ★4 que le ganaba al ★5.
+
+### EL DIAGNÓSTICO, QUE ES LA MITAD DEL TRABAJO
+
+Medido antes de tocar nada, con un round robin de **68.400 partidas**:
+
+| Qué | Estaba |
+|---|---|
+| El Chicharra (★4) contra El Turco (★5) | **52,5%** — el ★4 le ganaba al ★5 |
+| Rango entero de la gira | ★1 44,0% → ★5 55,7%: once puntos para cinco niveles |
+| La ficha que te lee | anotaba algo en **el 34% de las manos** |
+| El dial `lectura`, que separa un ★5 de un ★3 | **+1,1 / −0,3 / +2,2 / −2,3** puntos. Contra un rival que paga todo, leerlo lo hacía jugar PEOR |
+
+Y una tercera cosa que definió el tamaño de la sesión: **tocar números ya no
+alcanzaba**. Llevando el ★1 al extremo blando y barriendo los umbrales del ★5,
+el techo daba 72,6% contra un objetivo de 75-80%.
+
+### LAS DOS COSAS QUE DE VERDAD LO ARREGLARON
+
+**1. La columna `subeEnvidoCon` estaba dada vuelta.** Iba 34 para el ★1 y 30
+para el ★5, y el óptimo medido —con validación cruzada, optimizando contra los
+perfiles y validando contra el sparring y la gira— es **35**. O sea que el ★1
+jugaba más cerca del punto bueno que el ★5. Invertida (31·32·33·34·35), el ★5
+vs ★1 saltó de 63,6% a 72,0% de una.
+
+Es **el mismo error que ya se había cometido una vez** en este mismo archivo, y
+por el mismo motivo: suponer que "más difícil = canta y sube más".
+
+**2. La ficha estaba ciega, y el dial que dependía de ella no hacía nada.**
+`observarMano` exigía o envido querido (13,8% de las manos) o las tres cartas
+sobre la mesa (23,3%). Se tiraba el 41% de manos donde el jugador cantaba truco
+y el 31% donde mostraba dos cartas.
+
+El arreglo no fue exprimir más ese eje: fue **partirlo en tres, cada uno con su
+denominador**.
+
+    VERACIDAD   ¿cantó sin tener?    pide evidencia   ~33% de las manos
+    FRECUENCIA  ¿cada cuánto abre?   gratis           100%
+    AGUANTE     ¿se achica?          gratis           100%
+
+Frecuencia y aguante no necesitan ver una sola carta. Y el aguante era la mitad
+que faltaba entera: el bot podía decidir si te CREÍA, pero no si te convenía
+cantarle. Cobertura medida: de **33,4% a prácticamente todas las manos, 3×**.
+
+### LOS DIALES NUEVOS
+
+- **`aguante`** (0·0,2·0,5·0,8·1) — cuánto sube el umbral de querer por cada
+  escalón de truco. Es el *"si le cantás el vale cuatro se achican aunque
+  tengan"* que pidió Santiago, y es lo que hace que **mentirle a los primeros
+  rinda**, que es el objetivo pedagógico de la gira.
+- **`memoria`** (0·0·0·0,6·1) — cuántas partidas anteriores mira. Hasta el ★3
+  en cero: contra ellos alcanza con cambiar de estrategia para despistarlos.
+- **`plan`** — está en CERO para los 19, y es la decisión más incómoda de la
+  sesión. Ver abajo.
+
+Y un arreglo que no estaba planeado: **el `silencio` se diluye con lo que sobra
+sobre el umbral**. Se tiraba a la moneda sin mirar cuánto se tenía, y costaba
+nueve puntos de winrate: entre dos ★2, la callada sacaba 36,6% y el hablador
+45,6%. Callarse con el tanto justo es oficio; callarse un 33 es distracción.
+Con eso, la brecha entre esos dos ★2 pasó de 9 puntos a 1,7.
+
+### `lib/legajo.ts`: lo que se acuerdan de vos
+
+Clave propia `truco-uy:legajo`, **nunca adentro de `truco-uy:progreso`**, igual
+que hizo `sonido.ts`. Las últimas 3 partidas, del JUGADOR y no de cada rival
+—decisión de Santiago— así El Turco ya te conoce la primera vez.
+
+`sanear()` copiado de `progreso.ts` y encima una tabla de **15 coherencias**: no
+se puede haber mentido más veces de las que se cantó. Sin eso, editando el
+`localStorage` a mano se le fabrica al bot una lectura que ninguna partida
+produjo.
+
+**El tope es la decisión que más importa**: el legajo entra como seis manos y ni
+una más. Con eso el rival se sienta sabiendo, pero a las pocas manos lo nuevo ya
+pesa más que lo viejo. Sin tope, tres partidas largas lo dejaban clavado en la
+idea que se había hecho de vos, y eso no es un rival difícil: es un rival sordo.
+
+### LO QUE SE DESCARTÓ, Y POR QUÉ
+
+**`plan.ts` quedó apagado.** Santiago pidió con mucho detalle que los ★4 y ★5
+administren la mentira: *"mentir solamente cuando anteriormente te dijeron la
+verdad y te ganaron mostrándote cartas buenas"*. Se escribió entero, se arregló
+**tres veces** y se midió **de cinco formas**. No se pudo demostrar que sirva:
+
+    plan = 0 .................. 61,9%   ← la referencia
+    plan = 1, primera versión . 57,9%
+    …con el marcador arreglado  60,0%
+    …con el crédito calibrado   60,5%
+
+Y contra un rival con **memoria corta** —el que más debería premiarlo, porque es
+lo que se parece a una persona— sale **peor todavía: −2,6**, que es más que el
+margen de error. No es que falte el instrumento: se midió con el correcto.
+
+El módulo queda con sus tests y el dial listo; encenderlo es una columna de
+`OFICIO_POR_NIVEL`. **Esa decisión es de Santiago, no mía**: él lo pidió, yo
+sólo puedo decir que no lo pude demostrar.
+
+Lo que SÍ quedó de ahí, medido: `FALTA_EXIGE`. El umbral para querer una falta
+envido era `quiereEnvidoCon + 4` y el bueno es **+5**. Y que **la lectura entre
+siempre en la falta**, que da +3,5 puntos y produce exactamente el número que
+pidió Santiago: la falta se quiere con **33**, y con **30** si el otro miente.
+
+### DOS ERRORES MÍOS QUE ENCONTRÓ LA MEDICIÓN, Y UNO QUE ENCONTRÓ LA REVISIÓN
+
+1. **El marcador estaba al revés.** `ajustePorMarcador` ponía prudente al que va
+   perdiendo. Costaba 2 puntos. No jugar es la forma más segura de seguir
+   perdiendo: el que va abajo arriesga.
+2. **`mentiraEfectiva` sólo podía restar.** Iba de `base×0,15` a `base×1`, o sea
+   que administrar la mentira sólo sacaba mentiras en vez de moverlas de lugar.
+   Con el techo por encima de 1 la idea recién tiene sentido.
+3. **El legajo no guardaba nada contra los ★4 y ★5** después de la primera
+   partida. `fichaSembrada` devuelve fraccionarios, el saneador exige enteros, y
+   `anotarEnLegajo` fallaba **en silencio**. Justo los dos rivales para los que
+   el legajo existe. Lo encontró la revisión de seguridad, no yo. Arreglado
+   separando lo sembrado de lo observado, con su test de viaje redondo.
+
+### EL SOBREAJUSTE, QUE MORDIÓ DOS VECES
+
+Barriendo 48 combinaciones con 900 partidas, la "mejor" dio 76,1%. Verificada
+con 4.000: **72,6%**. Era ruido, y el barrido la había elegido por ruidosa. Y
+ese ★5 "optimizado" **perdía contra el ★5 de entonces (47,2%)**, porque estaba
+ajustado a un solo rival.
+
+De ahí salieron dos reglas que ahora están en el banco: **nada se calibra contra
+un solo oponente**, y **ningún número se informa sin su margen de error**. El
+medidor viejo había dicho "escala desordenada" con una diferencia de 1,9 puntos
+que era azar.
+
+Y volvió a aparecer al final, al revés: un test decía que contra el pescador el
+★5 no se distinguía del ★3 (1,9 puntos, con 900 partidas). Con 4.000 la
+diferencia real era **3,4**. No exigía de más: **medía mal**, y eso se arregla
+subiendo las partidas, no bajando el umbral.
+
+### EL BANCO NUEVO
+
+`lib/motor/banco.ts` (nuevo, tipado) + `herramientas/medir-bots.mjs` reescrito.
+Estaba duplicado entre la herramienta y el test, y ya había divergido: el
+`SPARRING` del `.mjs` todavía declaraba `verso: 0`, un dial borrado el 10/9. En
+`.ts` eso no compila, y de hecho el compilador cazó tres campos faltantes apenas
+se agregaron los diales nuevos.
+
+Lo que agrega: **el panel de cinco perfiles humanos** (mentiroso, honesto,
+miedoso, pagador, pescador), que es la diferencia entre medir si un bot es
+fuerte y medir si es DIFÍCIL; el round robin 19×19; y el margen de error.
+
+### CÓMO QUEDÓ
+
+    ★1: 37,0%   ★2: 41,9%   ★3: 46,7%   ★4: 54,2%   ★5: 57,8%
+    ✔ Las cinco bandas están separadas
+
+Contra cada forma de jugar de una persona, del ★1 al ★5:
+
+    Mentiroso  39,2 → 65,7        Miedoso   40,7 → 77,3
+    Honesto    42,8 → 61,1        Pagador   45,5 → 62,9
+    Pescador   55,5 → 65,4
+
+### LA REVISIÓN DE SEGURIDAD
+
+`security-review` sobre todo el diff. **Ningún hallazgo HIGH.** Un MEDIUM y un
+LOW, los dos arreglados:
+
+- **MEDIUM — el bot se soplaba el tanto que vos nunca dijiste.** `observarMano`
+  usaba `manoInicial` con sólo comprobar que el envido se hubiera querido. Pero
+  por `reglas.txt` 9.4 el pie que no supera dice **"son buenas"** y no revela
+  nada: el motor lo sabe (`envidoJugado.dicho`) y `tantos-al-cierre.ts` ya lo
+  respetaba para la pantalla. Era una fuga vieja que duraba una partida; con el
+  legajo iba a quedar **guardada**. Arreglado, y de paso se aprovechó la
+  información pública de verdad que hay ahí: decir "son buenas" prueba que tu
+  tanto es **menor o igual** al que cantó el otro, que es una cota superior y
+  alcanza para probar una mentira.
+- **LOW** — la fecha de la política de privacidad, que la propia página pide
+  mover cuando cambia lo que se guarda.
+
+Lo que se revisó y salió limpio: **contaminación de prototipo** en el saneador
+del legajo (se probaron seis ataques; el saneador construye un objeto nuevo
+desde una allowlist, que es la forma correcta), `NaN`/`Infinity`/negativos/
+gigantes (no se cuelan, y lo peor que se consigue editando a mano es el mismo
+ajuste que ya se consigue jugando), **XSS** (cero sumideros de HTML en todo el
+repo) y que **el legajo no guarde ni una carta**, con test que lo blinda.
+
+Verificación web aparte: la CSP no hubo que tocarla —el cambio no agrega un solo
+pedido de red, ni un script, ni un asset—, no hay dependencias nuevas y el
+legajo es la cuarta clave de `localStorage`, separada de las otras tres.
+
+**No se corrió `17-mobile-security`**: no se tocó Capacitor, ni el manifest, ni
+nada del APK. Se dice en vez de correrla por costumbre.
+
+### LOS SABOTAJES
+
+A los tests nuevos, para ver si sirven. Tres de cuatro se agarran: volver
+`subeEnvidoCon` a la tabla vieja (4 tests en rojo), darle al ★1 el aguante de un
+★5, y dejar al ★5 sin lectura. **El cuarto no rompe nada y está bien que así
+sea**: si el ★4 juega las cartas como un ★5, el ★5 conserva lectura, aguante y
+memoria, así que el escalón sigue existiendo. El test mide el resultado, no los
+ingredientes.
+
+### ESTADO AL CERRAR
+
+`npm test` **237/237** · `tsc` limpio · `mirar-web` TODO OK en los tres tamaños ·
+`mirar-mesa` TODO OK en las siete pantallas · los dos builds OK · `out-app`
+sigue en **6,0 MB**.
+
+Archivos tocados: `lib/motor/lectura.ts`, `bot.ts`, `personalidades.ts`,
+`partida.ts` (un campo, `Registro.sobre`), `baraja.ts`,
+`app/jugar/mesa/page.tsx`, `app/legales/privacidad/page.tsx`,
+`herramientas/medir-bots.mjs` y los tests.
+Nuevos: `lib/legajo.ts`, `lib/motor/banco.ts`, `lib/motor/plan.ts` y sus tests.
+
+**Sin commitear.**
+
 ## 2026-09-10 (noche) — El sonido: primero la lista de lo que hay que grabar, después las barras
 
 Sesión corta y de las que no se ven: **el juego sigue mudo al terminarla**. Lo

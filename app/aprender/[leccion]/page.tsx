@@ -88,9 +88,9 @@ export default async function PaginaLeccion({ params }: Props) {
         )}
       </nav>
 
-      {/* Acá estaba el "¿Te sirvió? / Seguir en GitHub". Se fue el 4/9/2026, y
-          el hueco del anuncio NO viene a reemplazarlo: lo lleva el pie, que en
-          esta misma pantalla queda justo abajo. Ver `app/aprender/page.tsx`. */}
+      {/* Acá estaba el "¿Te sirvió? / Seguir en GitHub". Se fue el 4/9/2026.
+          Y Aprender no lleva NINGÚN anuncio: ni banner (se sacaron todos el
+          2/10/2026) ni de pantalla completa. Lo cuida `lib/anuncios.ts`. */}
     </div>
   );
 }

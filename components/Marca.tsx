@@ -138,7 +138,21 @@ function CartaDeMarca({
  * `app/globals.css` que parte el rasterizado en esta pantalla, igual que la
  * clase `carta` de `components/Carta.tsx`. Ver el comentario de la regla.
  */
-export function Marca({ alto, className = "" }: { alto: string; className?: string }) {
+/**
+ * `idHalo` existe porque la marca puede estar DOS veces en la página: la
+ * pantalla de carga de la app la dibuja encima de la portada, que tiene la
+ * suya. Dos `<radialGradient>` con el mismo `id` es HTML inválido, y el
+ * `url(#…)` de una terminaría apuntando al de la otra.
+ */
+export function Marca({
+  alto,
+  className = "",
+  idHalo = "halo-marca",
+}: {
+  alto: string;
+  className?: string;
+  idHalo?: string;
+}) {
   return (
     <svg
       viewBox="0 0 140 108"
@@ -148,14 +162,14 @@ export function Marca({ alto, className = "" }: { alto: string; className?: stri
       aria-label="Truco Uruguayo"
     >
       <defs>
-        <radialGradient id="halo-marca">
+        <radialGradient id={idHalo}>
           <stop offset="0%" stopColor={C.dorado} stopOpacity="0.5" />
           <stop offset="45%" stopColor={C.dorado} stopOpacity="0.25" />
           <stop offset="75%" stopColor={C.dorado} stopOpacity="0.08" />
           <stop offset="100%" stopColor={C.dorado} stopOpacity="0" />
         </radialGradient>
       </defs>
-      <circle cx="70" cy="54" r="58" fill="url(#halo-marca)" />
+      <circle cx="70" cy="54" r="58" fill={`url(#${idHalo})`} />
       {/* la de atrás primero: el orden del documento es el orden de apilado */}
       <CartaDeMarca x={86} giro={17} palo="copa" />
       <CartaDeMarca x={56} giro={-14} palo="oro" />

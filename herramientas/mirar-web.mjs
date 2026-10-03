@@ -351,7 +351,7 @@ console.log("\nel volumen se guarda:");
   await ctx.close();
 }
 
-/* ══ 1bis. APRENDER EN UN CELULAR, Y EL HUECO DEL ANUNCIO ══════════════════
+/* ══ 1bis. APRENDER EN UN CELULAR, Y QUE NO QUEDE UN BANNER ════════════════
    Aprender es la mitad de lo que la app promete, y estaba medida para una
    computadora: títulos de 30px, párrafos de 17 y 48px de aire arriba y abajo.
    A 320 de ancho eso hacía renglones de siete palabras y una lección de casi
@@ -363,14 +363,13 @@ console.log("\nel volumen se guarda:");
    · **QUE NO DESBORDE A LO ANCHO.** Es el defecto que hace que una página se
      sienta rota en un teléfono y el que menos se ve leyendo el código: alcanza
      una palabra larga o una tabla para que aparezca la barra horizontal.
-   · **QUE EL HUECO DEL ANUNCIO ESTÉ Y MIDA LO QUE DICE.** El día que se
-     encienda el banner tiene que caber exactamente ahí. Si alguien le saca el
-     alto al componente, o lo saca de una pantalla, esto falla ahora y no
-     cuando ya haya un anuncio de por medio.
-   · **Y QUE HAYA UNO SOLO.** Dos banners pegados, sin contenido en el medio,
-     además de verse mal están prohibidos por las políticas de AdMob. Ya pasó
-     una vez el 4/9/2026: quedaron el del cuerpo y el del pie uno arriba del
-     otro. */
+   · **QUE NO HAYA NINGÚN HUECO DE BANNER.** Hasta el 2/10/2026 esto
+     verificaba lo contrario: que el hueco reservado (`EspacioAnuncio`)
+     estuviera y midiera 32px o más. Ese día los banners se sacaron de la app
+     —un banner fijo en un juego de cartas molesta y casi no paga— y los
+     anuncios pasaron a ser de pantalla completa, fuera del WebView. Así que
+     el guardián SE DIO VUELTA: ahora falla si encuentra un `[data-anuncio]`,
+     para que un hueco no vuelva a colarse por un componente olvidado. */
 console.log("\naprender, en un celular:");
 {
   const RUTAS = ["/aprender", "/aprender/la-flor", "/legales/privacidad"];
@@ -392,14 +391,10 @@ console.log("\naprender, en un celular:");
       if (m.anchoDoc > m.anchoVis + 1) {
         falla(donde, `desborda a lo ancho: el documento mide ${m.anchoDoc} y la ventana ${m.anchoVis}`);
       }
-      if (m.huecos.length === 0) {
-        falla(donde, "no hay hueco de anuncio: ¿se le sacó el <EspacioAnuncio> al pie?");
-      } else if (m.huecos.length > 1) {
-        falla(donde, `hay ${m.huecos.length} huecos de anuncio en la misma pantalla, y va uno solo`);
-      } else if (m.huecos[0].alto < 32) {
-        falla(donde, `el hueco del anuncio mide ${m.huecos[0].alto}px y el banner más chico son 32`);
+      if (m.huecos.length > 0) {
+        falla(donde, `hay ${m.huecos.length} hueco(s) de banner, y los banners se sacaron el 2/10/2026`);
       } else {
-        console.log(`  ${donde.padEnd(34)} OK  ${m.alto}px de largo, hueco de ${m.huecos[0].alto}px`);
+        console.log(`  ${donde.padEnd(34)} OK  ${m.alto}px de largo, sin banner`);
       }
     }
     await ctx.close();

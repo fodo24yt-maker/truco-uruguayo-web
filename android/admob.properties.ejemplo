@@ -1,0 +1,18 @@
+# Plantilla de los IDs de AdMob de verdad.
+#
+# Copiala a `android/admob.properties` (ese nombre NO sube a GitHub) y
+# reemplazá las tres líneas con los IDs de la consola de AdMob:
+#   · App ID:  Apps → la app → Configuración de la app     (lleva un "~")
+#   · Unidades: Apps → la app → Unidades de anuncios        (llevan una "/")
+#
+# Los usa sólo el build de release. El de debug usa siempre los de prueba de
+# Google, que están en `android/app/admob.gradle`. Si alguna línea queda en
+# REEMPLAZAR, o con un ID de prueba, el release no compila: es a propósito.
+ADMOB_APP_ID=REEMPLAZAR_APP_ID
+ADMOB_INTERSTICIAL=REEMPLAZAR_INTERSTICIAL
+ADMOB_RECOMPENSA=REEMPLAZAR_RECOMPENSA
+
+# Opcional, sólo para probar el formulario de consentimiento (UMP) en debug
+# como si estuvieras en Europa. Es el "hashed device id" de 32 caracteres que
+# imprime logcat la primera vez que la app pide el consentimiento.
+# ADMOB_DISPOSITIVO_PRUEBA_UMP=

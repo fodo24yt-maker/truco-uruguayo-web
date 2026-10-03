@@ -11,11 +11,21 @@
  * Toda la corrección sale del motor del juego, no de textos escritos a mano:
  * si mañana cambia una regla, los ejercicios cambian con ella y no pueden
  * quedar mintiendo.
+ *
+ * ── Y desde el 2/10/2026, cada acierto se anota ────────────────────────────
+ * Acertar los doce desbloquea la Gira nacional en la app (`lib/aprendido.ts`).
+ * Lo anota el propio ejercicio y no la lección porque las lecciones son
+ * componentes de servidor: no le pueden pasar una función a éste. Por eso el
+ * `id` es obligatorio, y tiene que ser uno de `EJERCICIOS`: un id inventado no
+ * compila.
  */
 
 import { useState } from "react";
 
 import { Carta } from "@/components/Carta";
+import { EntradaPartida } from "@/components/EntradaJuego";
+import { type IdEjercicio, anotarAcierto } from "@/lib/aprendido";
+import { esApp } from "@/lib/plataforma";
 import { type Carta as CartaType, desdeTexto, esPieza } from "@/lib/motor/baraja";
 
 export interface Opcion {
@@ -28,6 +38,8 @@ export interface Opcion {
 }
 
 export interface PropsEjercicio {
+  /** Cuál es, de los doce de `lib/aprendido.ts`. */
+  id: IdEjercicio;
   /** La pregunta concreta. */
   pregunta: string;
   /** La muestra de la mano, en notación corta ("3O"). */
@@ -42,6 +54,7 @@ export interface PropsEjercicio {
 }
 
 export function Ejercicio({
+  id,
   pregunta,
   muestra,
   mano,
@@ -50,6 +63,8 @@ export function Ejercicio({
   opciones,
 }: PropsEjercicio) {
   const [elegida, setElegida] = useState<number | null>(null);
+  /** Este acierto fue el que terminó Aprender y abrió la Gira (sólo en la app). */
+  const [abrioLaGira, setAbrioLaGira] = useState(false);
   const respondido = elegida !== null;
   const acerto = respondido && opciones[elegida].correcta;
   const laMuestra = muestra ? desdeTexto(muestra) : undefined;
@@ -124,7 +139,13 @@ export function Ejercicio({
           return (
             <button
               key={opcion.texto}
-              onClick={() => !respondido && setElegida(i)}
+              onClick={() => {
+                if (respondido) return;
+                setElegida(i);
+                if (opcion.correcta && anotarAcierto(id).giraRecienAbierta && esApp()) {
+                  setAbrioLaGira(true);
+                }
+              }}
               disabled={respondido}
               className={`rounded border-2 px-4 py-3 text-left text-[15px] transition-colors ${
                 mostrarComoCorrecta
@@ -165,6 +186,24 @@ export function Ejercicio({
             {!acerto && <strong>La buena era “{opciones.find((o) => o.correcta)!.texto}”: </strong>}
             {opciones.find((o) => o.correcta)!.porque}
           </p>
+
+          {/* El premio de terminar Aprender, la única vez que pasa. */}
+          {abrioLaGira && (
+            <div className="mt-3 rounded border-2 border-dorado bg-dorado/15 px-3 py-2.5">
+              <p className="font-[family-name:var(--font-ui)] text-sm uppercase tracking-wide text-bordo">
+                ¡Terminaste Aprender!
+              </p>
+              <p className="mt-1 text-[15px] leading-snug text-tinta">
+                La Gira nacional quedó desbloqueada para siempre. Diecinueve rivales te esperan.
+              </p>
+              <EntradaPartida
+                pedido={{ modo: "gira" }}
+                className="mt-2 inline-block rounded bg-bordo px-4 py-2 font-[family-name:var(--font-ui)] text-sm uppercase tracking-wide text-crema transition-colors hover:bg-bordo-claro"
+              >
+                Ir a la Gira →
+              </EntradaPartida>
+            </div>
+          )}
 
           <button
             onClick={() => setElegida(null)}

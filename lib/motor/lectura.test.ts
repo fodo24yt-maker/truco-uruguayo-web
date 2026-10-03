@@ -9,7 +9,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { desdeTexto as c } from "./baraja.ts";
+import { BARAJA, calidadConHuecos, calidadDeMano, desdeTexto as c } from "./baraja.ts";
 import {
   type Accion,
   type Jugador,
@@ -17,8 +17,8 @@ import {
   aplicar,
   nuevaPartida,
 } from "./partida.ts";
-import { analizarFlor } from "./tantos.ts";
-import { ajustePorLectura, fichaVacia, observarMano } from "./lectura.ts";
+import { analizarFlor, valorEnvido } from "./tantos.ts";
+import { SIN_AJUSTE, TOPES, ajustePorLectura, fichaVacia, observarMano } from "./lectura.ts";
 import { decidirJugada } from "./bot.ts";
 import { buscarPersonalidad } from "./personalidades.ts";
 
@@ -70,6 +70,7 @@ const jugar = (carta: string): Accion => ({ tipo: "jugar", carta: c(carta) });
 const ENVIDO: Accion = { tipo: "envido", canto: "envido" };
 const QUIERO: Accion = { tipo: "quiero" };
 const NO_QUIERO: Accion = { tipo: "no-quiero" };
+const TRUCO: Accion = { tipo: "truco" };
 
 // ─── Lo que ve, lo anota ────────────────────────────────────────────────────
 
@@ -199,28 +200,39 @@ test("ANTI-TRAMPA: tener flor y guardársela no puede cambiar la ficha", () => {
   assert.deepEqual(f1, f2, "la ficha cambió según una flor que nunca se cantó ni se mostró");
 });
 
-test("una mano cortada de entrada no enseña nada", () => {
+test("una mano cortada de entrada no enseña nada DE LAS CARTAS", () => {
+  // Ojo con lo que cambió acá el 11/9/2026. Antes esta mano no dejaba ni un
+  // rastro. Ahora deja dos, y los dos son cosas que cualquiera sentado en esa
+  // mesa vio con sus ojos: que la mano se jugó, y que este se fue al mazo. De
+  // las CARTAS se sigue sin anotar nada, que es lo que el test protege.
   let p = mesa(["4E", "5C", "6O"], ["12O", "11O", "10O"], "3B");
   p = correr(p, [{ tipo: "mazo" }]);
   const f = observarMano(fichaVacia(), p, "vos");
-  assert.deepEqual(f, fichaVacia(), "sin cartas sobre la mesa no hay nada que anotar");
+
+  assert.deepEqual(
+    f,
+    { ...fichaVacia(), manosJugadas: 1, mazos: 1 },
+    "de una mano cortada no se puede deducir una sola carta",
+  );
 });
 
 // ─── Qué hace el bot con eso ────────────────────────────────────────────────
 
 test("con lectura en 0 la ficha no cambia absolutamente nada", () => {
   const cargada = {
+    ...fichaVacia(),
+    manosJugadas: 12,
     manosVistas: 12,
     envidosCantados: 8,
     envidosFlojos: 8,
     pescas: 4,
-    tantoAltoCallado: 0,
     trucosCantados: 6,
     trucosFlojos: 6,
-    manoFuerteCallada: 0,
+    trucosRecibidos: 10,
+    trucosNoQueridos: 9,
   };
   const a = ajustePorLectura(cargada, 0);
-  assert.deepEqual(a, { quiereEnvido: 0, quiereTruco: 0, cantaEnvido: 0 });
+  assert.deepEqual(a, SIN_AJUSTE);
 
   // Y el bot de nivel 1 decide exactamente lo mismo con ficha o sin ella
   const luki = buscarPersonalidad("luki");
@@ -236,12 +248,13 @@ test("con lectura en 0 la ficha no cambia absolutamente nada", () => {
 
 test("contra un mentiroso le paga a ver; contra uno serio se achica", () => {
   const mentiroso = {
-    manosVistas: 12, envidosCantados: 8, envidosFlojos: 8, pescas: 0,
-    tantoAltoCallado: 0, trucosCantados: 8, trucosFlojos: 8, manoFuerteCallada: 0,
+    ...fichaVacia(), manosJugadas: 12, manosVistas: 12, manosConCartas: 12,
+    envidosCantados: 8, envidosFlojos: 8, trucosCantados: 8, trucosFlojos: 8,
   };
   const serio = {
-    manosVistas: 12, envidosCantados: 8, envidosFlojos: 0, pescas: 0,
-    tantoAltoCallado: 6, trucosCantados: 8, trucosFlojos: 0, manoFuerteCallada: 6,
+    ...fichaVacia(), manosJugadas: 12, manosVistas: 12, manosConCartas: 12,
+    envidosCantados: 8, envidosFlojos: 0, tantoAltoCallado: 6,
+    trucosCantados: 8, trucosFlojos: 0, manoFuerteCallada: 6,
   };
   const aM = ajustePorLectura(mentiroso, 1);
   const aS = ajustePorLectura(serio, 1);
@@ -256,22 +269,117 @@ test("el ajuste está acotado: leer al rival nunca puede empeorar la jugada", ()
   // Los umbrales de los rivales duros ya están en su punto justo. Si el ajuste
   // no tuviera tope, leer al rival los empujaba MÁS ALLÁ del óptimo y jugaban
   // peor por prestar atención. Pasó de verdad.
+  const base = { ...fichaVacia(), manosJugadas: 200, manosVistas: 200, manosConCartas: 200 };
   const extremos = [
-    { manosVistas: 200, envidosCantados: 200, envidosFlojos: 200, pescas: 200, tantoAltoCallado: 0, trucosCantados: 200, trucosFlojos: 200, manoFuerteCallada: 0 },
-    { manosVistas: 200, envidosCantados: 200, envidosFlojos: 0, pescas: 0, tantoAltoCallado: 200, trucosCantados: 200, trucosFlojos: 0, manoFuerteCallada: 200 },
+    // El mentiroso cobarde de manual: canta todo sin tener y no aguanta nada
+    { ...base, envidosCantados: 200, envidosFlojos: 200, pescas: 200, trucosCantados: 200,
+      trucosFlojos: 200, farolesCazados: 200, trucosRecibidos: 200, trucosNoQueridos: 200,
+      envidosRecibidos: 200, envidosNoQueridos: 200 },
+    // El serio que aguanta todo: si canta tiene, y no se achica nunca
+    { ...base, envidosCantados: 200, envidosFlojos: 0, tantoAltoCallado: 200,
+      trucosCantados: 200, trucosFlojos: 0, manoFuerteCallada: 200,
+      trucosRecibidos: 200, trucosNoQueridos: 0, envidosRecibidos: 200, envidosNoQueridos: 0 },
   ];
   for (const f of extremos) {
     const a = ajustePorLectura(f, 1);
-    assert.ok(a.quiereEnvido >= -5 && a.quiereEnvido <= 1.5, `envido fuera de tope: ${a.quiereEnvido}`);
-    assert.ok(a.quiereTruco >= -0.14 && a.quiereTruco <= 0.05, `truco fuera de tope: ${a.quiereTruco}`);
-    assert.ok(a.cantaEnvido >= 0 && a.cantaEnvido <= 3);
+    for (const campo of ["quiereEnvido", "quiereTruco", "cantaEnvido", "cantaTruco"] as const) {
+      const [min, max] = TOPES[campo];
+      assert.ok(
+        a[campo] >= min && a[campo] <= max,
+        `${campo} fuera de tope: ${a[campo]} no está en [${min}, ${max}]`,
+      );
+    }
   }
 });
 
 test("con poca evidencia el ajuste es chico: no se vuelve loco por una mano", () => {
-  const unaMano = { ...fichaVacia(), manosVistas: 1, envidosCantados: 1, envidosFlojos: 1 };
-  const muchas = { ...fichaVacia(), manosVistas: 20, envidosCantados: 20, envidosFlojos: 20 };
+  const unaMano = { ...fichaVacia(), manosJugadas: 1, manosVistas: 1, envidosCantados: 1, envidosFlojos: 1 };
+  const muchas = { ...fichaVacia(), manosJugadas: 20, manosVistas: 20, envidosCantados: 20, envidosFlojos: 20 };
   const a1 = ajustePorLectura(unaMano, 1);
   const a20 = ajustePorLectura(muchas, 1);
   assert.ok(Math.abs(a1.quiereEnvido) < Math.abs(a20.quiereEnvido), "la confianza tiene que crecer");
+});
+
+// ─── Las cotas, que son la garantía anti-trampa hecha aritmética ────────────
+
+test("PROPIEDAD: con dos cartas a la vista, la cota NUNCA supera lo que había", () => {
+  /* Toda la honestidad del cambio del 11/9/2026 se apoya en esto. Con dos
+     cartas sobre la mesa no se puede saber el tanto ni la calidad, pero sí se
+     puede acotarlos POR ABAJO, contando lo que falta como la peor carta de la
+     baraja.
+
+     Que la cota sea inferior es lo que hace que sólo pueda probar que el rival
+     TENÍA algo, y nunca que no lo tenía. Por eso alimenta "se calló una mano
+     brava" —que es un hecho— y nunca `envidosFlojos` ni `trucosFlojos`, que son
+     acusaciones de mentir. Si esta propiedad se rompiera, el bot pasaría a
+     deducir de lo que no vio.
+
+     Se verifica por fuerza bruta y no con tres ejemplos: son 11.340 casos de
+     mano y muestra, con las tres formas de mostrar dos cartas de tres. */
+  let casos = 0;
+  for (const muestra of BARAJA) {
+    for (let i = 0; i < 40; i++)
+      for (let j = i + 1; j < 40; j++)
+        for (let k = j + 1; k < 40; k++) {
+          const mano = [BARAJA[i], BARAJA[j], BARAJA[k]];
+          if (mano.some((x) => x.numero === muestra.numero && x.palo === muestra.palo)) continue;
+          if ((i * 7 + j * 13 + k * 3 + muestra.numero) % 97 !== 0) continue; // muestreo parejo
+          const tantoReal = valorEnvido(mano, muestra);
+          const calidadReal = calidadDeMano(mano, muestra);
+          for (const [a, b] of [[0, 1], [0, 2], [1, 2]]) {
+            const vistas = [mano[a], mano[b]];
+            casos++;
+            assert.ok(
+              valorEnvido(vistas, muestra) <= tantoReal,
+              `la cota del tanto se pasó: ${valorEnvido(vistas, muestra)} > ${tantoReal}`,
+            );
+            assert.ok(
+              calidadConHuecos(vistas, muestra, 3) <= calidadReal + 1e-9,
+              `la cota de la calidad se pasó con muestra ${muestra.numero}${muestra.palo}`,
+            );
+          }
+        }
+  }
+  assert.ok(casos > 10000, `se probaron sólo ${casos} casos: el muestreo se rompió`);
+});
+
+test("calidadConHuecos sin huecos es exactamente calidadDeMano", () => {
+  // `calidadDeMano` pasó a ser un caso particular de la otra, así que esto
+  // verifica que generalizarla no le cambió el comportamiento a nadie.
+  for (const muestra of [c("3B"), c("2E"), c("12O")]) {
+    for (let i = 0; i < 40; i += 3) {
+      const mano = [BARAJA[i], BARAJA[(i + 11) % 40], BARAJA[(i + 23) % 40]];
+      assert.equal(calidadConHuecos(mano, muestra, mano.length), calidadDeMano(mano, muestra));
+    }
+  }
+});
+
+test("se calló una mano brava: con DOS cartas ya se puede anotar, sin acusarlo de mentir", () => {
+  // Antes hacían falta las tres cartas y por eso se tiraba a la basura el 31%
+  // de las manos. Con dos matas a la vista y sin haber cantado truco, que se
+  // guardó una mano brava es un hecho, no una sospecha.
+  // El 2 de basto con muestra de basto es la carta más fuerte que hay, y el
+  // ancho de espada le sigue de cerca. Ojo con qué cartas se eligen: la cota es
+  // CONSERVADORA a propósito, así que dos anchos comunes no le alcanzan para
+  // afirmar nada —lo que no vio cuenta como un cuatro— y ahí no anota, que es
+  // justo lo que tiene que hacer.
+  let p = mesa(["2B", "1E", "4O"], ["12O", "11O", "10O"], "3B");
+  p = correr(p, [
+    jugar("2B"), jugar("10O"),
+    jugar("1E"), jugar("11O"), // gana las dos: la tercera no se juega
+  ]);
+  const f = observarMano(fichaVacia(), p, "vos");
+  assert.equal(f.manoFuerteCallada, 1, "la pieza mayor sobre la mesa y sin cantar truco");
+  assert.equal(f.trucosFlojos, 0, "no cantó truco: no se le puede anotar una mentira");
+  assert.equal(f.envidosFlojos, 0);
+});
+
+test("un farol cazado es una mentira probada SIN verle una sola carta", () => {
+  // Cantó truco, le subieron a retruco y se achicó. El que tiene con qué no se
+  // achica en su propio truco. Cubre parte del 41% de manos donde alguien canta
+  // truco y nunca se le llegan a ver las tres cartas.
+  let p = mesa(["4E", "5C", "6O"], ["1E", "1B", "12O"], "3B");
+  p = correr(p, [TRUCO, TRUCO, NO_QUIERO]);
+  const f = observarMano(fichaVacia(), p, "vos");
+  assert.equal(f.farolesCazados, 1, "cantó truco y se achicó cuando le subieron");
 });

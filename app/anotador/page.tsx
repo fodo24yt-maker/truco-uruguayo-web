@@ -29,9 +29,10 @@
  * mismo sin crear una superficie aparte.
  */
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { EspacioAnuncio } from "@/components/EspacioAnuncio";
+import { portero } from "@/lib/entrada";
 
 import {
   CUENTA_VACIA,
@@ -274,6 +275,15 @@ export default function Anotador() {
      servidor— y escribe 0 a 0 encima de la partida que estaba guardada. */
   const [cargado, setCargado] = useState(false);
 
+  /* En la app el anotador tiene candado hasta mirar un video, una vez. Los
+     botones ya lo respetan (pasan por `lib/entrada.ts`); esto es para cuando
+     se llega sin botón —una dirección escrita a mano—: si está cerrado, se
+     vuelve a la portada con el diálogo abierto. En la web no hace nada. */
+  const router = useRouter();
+  useEffect(() => {
+    if (portero.rebotar("anotador")) router.replace("/");
+  }, [router]);
+
   // El `localStorage` sólo existe del lado del navegador, igual que en la gira
   useEffect(() => {
     setCuenta(leerCuenta());
@@ -423,21 +433,6 @@ export default function Anotador() {
           />
         </div>
 
-        {/* ── EL HUECO DEL ANUNCIO ────────────────────────────────────────
-            Va acá y no en el pie del sitio porque esta pantalla es
-            `pantalla-fija`, y `app/globals.css` esconde el pie en las
-            pantallas fijas: sin esto, el anotador sería la única pantalla de
-            la app sin ningún lugar donde poner el banner.
-
-            El alto se reserva DESDE AHORA, con el banner todavía apagado, por
-            la misma razón que en la mesa: la pantalla está medida para entrar
-            exacta y no scrollear, así que el hueco tiene que existir cuando se
-            mide. Prenderlo después no puede correr un solo píxel.
-
-            `donde="sitio"` y no `"mesa"`: el tope de 50px de la mesa está para
-            que el banner no se coma una carta, y acá lo que sobra es papel en
-            blanco. Ver `components/EspacioAnuncio.tsx`. */}
-        <EspacioAnuncio donde="sitio" />
       </div>
     </section>
   );

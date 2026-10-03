@@ -2,9 +2,11 @@ import type { Metadata, Viewport } from "next";
 import { Oswald, Source_Sans_3, Yeseva_One } from "next/font/google";
 import Link from "next/link";
 import { BarraApp } from "@/components/BarraApp";
-import { EspacioAnuncio } from "@/components/EspacioAnuncio";
 import { PieLegales } from "@/components/PieLegales";
 import { BotonAtrasAndroid } from "@/components/BotonAtrasAndroid";
+import { Anuncios } from "@/components/Anuncios";
+import { DialogoDesbloqueo } from "@/components/DialogoDesbloqueo";
+import { PantallaCarga } from "@/components/PantallaCarga";
 import { NOMBRE_SITIO, URL_SITIO } from "@/lib/sitio";
 import "./globals.css";
 
@@ -155,15 +157,28 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             Y LOS LEGALES SE FUERON DE CASI TODAS LAS PANTALLAS. Quedan en la
             parte de aprender y adentro de las propias páginas legales: Play
             Store pide que existan y se encuentren, no que estén repetidos en
-            cada pantalla. El detalle está en `PieLegales.tsx`.
+            cada pantalla.
 
-            En el resto del sitio el pie es sólo el hueco del anuncio. */}
-        <footer className="madera mt-[clamp(1.5rem,5vh,4rem)] border-t-2 filo-dorado px-4 pb-[clamp(0.75rem,2vh,1.5rem)] pt-[clamp(0.75rem,2vh,1.5rem)] text-center text-sm text-crema/60">
-          {/* El hueco del anuncio, arriba de los legales: es el pie de la app y
-              es uno de los tres lugares donde va. Ver `EspacioAnuncio.tsx`. */}
-          <EspacioAnuncio donde="sitio" className="mb-[clamp(0.75rem,2vh,1.25rem)]" />
-          <PieLegales />
-        </footer>
+            DESDE EL 2/10/2026 EL `<footer>` LO DIBUJA `PieLegales`, y sólo
+            donde hay legales. Hasta ese día el pie llevaba además el hueco de
+            un banner; los banners se sacaron, y un pie vacío es una franja de
+            madera sin nada adentro (se veía en el 404). */}
+        <PieLegales />
+
+        {/* Los anuncios, sólo en la app: el arranque (consentimiento y SDK) y
+            el diálogo de lo bloqueado. Van directo en el `<body>` y no en la
+            barra: en la mesa y el mapa el `<header>` se esconde, y con él todo
+            lo que cuelgue de él. En la web, el primero no hace nada y el
+            segundo no se abre nunca. */}
+        <Anuncios />
+        <DialogoDesbloqueo />
+
+        {/* La pantalla de carga, SÓLO en la app. `NEXT_PUBLIC_DESTINO` se fija
+            al compilar: en el HTML de la app viene puesta desde el primer
+            cuadro, antes del JavaScript, y en el de la web no existe. Se ve al
+            abrir la app (y si Android restaura el proceso): al navegar adentro
+            de la app, este layout no se vuelve a cargar. */}
+        {process.env.NEXT_PUBLIC_DESTINO === "app" && <PantallaCarga />}
       </body>
     </html>
   );
