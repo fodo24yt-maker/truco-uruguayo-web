@@ -12,6 +12,62 @@
 
 ---
 
+## 2026-10-07 — Medir primero: los píxeles son del camino Vulkan, y lo lento es rasterizar
+
+**Sesión cortada por límite de uso, sin cierre completo (ver Pendiente).**
+
+Método pedido por Santiago: medir → hipótesis → arreglo → medir → informe.
+Santiago toca, Claude mide.
+
+### Instrumentos nuevos
+- `capacitor.config.ts`: el inspector se prende SÓLO con `INSPECCIONAR_WEBVIEW=1`
+  (`celular-usb.mjs --apk --inspeccionable`); el archivo dice `false` siempre.
+- `herramientas/puente-devtools.mjs`: el puente sacado de `rig-celular.mjs`; elige
+  el socket por el PID de la app (no se mete en el WebView de los anuncios).
+- `herramientas/medir-celular.mjs`: `--sesion` (cuadros por screencast, Event
+  Timing, LoAF, gfxinfo por tramo, memoria del renderer, logcat; se maneja con
+  `control.txt`: tramo / rama / traza / nota / parar), `--analizar`, `--pixeles`.
+  **Usar `--jpeg 90`**: en PNG los cuadros llegan en ráfagas con ~1 s vacío.
+
+### Lo medido
+- **Arranque**: la app está lista a los ~2,4 s; la pantalla de carga espera
+  4–6,5 s MÁS a AdMob (anuncios listos a 6,6–8,9 s). Decisión pendiente.
+- **Primera vez en cada pantalla**: un cuadro de 1,1–1,3 s (Davey en RenderThread),
+  sólo la primera visita; después 0,1–0,3 s. Hipótesis L9 (shaders/pipelines de
+  la GPU). El "ensayo general" del 3/10 se descartó midiendo en la COMPU: re-probar
+  en el teléfono.
+- **Lentitud general**: 55–65% de cuadros tarde, p50 ~45 ms. El toque se atiende
+  rápido; lo lento es **rasterizar en la GPU** (hasta 74 ms) y la espera del
+  RenderThread (hasta 124 ms). El JS no es.
+- **Sospecha de Santiago ("es una web adaptada")**: 0 recargas en 20 navegaciones.
+  El agente encontró `Cache-Control: no-cache` de Capacitor, precarga que vence a
+  los 5 min (staleTime 300) y sin caché de V8: chicos, pendientes de medir.
+- **L2 (sacar `.escena > * {opacity:.999}`) REFUTADA**: no acelera (p90 peor) y la
+  basura se va a toda la mesa. El arreglo del 8/9 se queda.
+- **P4 CONFIRMADA**: con `debug.hwui.renderer=skiagl` (OpenGL) Santiago no vio
+  píxeles; al volver a Vulkan volvieron. OpenGL es algo más lento (72% tarde).
+- **P5 REFUTADA**: `debug.hwui.use_partial_updates=false` no cambia nada.
+- Las dos propiedades se volvieron a vacío y se comprobó `Pipeline=Skia (Vulkan)`.
+- La basura: pedazos color madera/violeta DEBAJO de capas animadas (palma, mesa,
+  mate); las cartas salen limpias; también cuando juega el bot.
+
+### Arreglado
+- `app/jugar/mesa/page.tsx`: la carta enseñada volvía al abanico durante el
+  barrido (`enseñadas && !barrida`). Sin probar en el teléfono todavía.
+
+### Pendiente (en orden)
+1. **Reinstalar el APK normal** (el instalado tiene el inspector): `node
+   herramientas/celular-usb.mjs --apk`, aceptar el cartel de MIUI.
+2. Revisión de seguridad (`security-review`, `17-mobile-security`, `09-web-security`),
+   `npm test`, `tsc`, guardianes de Playwright: NO se corrieron.
+3. Próximo experimento: rama **M0** (animaciones de 1 ms) para ver si la basura sale
+   de las capas animadas; después P6: WebView en `LAYER_TYPE_HARDWARE` (otro camino
+   de dibujo) y C1/S0/R0 para la velocidad.
+4. Pendiente de Santiago: con envido/flor del rival y "me voy", las cartas
+   enseñadas caen corridas, sobre el mazo.
+5. Decidir si la pantalla de carga sigue esperando a AdMob.
+6. Bug menor visto: el `setInterval` de 250 ms de `PantallaCarga` no se apaga.
+
 ## 2026-10-03 — La pantalla de carga, y la mesa que entra entera
 
 **El pedido.** Santiago notó que al tocar Partida rápida la mesa tardaba unos

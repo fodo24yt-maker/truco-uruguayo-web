@@ -27,11 +27,21 @@
 
       Las tres líneas de abajo son las que Android 12+ sí mira. Las provee
       `androidx.core:core-splashscreen`, que ya viene entre las dependencias.
+
+      SIN LOGO, DESDE EL 3/10/2026. Lo pidió Santiago: que al abrir se vea
+      sólo la pantalla de carga de la app (`components/PantallaCarga.tsx`).
+      Android 12+ dibuja SIEMPRE algo mientras arranca el proceso y eso no se
+      puede saltear; lo que sí se puede es que no tenga nada: el ícono es
+      transparente y queda el fondo `noche` liso, el mismo de la pantalla de
+      carga y del WebView. `android:background` también pasa a `noche` (antes
+      `@drawable/splash`, con la carta en el medio), que es lo que miran
+      Android 11 y anteriores. Los `splash.png` que hornea
+      `herramientas/generar-icono.mjs` quedan sin uso.
     -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/noche</item>
-        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="windowSplashScreenAnimatedIcon">@android:color/transparent</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
-        <item name="android:background">@drawable/splash</item>
+        <item name="android:background">@color/noche</item>
     </style>
 </resources>

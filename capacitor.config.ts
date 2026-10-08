@@ -31,7 +31,17 @@ const config: CapacitorConfig = {
 
   android: {
     /* El inspector remoto abre la consola del WebView a cualquiera que enchufe
-       el teléfono por USB. En desarrollo es cómodo; en lo que se publica, no. */
+       el teléfono por USB. En desarrollo es cómodo; en lo que se publica, no.
+
+       ESTE `false` MANDA SÓLO EN EL APK DE RELEASE (medido el 7/10/2026). En
+       el de depuración el WebView prende el inspector igual, diga lo que diga
+       acá: el APK compilado con `false` —el mismo, byte a byte, que estaba
+       instalado— publicaba `webview_devtools_remote_<pid>`, y en su código la
+       única llamada al interruptor es la de Capacitor con este valor. Por eso
+       las herramientas que miden desde adentro (`rig-celular.mjs`,
+       `medir-celular.mjs`) andan con el `--apk` de siempre, y no hay que
+       tocar esto nunca: no es un riesgo nuevo, porque un APK de depuración ya
+       le abre todo al cable (`run-as`), y lo que se reparte es el release. */
     webContentsDebuggingEnabled: false,
 
     /* 105 y no el 60 de fábrica. De `:has()` cuelga toda la familia de reglas
@@ -65,11 +75,19 @@ const config: CapacitorConfig = {
 
     /* Por omisión el splash es BLANCO, y sobre un sitio que es todo penumbra
        eso es un flashazo en cada arranque: lo primero que ve el que abre la
-       app. Va del color del fondo, que es el mismo `themeColor` del sitio. */
+       app. Va del color del fondo, que es el mismo `themeColor` del sitio.
+
+       `launchShowDuration: 0` DESDE EL 3/10/2026 (eran 400). Con 0 el plugin
+       no instala su splash: el que se ve es el del sistema, sin logo
+       (`res/values/styles.xml`), y se va solo con el primer cuadro de la app.
+       Con 400, además de mostrar el logo, el plugin frenaba el dibujo del
+       WebView esos 400 ms (`SplashScreen.java`, el `OnPreDrawListener`
+       devuelve `false`): escondía la pantalla de carga aunque ya estuviera
+       lista. El tema de la app lo pone `BridgeActivity` igual, sin el plugin. */
     SplashScreen: {
       backgroundColor: "#14100E",
       launchAutoHide: true,
-      launchShowDuration: 400,
+      launchShowDuration: 0,
       showSpinner: false,
       androidScaleType: "CENTER_CROP",
     },

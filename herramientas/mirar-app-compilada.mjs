@@ -63,7 +63,7 @@ for (const ruta of RUTAS) {
   // La pantalla de carga de la app tapa todo al abrir (3/10/2026): hasta que
   // se va no hay nada que mirar. Si no se fuera, es una falla en sí misma.
   await pag
-    .waitForSelector("[data-pantalla-carga]", { state: "detached", timeout: 8000 })
+    .waitForSelector("[data-pantalla-carga]", { state: "detached", timeout: 15000 })
     .catch(() => falla(ruta, "la pantalla de carga no se fue"));
   await pag.waitForTimeout(ruta.includes("mesa") ? 3200 : 700);
 

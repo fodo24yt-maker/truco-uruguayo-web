@@ -865,16 +865,17 @@ body:has(.pantalla-fija) footer {
    La dibuja `components/PantallaCarga.tsx`, sólo en la app.
 
    La red de seguridad va acá y no en el componente: `carga-se-va` la esconde a
-   los 6 s AUNQUE EL JAVASCRIPT NO HAYA CORRIDO NUNCA. Es duración 0 con 6 s de
-   demora, y el bloque de `prefers-reduced-motion` acorta duraciones, no
-   demoras: la red sigue en pie para quien pidió menos movimiento.
+   los 14 s AUNQUE EL JAVASCRIPT NO HAYA CORRIDO NUNCA. Es duración 0 con 14 s
+   de demora, y el bloque de `prefers-reduced-motion` acorta duraciones, no
+   demoras: la red sigue en pie para quien pidió menos movimiento. Tiene que
+   ser MÁS que el tope del componente (12 s desde el 3/10/2026; eran 4 y 6).
 
    `touch-action` y `overscroll-behavior`: que un dedo apoyado mientras carga
    no arrastre la página de abajo. */
 .pantalla-carga {
   touch-action: none;
   overscroll-behavior: contain;
-  animation: carga-se-va 0s linear 6s forwards;
+  animation: carga-se-va 0s linear 14s forwards;
 }
 @keyframes carga-se-va {
   to {
@@ -890,9 +891,8 @@ body:has(.pantalla-fija) footer {
 }
 
 /* La barrita. `scaleX` y no `width`: no recalcula el diseño en cada cuadro.
-   Avanza sola y va frenando hasta el 92% en el tiempo máximo de la pantalla
-   (4 s); cuando la carga termina de verdad, el componente pone
-   `data-completa` y la barra se llena del todo, partiendo de donde iba. */
+   Sola, avanza y va frenando hasta el 92% en 4 s: así la usa el
+   "Repartiendo…" de la mesa. */
 .barra-carga-relleno {
   transform-origin: left center;
   transform: scaleX(0.04);
@@ -903,10 +903,33 @@ body:has(.pantalla-fija) footer {
     transform: scaleX(0.92);
   }
 }
+/* En la pantalla de carga (3/10/2026), que ahora puede durar hasta 12 s:
+   1. antes del JavaScript, la misma animación pero estirada a 12 s;
+   2. cuando el componente toma la barra (`data-avance-js`), deja de animarse
+      sola y va a `--avance`, que el componente mueve por los pasos que
+      terminaron de verdad, partiendo de donde la dejó el CSS;
+   3. al terminar (`data-completa`), se llena del todo. Va después de la 2:
+      misma especificidad, gana la última. */
+.pantalla-carga .barra-carga-relleno {
+  animation-duration: 12s;
+}
+.pantalla-carga[data-avance-js="true"] .barra-carga-relleno {
+  animation: none;
+  transform: scaleX(var(--avance, 0.04));
+  transition: transform 450ms ease-out;
+}
 .pantalla-carga[data-completa="true"] .barra-carga-relleno {
   animation: none;
   transform: scaleX(1);
   transition: transform 180ms ease-out;
+}
+/* Con menos movimiento pedido, la barra no avanza sola: sólo cuando termina un
+   paso (el componente tampoco la empuja). Si no, con la duración recortada a
+   0,01 ms saltaba al 92% en el primer cuadro y se quedaba ahí. */
+@media (prefers-reduced-motion: reduce) {
+  .pantalla-carga .barra-carga-relleno {
+    animation-name: none;
+  }
 }
 
 /* Algo que aparece recién si la espera se hace notar: el "Repartiendo…" de la

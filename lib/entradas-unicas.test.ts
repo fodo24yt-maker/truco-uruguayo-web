@@ -64,6 +64,12 @@ const PERMITIDOS: Record<string, { rutas: string[]; porque: string }> = {
     rutas: ["/jugar/gira"],
     porque: "es el nombre que lleva la flecha de volver ('Mapa'), no un destino",
   },
+  "components/PantallaCarga.tsx": {
+    rutas: ["/jugar/mesa"],
+    porque:
+      "el ensayo del arranque pinta la mesa DEBAJO de la pantalla de carga y vuelve al inicio: " +
+      "no es una partida, y a propósito no cuenta como la primera ni pide anuncio",
+  },
   "app/sitemap.ts": { rutas: ["/anotador"], porque: "es para los buscadores" },
   "app/anotador/layout.tsx": { rutas: ["/anotador"], porque: "es la URL canónica" },
 };

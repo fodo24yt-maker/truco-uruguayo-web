@@ -94,33 +94,27 @@ import { spawnSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync, rmSync, renameSync } from "node:fs";
 import path from "node:path";
 
-import { adb, sacarFoto, elCelular, PAQUETE, ACTIVIDAD } from "./celular-usb.mjs";
+import { adb, sacarFoto, elCelular, enPrimerPlano, PAQUETE, ACTIVIDAD } from "./celular-usb.mjs";
+import { abrirDevtools, cerrarDevtools } from "./puente-devtools.mjs";
 import { bloquesDe, cromaticasDe } from "./bloques.mjs";
 
 const morir = (...m) => { console.error("\n✗", ...m, "\n"); process.exit(1); };
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /* La pantalla de carga de la app (desde el 3/10/2026) tapa todo al abrir una
-   página: hasta 4 s, y la red del CSS la saca a los 6. Ninguna foto puede
+   página: hasta 12 s, y la red del CSS la saca a los 14. Ninguna foto puede
    salir antes de que se vaya, o se mide la pantalla de carga. */
 const sinPantallaCarga = (pag) =>
-  pag.waitForSelector("[data-pantalla-carga]", { state: "detached", timeout: 8000 }).catch(() => {});
+  pag.waitForSelector("[data-pantalla-carga]", { state: "detached", timeout: 15000 }).catch(() => {});
 
 /** La banda del mapa. La de la mesa (por omisión de `bloques.mjs`) da 0 acá. */
 const BANDA_MAPA = [0.15, 0.68];
 const BANDA_MESA = [0.27, 0.72];
 
 // ── El cerrojo ──────────────────────────────────────────────────────────────
-
-/* Se pregunta por `dumpsys activity activities` y no por `dumpsys window`
-   porque el primero nombra la actividad resumida aunque haya un panel del
-   sistema encima. Si el teléfono se bloquea a mitad de una tanda, esto corta
-   en el toque siguiente en vez de fotografiar la pantalla de bloqueo. */
-function enPrimerPlano() {
-  const s = adb("shell", "dumpsys", "activity", "activities").stdout || "";
-  const m = /topResumedActivity=\S+\s+\S+\s+(\S+)\//.exec(s);
-  return m ? m[1] : null;
-}
+// `enPrimerPlano()` vive en `celular-usb.mjs` desde el 3/10/2026: también lo
+// usa su modo `--tiempos`, y un cerrojo escrito dos veces es un cerrojo que un
+// día dice dos cosas distintas.
 
 /* La lista de paquetes permitidos va EXPLÍCITA en cada llamada, y no hay un
    valor por omisión escondido: así, leyendo la corrida, se ve cuál tiene
@@ -166,81 +160,10 @@ async function contar(ruta, banda) {
 }
 
 // ── El puente a DevTools ────────────────────────────────────────────────────
-
-const variableDeWindows = (n) => {
-  const r = spawnSync("/mnt/c/Windows/System32/cmd.exe", ["/c", `echo %${n}%`], { encoding: "utf8" });
-  const v = (r.stdout || "").trim();
-  return v && v !== `%${n}%` ? v : null;
-};
-const aLinux = (p) => spawnSync("wslpath", ["-u", p], { encoding: "utf8" }).stdout.trim();
-const aWindows = (p) => spawnSync("wslpath", ["-w", p], { encoding: "utf8" }).stdout.trim();
-
-/** La IP con la que WSL ve a Windows. Sale de la ruta por omisión. */
-function ipDeWindows() {
-  const r = spawnSync("ip", ["route", "show", "default"], { encoding: "utf8" });
-  return /default via (\S+)/.exec(r.stdout || "")?.[1] ?? null;
-}
-
-let puente = null;
-
-async function abrirDevtools() {
-  /* El socket lo publica el WebView, y su nombre lleva el PID del proceso.
-     Sale de /proc/net/unix, que es lo que hace `chrome://inspect`. */
-  const unix = adb("shell", "cat", "/proc/net/unix").stdout || "";
-  const socket = /webview_devtools_remote_\d+/.exec(unix)?.[0];
-  if (!socket) {
-    morir(
-      "El WebView no publica DevTools.\n",
-      " Hace falta `webContentsDebuggingEnabled: true` en `capacitor.config.ts`\n",
-      " y volver a compilar con `node herramientas/celular-usb.mjs --apk`.\n",
-      " OJO: eso se revierte antes de publicar nada.",
-    );
-  }
-  adb("forward", "tcp:9222", `localabstract:${socket}`);
-
-  const nodeWin = "/mnt/c/Program Files/nodejs/node.exe";
-  if (!existsSync(nodeWin)) morir("No encuentro el node.exe de Windows, que es el que hace de puente.");
-
-  const ip = ipDeWindows();
-  if (!ip) morir("No pude averiguar con qué IP ve WSL a Windows.");
-
-  /* ── EL PUENTE SE ATA A UNA SOLA DIRECCIÓN, Y ESO IMPORTA ────────────────
-     La primera versión escuchaba en `0.0.0.0`, o sea en TODAS las interfaces
-     de Windows, incluida la del wifi de casa. Eso deja el inspector del
-     WebView del teléfono —con permiso para ejecutar JavaScript adentro de la
-     app y para leerle el `localStorage`, donde vive todo el progreso de la
-     gira— abierto a cualquiera que esté en la misma red mientras corre esto.
-
-     Atado a la dirección de la placa de WSL, sólo llega WSL, que es lo único
-     que lo necesita. */
-  const tmp = aLinux(variableDeWindows("TEMP"));
-  const guion = path.join(tmp, "puente-cdp-truco.js");
-  /* El `setTimeout` es para el `kill -9`, que no hay manejador que atrape. Sin
-     él, un proceso matado a lo bruto deja este puente escuchando para siempre.
-     Media hora alcanza para la corrida más larga que se hizo. */
-  writeFileSync(guion, `const net=require("net");net.createServer(a=>{const b=net.connect(9222,"127.0.0.1");a.pipe(b);b.pipe(a);a.on("error",()=>b.destroy());b.on("error",()=>a.destroy());}).listen(9223,${JSON.stringify(ip)});setTimeout(()=>process.exit(0),30*60000);\n`);
-  guionDelPuente = guion;
-  puente = spawn(nodeWin, [aWindows(guion)], { stdio: "ignore", detached: false });
-
-  const url = `http://${ip}:9223`;
-
-  for (let i = 0; i < 20; i++) {
-    await dormir(300);
-    try {
-      const r = await fetch(`${url}/json/version`, { signal: AbortSignal.timeout(1500) });
-      if (r.ok) return url;
-    } catch { /* todavía no levantó */ }
-  }
-  morir("El puente a DevTools no levantó.");
-}
-
-let guionDelPuente = null;
-
-function cerrarDevtools() {
-  if (puente) { puente.kill(); puente = null; }
-  if (guionDelPuente) { rmSync(guionDelPuente, { force: true }); guionDelPuente = null; }
-  adb("forward", "--remove", "tcp:9222");
-}
+// Vive en `puente-devtools.mjs` desde el 7/10/2026: también lo usa
+// `medir-celular.mjs`. Ahí están las reglas que no se negocian (una sola
+// dirección, apagado a los 30 min, cierre en `exit`) y se elige el socket por
+// el PID de la app.
 
 /* ── EL PUENTE SE CIERRA TAMBIÉN SI ESTO SE MATA A LO BRUTO ────────────────
    El `finally` de abajo cubre la salida normal y las excepciones, pero NO una
@@ -255,19 +178,9 @@ for (const senal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   process.on(senal, () => { cerrarDevtools(); process.exit(130); });
 }
 
-/* Y ESTE ES EL QUE FALTABA, que lo encontró la revisión de seguridad del 10/9.
-   `morir()` es `process.exit(1)`, y **`process.exit` no ejecuta los `finally`**:
-   el de abajo, que es el que cierra el puente, no corría nunca por ese camino.
-
-   No es un camino raro. Es el del cerrojo: si el teléfono se bloquea a mitad
-   de una corrida, `exigirAlguno` mata el proceso —bien— y dejaba el inspector
-   del WebView escuchando en Windows sin nadie mirando. Igual con una rama mal
-   escrita o un `--referencia` que no existe, que se validan con el puente ya
-   levantado.
-
-   `exit` sólo corre código síncrono, y `cerrarDevtools` lo es: `kill()` y
-   `spawnSync`. Y es idempotente, así que llamarlo dos veces no molesta. */
-process.on("exit", cerrarDevtools);
+/* El gancho de `exit` —el que cubre `process.exit`, que no ejecuta los
+   `finally`; lo encontró la revisión de seguridad del 10/9— lo pone
+   `puente-devtools.mjs` al importarlo. */
 
 // ── Los recorridos ──────────────────────────────────────────────────────────
 

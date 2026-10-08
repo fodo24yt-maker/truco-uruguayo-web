@@ -265,6 +265,10 @@ export function crearGestor({ reloj, enAprender }: Dependencias) {
   const avisar = () => {
     for (const fn of oyentes) fn();
   };
+  const suscribir = (fn: () => void): (() => void) => {
+    oyentes.add(fn);
+    return () => oyentes.delete(fn);
+  };
 
   const vencido = (f: Formato) =>
     carga[f].estado === "listo" && reloj.ahora() - carga[f].desde > MINUTOS_VIDA_ANUNCIO * MIN;
@@ -609,10 +613,30 @@ export function crearGestor({ reloj, enAprender }: Dependencias) {
       }
       avisar();
     },
-    suscribir(fn: () => void): () => void {
-      oyentes.add(fn);
-      return () => oyentes.delete(fn);
+    /**
+     * Se cumple cuando ya no queda nada cargando: terminó el arranque y cada
+     * carga salió, bien o mal (una que falló no espera su reintento). Nunca
+     * rechaza, y sin red de anuncios se cumple enseguida.
+     *
+     * Es lo que espera la pantalla de carga de la app (desde el 3/10/2026).
+     * Antes esperaba sólo el arranque, y las cargas seguían DESPUÉS de que se
+     * iba: AdMob trabaja en el hilo principal de Android y el anuncio corre en
+     * el mismo proceso de dibujo que la página, así que el primer toque en
+     * "Jugar" caía en el medio de ese trabajo.
+     */
+    cargasQuietas(): Promise<void> {
+      const quieto = () =>
+        !iniciando && carga.intersticial.estado !== "cargando" && carga.video.estado !== "cargando";
+      return new Promise<void>((listo) => {
+        if (quieto()) return listo();
+        const quitar = suscribir(() => {
+          if (!quieto()) return;
+          quitar();
+          listo();
+        });
+      });
     },
+    suscribir,
     /** Sólo para los tests. */
     _tiempos: (): Readonly<Tiempos> => ({ ...t }),
   };

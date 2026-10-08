@@ -38,6 +38,13 @@ export const MAX_DEPARTAMENTOS_EN_MEMORIA = 3;
 /** Lo máximo que la mesa espera a su escena antes de repartir igual. */
 export const MS_TOPE_ESPERA_ESCENA = 1200;
 
+/**
+ * Lo máximo que se espera al código de las pantallas de jugar. Era 2,5 s; con
+ * la pantalla de carga de hasta 12 s (3/10/2026) sube a 6, para que un
+ * teléfono lento no la deje ir antes de tener el código.
+ */
+export const MS_TOPE_ESPERA_CODIGO = 6000;
+
 // ───────────────────────────── La parte pura ─────────────────────────────
 
 /**
@@ -58,13 +65,20 @@ export function departamentosAPrecargar(
   const sumar = (depto: string) => {
     if (!lista.includes(depto) && lista.length < MAX_DEPARTAMENTOS_A_PRECARGAR) lista.push(depto);
   };
-  sumar(buscarPersonalidad(datos.ultimoRival ?? "").departamento);
+  sumar(rivalDeLaRapida(datos).departamento);
   if (conGira) {
     const proxima = proximaParada(armarGira(datos.rivales));
     if (proxima) sumar(proxima.personalidad.departamento);
   }
   return lista;
 }
+
+/**
+ * El rival que va a tener enfrente la Partida rápida: el último elegido, o el
+ * de siempre (Luquita) si no hay. Es la misma cuenta que hace la mesa.
+ */
+export const rivalDeLaRapida = (datos: { ultimoRival: string | null }) =>
+  buscarPersonalidad(datos.ultimoRival ?? "");
 
 /** Una promesa que se cumple con `p` o a los `ms`, lo que pase primero. Nunca rechaza. */
 export function conTope(p: Promise<unknown>, ms: number, esperar = setTimeout): Promise<void> {
@@ -149,10 +163,15 @@ export const esperarEscena = (escena: Escena, tope = MS_TOPE_ESPERA_ESCENA) =>
  * con los archivos fríos (la primera vez que se abre la app) el hueco entre
  * los dos superaba el `quieto`. Por eso se espera a la página misma.
  *
- * Si Next cambiara ese nombre, esto esperaría hasta el `tope`, y
- * `mirar-carga.mjs` avisa si la pantalla empieza a irse siempre en el tope.
+ * Si Next cambiara ese nombre, esto esperaría hasta el `tope` en cada
+ * arranque, y `mirar-carga.mjs` avisa si el paso del código empieza a tardar
+ * de más (lo mide con la marca `carga:codigo` de la pantalla de carga).
  */
-export function esperarCodigo(rutas: string[], quieto = 300, tope = 2500): Promise<void> {
+export function esperarCodigo(
+  rutas: string[],
+  quieto = 300,
+  tope = MS_TOPE_ESPERA_CODIGO,
+): Promise<void> {
   if (typeof window === "undefined" || typeof PerformanceObserver === "undefined") {
     return Promise.resolve();
   }
@@ -195,6 +214,9 @@ export function esperarCodigo(rutas: string[], quieto = 300, tope = 2500): Promi
 /**
  * Todo lo del arranque. `prefetch` es el del router de Next (se inyecta para
  * que este archivo no dependa de Next y se pueda probar en Node).
+ *
+ * Devuelve las dos esperas por separado —el código y las mesas— para que la
+ * pantalla de carga mueva la barra por pasos de verdad. Ninguna rechaza.
  */
 export function precargarJuego({
   prefetch,
@@ -204,7 +226,7 @@ export function precargarJuego({
   prefetch: (href: string) => void;
   datos: { ultimoRival: string | null; rivales: Marcas };
   conGira: boolean;
-}): Promise<void> {
+}): { codigo: Promise<void>; mesas: Promise<void> } {
   // El código de las pantallas de jugar. Next lo trae en segundo plano. Las
   // direcciones salen de `lib/entrada.ts`, que es el dueño de esas rutas.
   const mesa = hrefDe({ modo: "rapida" });
@@ -216,8 +238,10 @@ export function precargarJuego({
       // Precargar es una ayuda: si falla, la pantalla se baja al entrar, como antes.
     }
   }
-  return Promise.all([
-    ...departamentosAPrecargar(datos, conGira).map(precargarDepartamento),
-    esperarCodigo([mesa, gira]),
-  ]).then(() => {});
+  return {
+    codigo: esperarCodigo([mesa, gira]),
+    mesas: Promise.all(departamentosAPrecargar(datos, conGira).map(precargarDepartamento)).then(
+      () => {},
+    ),
+  };
 }

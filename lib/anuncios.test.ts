@@ -448,3 +448,94 @@ test("sin red de anuncios (la web), nunca hay nada", () => {
   assert.equal(g.alEntrarAPartida(), null);
   assert.equal(g.estadoVideo(), "no-disponible");
 });
+
+// ─────────── Lo que espera la pantalla de carga (3/10/2026) ───────────
+
+/**
+ * Una red de anuncios cuyas cargas quedan colgadas hasta que el test las
+ * suelta: así se ve qué hace `cargasQuietas` MIENTRAS se carga.
+ */
+function motorDeMano(opciones: { puedePedir?: boolean } = {}) {
+  const pendientes = new Map<Formato, { bien: () => void; mal: () => void }>();
+  const m = {
+    iniciar: async () => ({ puedePedir: opciones.puedePedir ?? true, pidePrivacidad: false }),
+    cargar: (f: Formato) =>
+      new Promise<void>((bien, mal) => {
+        pendientes.set(f, { bien, mal: () => mal(new Error("sin fill")) });
+      }),
+    mostrar: () => new Promise<void>(() => {}),
+    alEvento: () => {},
+    abrirPrivacidad: async () => ({ puedePedir: true, pidePrivacidad: false }),
+    soltar(f: Formato, como: "bien" | "mal") {
+      const p = pendientes.get(f);
+      assert.ok(p, `no había una carga de ${f} esperando`);
+      pendientes.delete(f);
+      p[como]();
+    },
+  };
+  return m;
+}
+
+/** Dice si la promesa ya se cumplió, sin esperarla. */
+async function cumplida(p: Promise<unknown>): Promise<boolean> {
+  let ya = false;
+  void p.then(() => {
+    ya = true;
+  });
+  await vaciar();
+  return ya;
+}
+
+test("cargas quietas: sin red de anuncios (la web) se cumple enseguida", async () => {
+  const g = crearGestor({ reloj: relojFalso(), enAprender: () => false });
+  assert.equal(await cumplida(g.cargasQuietas()), true);
+});
+
+test("cargas quietas: si no se pueden pedir anuncios (sin consentimiento), enseguida", async () => {
+  const g = crearGestor({ reloj: relojFalso(), enAprender: () => false });
+  await g.conectar(motorDeMano({ puedePedir: false }) as unknown as MotorAnuncios);
+  assert.equal(await cumplida(g.cargasQuietas()), true);
+});
+
+test("cargas quietas: espera el intersticial Y el video del arranque", async () => {
+  const motor = motorDeMano();
+  const g = crearGestor({ reloj: relojFalso(), enAprender: () => false });
+  g.quererVideo(true); // queda algo bloqueado: también se carga el video
+  await g.conectar(motor as unknown as MotorAnuncios);
+  const quietas = g.cargasQuietas();
+  assert.equal(await cumplida(quietas), false, "con las dos cargando, todavía no");
+  motor.soltar("intersticial", "bien");
+  assert.equal(await cumplida(quietas), false, "falta el video");
+  motor.soltar("video", "bien");
+  assert.equal(await cumplida(quietas), true);
+});
+
+test("cargas quietas: una carga que falla cuenta como terminada (no espera el reintento)", async () => {
+  const motor = motorDeMano();
+  const g = crearGestor({ reloj: relojFalso(), enAprender: () => false });
+  await g.conectar(motor as unknown as MotorAnuncios);
+  const quietas = g.cargasQuietas();
+  assert.equal(await cumplida(quietas), false);
+  motor.soltar("intersticial", "mal");
+  assert.equal(await cumplida(quietas), true);
+});
+
+test("cargas quietas: si no queda nada bloqueado, sólo espera el intersticial", async () => {
+  const motor = motorDeMano();
+  const g = crearGestor({ reloj: relojFalso(), enAprender: () => false });
+  await g.conectar(motor as unknown as MotorAnuncios);
+  const quietas = g.cargasQuietas();
+  motor.soltar("intersticial", "bien");
+  assert.equal(await cumplida(quietas), true);
+});
+
+test("cargas quietas: pedida ANTES de que termine el arranque, espera también las cargas", async () => {
+  const motor = motorDeMano();
+  const g = crearGestor({ reloj: relojFalso(), enAprender: () => false });
+  const conectado = g.conectar(motor as unknown as MotorAnuncios);
+  const quietas = g.cargasQuietas(); // el arranque todavía no terminó
+  await conectado;
+  assert.equal(await cumplida(quietas), false, "terminó el arranque, pero el intersticial sigue cargando");
+  motor.soltar("intersticial", "bien");
+  assert.equal(await cumplida(quietas), true);
+});

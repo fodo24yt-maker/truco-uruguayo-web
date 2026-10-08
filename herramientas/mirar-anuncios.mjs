@@ -74,10 +74,11 @@ async function sinPantallaCarga(pag) {
   const carga = pag.locator("[data-pantalla-carga]");
   // Con el reloj de Playwright puesto, el tiempo está quieto: hay que empujarlo
   // para que se cumplan los tiempos de la pantalla. Sin él, se espera de verdad.
-  for (let i = 0; i < 20 && (await carga.count()); i++) {
+  // Hasta 15 s de reloj: el tope de la pantalla es 12 s (3/10/2026).
+  for (let i = 0; i < 30 && (await carga.count()); i++) {
     const empujado = await pag.clock.fastForward(500).then(() => true, () => false);
     if (!empujado) {
-      await carga.waitFor({ state: "detached", timeout: 8000 });
+      await carga.waitFor({ state: "detached", timeout: 15000 });
       return;
     }
     await pag.waitForTimeout(50);
@@ -378,6 +379,45 @@ for (const control of [{ carga: "falla" }, { mostrar: "falla" }, { mostrar: "nun
   } catch {
     falla(`${JSON.stringify(control)}: el usuario quedó trabado`);
   }
+  await ctx.close();
+}
+
+/* La pantalla de carga espera a que las primeras cargas TERMINEN (3/10/2026).
+   Antes esperaba sólo el arranque de AdMob, y las cargas seguían cuando ya
+   estabas tocando "Jugar". Con cada carga tardando 8 s, la pantalla tiene
+   que irse DESPUÉS de las dos (el video también: de entrada la Gira y el
+   anotador tienen candado). Sin el reloj de Playwright: tiempo de verdad.
+
+   ¿Por qué 8 s y no algo más corto? Porque en `next dev` no hay prefetch, y
+   el paso del código espera hasta su tope (6 s): una demora más corta queda
+   tapada por ese paso y la prueba daba bien AUNQUE la pantalla no esperara a
+   los anuncios. Se comprobó saboteándola el 3/10/2026: con 2,5 s no lo
+   agarraba, con 8 sí. Tiene que quedar entre 6 y 12 (el tope de la pantalla). */
+console.log("\nla pantalla de carga espera a los anuncios:");
+{
+  const { ctx, pag } = await telefono({ control: { demoraCarga: 8000 } });
+  await pag.addInitScript(() => {
+    let vista = false;
+    new MutationObserver(() => {
+      const hay = Boolean(document.querySelector("[data-pantalla-carga]"));
+      if (hay) vista = true;
+      else if (vista) {
+        vista = false;
+        window.__trucoAnunciosSimulados.registro.push("pantalla-se-fue");
+      }
+    }).observe(document, { subtree: true, childList: true });
+  });
+  await pag.goto(`${RAIZ}/`, { waitUntil: "domcontentloaded" });
+  await pag.locator("[data-pantalla-carga]").waitFor({ state: "detached", timeout: 15000 });
+  const r = await registro(pag);
+  const i = (que) => r.indexOf(que);
+  const seFue = i("pantalla-se-fue");
+  if (seFue < 0) falla(`no se vio irse la pantalla de carga (${r.join(", ")})`);
+  else if (i("cargado:intersticial") < 0 || i("cargado:intersticial") > seFue)
+    falla(`la pantalla se fue antes de que cargara el intersticial (${r.join(", ")})`);
+  else if (i("cargado:video") < 0 || i("cargado:video") > seFue)
+    falla(`la pantalla se fue antes de que cargara el video (${r.join(", ")})`);
+  else bien(`se fue recién después de las dos cargas: ${r.join(" → ")}`);
   await ctx.close();
 }
 

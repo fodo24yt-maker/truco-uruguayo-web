@@ -182,6 +182,11 @@ const redondo = (lado) =>
  * Es el fondo de noche del sitio con la carta chica en el medio. Sin esto el
  * arranque es un flashazo blanco sobre una app que es toda penumbra: lo primero
  * que ve el que la abre y lo único que no se puede arreglar después.
+ *
+ * SIN USO DESDE EL 3/10/2026: el tema del arranque (`res/values/styles.xml`)
+ * pasó a `noche` liso, sin logo, y el plugin de splash ya no muestra el suyo
+ * (`launchShowDuration: 0`). Se sigue horneando porque el plugin lo busca por
+ * nombre si alguna vez cae en su camino viejo, y sin él la app se cerraría.
  */
 function splash(ancho, alto) {
   const lado = Math.min(ancho, alto) * 0.34;

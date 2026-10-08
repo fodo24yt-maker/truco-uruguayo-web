@@ -834,9 +834,18 @@ function Mesa() {
    *
    * Con la mano jugada entera la lista viene vacía y no se apoya nada, porque
    * las seis cartas ya están sobre la mesa.
+   *
+   * SIGUEN EN LA LISTA DURANTE EL BARRIDO (arreglado el 7/10/2026). Hasta ese
+   * día la condición era `enseñadas && !barrida`: al empezar el barrido la
+   * lista se vaciaba, las apoyadas desaparecían de la mesa de golpe en vez de
+   * irse al mazo con las demás (su `anim-al-mazo` de abajo no corría nunca) y,
+   * peor, `enMesaMias` quedaba vacío y la tuya VOLVÍA AL ABANICO durante los
+   * 760 ms del barrido. Lo vio Santiago en el teléfono: "tiré mi última carta
+   * y volvió a mi mano al recoger". Se ve en los cuadros 212 → 222 de la
+   * sesión de medición de ese día. Se apagan solas con la mano nueva, que pone
+   * `enseñadas` en `false`.
    */
-  const enMesa =
-    enseñadas && !barrida ? cartasEnMesa(p) : { clase: null, cartas: [] };
+  const enMesa = enseñadas ? cartasEnMesa(p) : { clase: null, cartas: [] };
 
   /* Las tuyas SALEN DEL ABANICO en el mismo cuadro en que caen sobre la mesa.
      Sin esto se ven dos veces: en la mano y en la mesa. */
@@ -1343,7 +1352,10 @@ function Mesa() {
                 arriba del todo: allá arriba está el registro de lo que dijo el
                 rival, que en una pantalla baja ocupa toda la franja. Centrado y
                 a esa altura no se pisa con nada. */}
-            {enMesa.clase && (
+            {/* Con el barrido el rótulo se va, igual que los tantos en número
+                (`tantosEnseñados`): las cartas se van al mazo y ya no hay nada
+                que rotular. */}
+            {enMesa.clase && !barrida && (
               <CartelEnMesa
                 clase={enMesa.clase}
                 posicion={estiloEnMesa(0.5, d.baza.ganador - 0.1)}

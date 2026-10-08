@@ -6,6 +6,7 @@
  *     node herramientas/celular-usb.mjs --compilar → sólo deja el .apk, sin instalar
  *     node herramientas/celular-usb.mjs --foto     → una foto del celular, sin pérdida
  *     node herramientas/celular-usb.mjs --vigilar  → 5 fotos seguidas y las compara
+ *     node herramientas/celular-usb.mjs --tiempos [N] → cuánto tarda en abrir, N veces
  *
  * ── El problema que resuelve ──────────────────────────────────────────────
  *
@@ -64,6 +65,15 @@
  *
  * En esta máquina: el JDK y el SDK, que viven en `~/herramientas-android/`
  * (fuera del repositorio, porque son 1,5 GB y no son código nuestro).
+ *
+ * **`--tiempos`** (3/10/2026) mide el arranque en el teléfono de verdad, SIN
+ * abrir el inspector del WebView: cierra la app, la abre en frío y lee del
+ * `logcat` lo que la pantalla de carga escribe al irse (`[carga] mesas … ms ·
+ * código … · anuncios … · se fue a los …`) y las trabas del hilo principal de
+ * Android (`Skipped N frames`, que el sistema avisa a partir de medio
+ * segundo). Sólo anda con el APK de depuración: en el de release Capacitor
+ * no manda la consola al `logcat`. Lee únicamente las líneas del proceso de
+ * la app y no borra el `logcat` del teléfono.
  */
 
 import { existsSync, copyFileSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
@@ -84,6 +94,9 @@ const j = args.indexOf("--vigilar");
 /* Cinco fotos alcanzan: con dos ya se ve si algo se mueve, y cinco dan cuatro
    comparaciones sin que la espera se vuelva molesta. */
 const cuantasFotos = j === -1 ? 5 : Number(args[j + 1]) || 5;
+const medirTiempos = args.includes("--tiempos");
+const k = args.indexOf("--tiempos");
+const cuantasVeces = k === -1 ? 3 : Math.min(10, Number(args[k + 1]) || 3);
 const conApk = args.includes("--apk") || soloCompilar;
 const i = args.indexOf("--puerto");
 const puerto = i === -1 ? 3000 : Number(args[i + 1]) || 3000;
@@ -346,6 +359,79 @@ async function fotos(celular, cuantas) {
   }
 }
 
+// ── El cerrojo ──────────────────────────────────────────────────────────────
+
+/* Qué app está en primer plano. Lo usan `--tiempos` y `rig-celular.mjs`, que
+   sólo trabajan si es la nuestra.
+
+   Se pregunta por `dumpsys activity activities` y no por `dumpsys window`
+   porque el primero nombra la actividad resumida aunque haya un panel del
+   sistema encima. Si el teléfono se bloquea a mitad de una tanda, esto corta
+   en el toque siguiente en vez de fotografiar la pantalla de bloqueo. */
+export function enPrimerPlano() {
+  const s = adb("shell", "dumpsys", "activity", "activities").stdout || "";
+  const m = /topResumedActivity=\S+\s+\S+\s+(\S+)\//.exec(s);
+  return m ? m[1] : null;
+}
+
+// ── Cuánto tarda en abrir ───────────────────────────────────────────────────
+
+const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* La pantalla de carga se va como mucho a los 12 s; con 15 se ve también lo
+   que pasa DESPUÉS, que es el momento en que tocarías "Jugar": si ahí hay
+   trabas, algo sigue cargando cuando no debería. */
+const MS_MIRAR_ARRANQUE = 15000;
+
+async function tiempos(celular, veces) {
+  const modelo = /model:(\S+)/.exec(celular.linea)?.[1] ?? celular.serie;
+  console.log(`✓ celular: ${modelo}`);
+  if (!(adb("shell", "pm", "path", PAQUETE).stdout || "").includes("package:")) {
+    morir("La app no está instalada. Primero:  node herramientas/celular-usb.mjs --apk");
+  }
+  for (let vez = 1; vez <= veces; vez++) {
+    console.log(`\n── arranque en frío ${vez}/${veces}`);
+    adb("shell", "am", "force-stop", PAQUETE);
+    await dormir(1000);
+    // `-W` espera al primer cuadro de la app y dice cuánto tardó
+    const abierta = adb("shell", "am", "start", "-W", "-n", ACTIVIDAD).stdout || "";
+    const primerCuadro = /TotalTime:\s*(\d+)/.exec(abierta)?.[1];
+    await dormir(500);
+    const quien = enPrimerPlano();
+    if (quien !== PAQUETE) {
+      morir(`El primer plano es "${quien ?? "nada reconocible"}" y no la app. ¿Está bloqueado el teléfono?`);
+    }
+    const pid = (adb("shell", "pidof", PAQUETE).stdout || "").trim();
+    if (!/^\d+$/.test(pid)) morir("No encontré el proceso de la app.");
+    await dormir(MS_MIRAR_ARRANQUE);
+
+    /* SÓLO las líneas de nuestro proceso (`--pid`), y sólo las dos que
+       interesan. El proceso es nuevo en cada arranque, así que no se mezcla
+       con el anterior. */
+    const log = (adb("logcat", "-d", `--pid=${pid}`).stdout || "").split(/\r?\n/);
+    // La línea se escribe justo cuando la pantalla se va: lo que viene antes
+    // es DURANTE la carga, y lo de después es cuando ya podrías tocar "Jugar".
+    const iCarga = log.findIndex((l) => l.includes("[carga]"));
+    const trabas = (desde, hasta) =>
+      log
+        .slice(desde, hasta)
+        .map((l) => /Skipped (\d+) frames/.exec(l)?.[1])
+        .filter(Boolean)
+        .map((n) => `${n} cuadros`);
+    const decir = (lista) => (lista.length ? lista.join(", ") : "ninguna de medio segundo o más");
+    console.log(`  primer cuadro de Android: ${primerCuadro ? `${primerCuadro} ms` : "?"}`);
+    if (iCarga < 0) {
+      console.log("  sin línea [carga]: ¿es el APK de depuración? En el de release no se escribe.");
+      console.log(`  trabas del hilo principal: ${decir(trabas(0))}`);
+    } else {
+      console.log(`  ${log[iCarga].slice(log[iCarga].indexOf("[carga]"))}`);
+      console.log(`  trabas durante la carga: ${decir(trabas(0, iCarga))}`);
+      console.log(`  trabas DESPUÉS de la carga: ${decir(trabas(iCarga + 1))}`);
+    }
+  }
+  console.log("");
+}
+
 /* Lo de acá abajo es la línea de comandos, y corre SÓLO cuando se invoca este
    archivo directamente. Importado —lo hace `rig-celular.mjs`, que reusa
    `elCelular()`, `sacarFoto()` y `adb()` en vez de volver a escribirlas— no
@@ -364,6 +450,8 @@ if (desinstalar) {
   console.log((r.stdout || r.stderr || "").trim());
 } else if (unaFoto || vigilar) {
   await fotos(elCelular(), vigilar ? cuantasFotos : 1);
+} else if (medirTiempos) {
+  await tiempos(elCelular(), cuantasVeces);
 } else if (soloCompilar) {
   compilar();
   console.log(`\nPara instalarlo:  node herramientas/celular-usb.mjs --apk\n`);

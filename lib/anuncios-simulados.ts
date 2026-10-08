@@ -15,6 +15,8 @@
  *
  * Se controla con `window.__trucoAnunciosSimulados`:
  *   carga:   "ok" | "falla"              (default "ok")
+ *   demoraCarga: ms que tarda cada carga (default 0). Con esto se prueba que
+ *            la pantalla de carga espera a los anuncios (3/10/2026)
  *   mostrar: "aparece" | "falla" | "nunca" (default "aparece")
  *   pidePrivacidad: boolean
  *   registro: string[]   ← acá se anota lo que pasó, para que la herramienta lo lea
@@ -24,6 +26,7 @@ import type { EventoMotor, Formato, MotorAnuncios } from "./anuncios.ts";
 
 interface Control {
   carga?: "ok" | "falla";
+  demoraCarga?: number;
   mostrar?: "aparece" | "falla" | "nunca";
   pidePrivacidad?: boolean;
   registro?: string[];
@@ -88,7 +91,10 @@ export function crearMotorSimulado(): MotorAnuncios {
     },
     async cargar(f) {
       anotar(`cargar:${f}`);
+      const demora = control().demoraCarga ?? 0;
+      if (demora > 0) await new Promise((r) => setTimeout(r, demora));
       if (control().carga === "falla") throw new Error("sin fill (simulado)");
+      anotar(`cargado:${f}`);
     },
     mostrar(f) {
       anotar(`mostrar:${f}`);
