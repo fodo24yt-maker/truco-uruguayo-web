@@ -479,7 +479,7 @@ export function Carta({
       <svg
         viewBox="0 0 100 150"
         style={estilo}
-        className={`carta rounded-lg shadow-lg shadow-black/50 ${className}`}
+        className={`carta rounded-lg sombra-carta ${className}`}
         aria-hidden="true"
       >
         <rect x="1" y="1" width="98" height="148" rx="7" fill="var(--color-bordo)" />
@@ -520,7 +520,7 @@ export function Carta({
     <svg
       viewBox="0 0 100 150"
       style={estilo}
-      className={`carta rounded-lg shadow-lg shadow-black/50 ${pieza ? "halo-pieza" : ""} ${className}`}
+      className={`carta rounded-lg sombra-carta ${pieza ? "halo-pieza" : ""} ${className}`}
       role="img"
       aria-label={`${carta.numero} de ${carta.palo}${pieza ? ", es pieza" : ""}`}
     >

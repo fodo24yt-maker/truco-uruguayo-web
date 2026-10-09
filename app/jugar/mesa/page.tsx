@@ -99,9 +99,16 @@ const FIN_REPARTO = MOMENTO_VOLTEO + 2 * ENTRE_VOLTEOS + VOLTEO;
  * La carta es un `<svg>` con `rounded-lg` sobre un `rect` de `rx="7"`, así que
  * la sombra sigue la misma silueta que seguía el filtro y no se ve distinto.
  * NO VOLVER A PONER UN FILTRO ACÁ: `mirar-mesa.mjs` falla si aparece uno.
+ *
+ * ── Y TAMPOCO UN DESENFOQUE (8/10/2026) ─────────────────────────────────
+ * Esto era `0 10px 12px -3px rgba(0,0,0,0.75), 0 4px 8px -4px
+ * rgba(0,0,0,0.6)`, y el box-shadow con desenfoque TAMBIÉN rompía: en el
+ * Redmi, la basura de 4×4 caía sobre la palma, justo debajo de las cartas,
+ * que es donde cae esta sombra. Ahora es la misma sombra hecha con capas sin
+ * desenfoque: la variable la escribe `herramientas/sombras-duras.mjs` en
+ * `globals.css`, con los números al lado.
  */
-const SOMBRA_EN_MANO =
-  "0 10px 12px -3px rgba(0,0,0,0.75), 0 4px 8px -4px rgba(0,0,0,0.6)";
+const SOMBRA_EN_MANO = "var(--sombra-mano)";
 
 /**
  * Cuánto se esperan las cartas en la mesa después de que se cierra la mano.
@@ -1858,13 +1865,17 @@ function CartaApoyada({
           blancos alrededor de las cartas del 4/9/2026.
 
           Ahora el borde suave lo da un `box-shadow`, que sigue la misma
-          silueta redondeada del `rounded` y NO crea superficie: es
-          exactamente el cambio que ya se le hizo a las cartas de la mano el
-          2/9 (ver `SOMBRA_EN_MANO`). NO VOLVER A PONER UN FILTRO ACÁ:
-          `mirar-mesa.mjs` falla si aparece uno en la escena. */}
+          silueta redondeada del `rounded`: es el cambio que ya se le hizo a
+          las cartas de la mano el 2/9 (ver `SOMBRA_EN_MANO`). NO VOLVER A
+          PONER UN FILTRO ACÁ: `mirar-mesa.mjs` falla si aparece uno.
+
+          Y desde el 8/10/2026, tampoco un DESENFOQUE: era `0 0 7px 2px`, y
+          un box-shadow con desenfoque también rompía en el Redmi (ver
+          `globals.css`, "Las sombras de la mesa"). Es la misma sombra, hecha
+          con capas sin desenfoque. */}
       <div
         className="anim-sombra absolute inset-x-0 bottom-[-3px] top-3 rounded bg-black/70"
-        style={{ boxShadow: "0 0 7px 2px rgba(0,0,0,0.55)" }}
+        style={{ boxShadow: "var(--sombra-baza)" }}
         aria-hidden="true"
       />
       <Carta
@@ -2071,7 +2082,7 @@ function BotonCanto({
           ? /* Suelto sobre la madera: mide lo que dice, con aire a los costados
                y una sombra dura que lo despega del fondo. El filo claro de
                arriba es lo que lo hace parecer una ficha y no una mancha. */
-            "px-3.5 shadow-[0_3px_10px_-1px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.28)]"
+            "px-3.5 sombra-canto"
           : "flex-1 px-2"
       } ${tonos[tono]}`}
     >

@@ -44,8 +44,10 @@ function Contenido({ rival, alPie }: { rival: Personalidad; alPie: string }) {
           className="absolute inset-0 overflow-hidden rounded-full"
           style={{
             background: `radial-gradient(circle at 34% 26%, ${ficha.piel}22, rgba(0,0,0,0.55))`,
-            boxShadow:
-              "0 0 0 2px var(--color-dorado), 0 0 0 3.5px rgba(0,0,0,0.65), 0 6px 14px -3px rgba(0,0,0,0.9)",
+            /* Era `0 0 0 2px dorado, 0 0 0 3.5px rgba(0,0,0,.65), 0 6px 14px
+               -3px rgba(0,0,0,.9)`: la misma, sin desenfoque (8/10/2026,
+               `herramientas/sombras-duras.mjs`). */
+            boxShadow: "var(--sombra-medallon)",
           }}
         >
           <Cara ficha={ficha} nombre={rival.nombre} />

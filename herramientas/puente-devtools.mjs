@@ -54,8 +54,9 @@ const variableDeWindows = (n) => {
 const aLinux = (p) => spawnSync("wslpath", ["-u", p], { encoding: "utf8" }).stdout.trim();
 const aWindows = (p) => spawnSync("wslpath", ["-w", p], { encoding: "utf8" }).stdout.trim();
 
-/** La IP con la que WSL ve a Windows. Sale de la ruta por omisión. */
-function ipDeWindows() {
+/** La IP con la que WSL ve a Windows. Sale de la ruta por omisión. La usa
+    también `jugar-celular.mjs`, para hablarle al puente que abrió la sesión. */
+export function ipDeWindows() {
   const r = spawnSync("ip", ["route", "show", "default"], { encoding: "utf8" });
   return /default via (\S+)/.exec(r.stdout || "")?.[1] ?? null;
 }

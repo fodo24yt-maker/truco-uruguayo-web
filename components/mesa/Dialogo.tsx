@@ -101,7 +101,7 @@ export function DialogoRival({
               className={`anim-pop mt-0.5 inline-block max-w-full truncate rounded-full px-3 py-1 font-[family-name:var(--font-ui)] text-[13px] uppercase tracking-wide sm:text-sm ${
                 ultimo.quien === "sistema"
                   ? "text-crema/80 [text-shadow:0_2px_3px_rgba(0,0,0,0.95)]"
-                  : "bg-crema text-tinta shadow-lg shadow-black/60"
+                  : "bg-crema text-tinta sombra-globo"
               }`}
             >
               {ultimo.texto}
@@ -141,7 +141,7 @@ export function DialogoMio({ eventos }: { eventos: readonly Evento[] }) {
       {ultimo && (
         <p
           key={mios.length}
-          className="anim-pop inline-block max-w-full truncate rounded-full bg-crema px-3 py-1 font-[family-name:var(--font-ui)] text-[13px] uppercase tracking-wide text-tinta shadow-lg shadow-black/60 sm:text-sm"
+          className="anim-pop inline-block max-w-full truncate rounded-full bg-crema px-3 py-1 font-[family-name:var(--font-ui)] text-[13px] uppercase tracking-wide text-tinta sombra-globo sm:text-sm"
         >
           {ultimo.texto}
         </p>

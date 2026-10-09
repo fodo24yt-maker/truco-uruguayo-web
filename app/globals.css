@@ -280,11 +280,195 @@ footer {
   color: var(--color-tinta);
 }
 
-/* El halo de la muestra y de las piezas: el hilo visual que las une */
-.halo-pieza {
-  box-shadow:
+/* ── LAS SOMBRAS DE LA MESA, SIN DESENFOQUE ───────────────────────────────
+
+   Medido en el Redmi 13C (Mali-G52, Vulkan) el 8/10/2026, con el jugador
+   automático y las ramas alternadas cada 3 minutos (`medir-celular.mjs`):
+
+       A    como estaba                         8,6% de los cuadros con basura
+       S0b  sin ningún box-shadow en la escena  1,2%
+       TR0  sin text-shadow ni filter           11,2%   (no cambia nada)
+
+   La basura de 4×4 de la mesa la disparan los `box-shadow` CON DESENFOQUE: Skia
+   los dibuja con una máscara desenfocada en texturas auxiliares, igual que un
+   `filter`, y eso es lo que el driver Vulkan de la Mali maneja mal. Caía sobre
+   todo en la palma de la mano, que es justo donde cae la sombra de las cartas.
+   (Hasta el 8/10 se creía que un box-shadow "no crea superficie": es cierto
+   para el compositor, no para el rasterizado.)
+
+   La sombra es la MISMA, rehecha con capas de radio 0 que siguen el perfil del
+   desenfoque (diferencia media ~0,5/255 contra la original). Los valores los
+   escribe `node herramientas/sombras-duras.mjs --escribir`, que tiene la cuenta
+   y la calibración: NO editarlos a mano, y NO volver a poner un radio de
+   desenfoque en una sombra de la mesa. */
+/* ── generado por `node herramientas/sombras-duras.mjs --escribir`: no editar a mano ── */
+:root {
+  --sombra-mano:
+    0px 10px 0 8.64px rgba(0,0,0,0.021),
+    0px 10px 0 7.14px rgba(0,0,0,0.016),
+    0px 10px 0 5.64px rgba(0,0,0,0.025),
+    0px 10px 0 4.14px rgba(0,0,0,0.037),
+    0px 10px 0 2.64px rgba(0,0,0,0.051),
+    0px 10px 0 1.14px rgba(0,0,0,0.067),
+    0px 10px 0 -0.36px rgba(0,0,0,0.085),
+    0px 10px 0 -1.86px rgba(0,0,0,0.102),
+    0px 10px 0 -3.36px rgba(0,0,0,0.117),
+    0px 10px 0 -4.86px rgba(0,0,0,0.127),
+    0px 10px 0 -6.36px rgba(0,0,0,0.132),
+    0px 10px 0 -7.86px rgba(0,0,0,0.128),
+    0px 10px 0 -9.36px rgba(0,0,0,0.116),
+    0px 10px 0 -10.86px rgba(0,0,0,0.097),
+    0px 4px 0 3.76px rgba(0,0,0,0.018),
+    0px 4px 0 2.26px rgba(0,0,0,0.023),
+    0px 4px 0 0.76px rgba(0,0,0,0.042),
+    0px 4px 0 -0.74px rgba(0,0,0,0.067),
+    0px 4px 0 -2.24px rgba(0,0,0,0.094),
+    0px 4px 0 -3.74px rgba(0,0,0,0.117),
+    0px 4px 0 -5.24px rgba(0,0,0,0.130),
+    0px 4px 0 -6.74px rgba(0,0,0,0.126),
+    0px 4px 0 -8.24px rgba(0,0,0,0.105),
+    0px 4px 0 -9.74px rgba(0,0,0,0.073);
+  --sombra-carta:
+    0px 10px 0 11.55px rgba(0,0,0,0.013),
+    0px 10px 0 10.05px rgba(0,0,0,0.008),
+    0px 10px 0 8.55px rgba(0,0,0,0.011),
+    0px 10px 0 7.05px rgba(0,0,0,0.016),
+    0px 10px 0 5.55px rgba(0,0,0,0.021),
+    0px 10px 0 4.05px rgba(0,0,0,0.027),
+    0px 10px 0 2.55px rgba(0,0,0,0.033),
+    0px 10px 0 1.05px rgba(0,0,0,0.039),
+    0px 10px 0 -0.45px rgba(0,0,0,0.045),
+    0px 10px 0 -1.95px rgba(0,0,0,0.050),
+    0px 10px 0 -3.45px rgba(0,0,0,0.054),
+    0px 10px 0 -4.95px rgba(0,0,0,0.055),
+    0px 10px 0 -6.45px rgba(0,0,0,0.055),
+    0px 10px 0 -7.95px rgba(0,0,0,0.052),
+    0px 10px 0 -9.45px rgba(0,0,0,0.047),
+    0px 10px 0 -10.95px rgba(0,0,0,0.040),
+    0px 10px 0 -12.45px rgba(0,0,0,0.033),
+    0px 10px 0 -13.95px rgba(0,0,0,0.026),
+    0px 4px 0 1.82px rgba(0,0,0,0.017),
+    0px 4px 0 0.32px rgba(0,0,0,0.031),
+    0px 4px 0 -1.18px rgba(0,0,0,0.062),
+    0px 4px 0 -2.68px rgba(0,0,0,0.099),
+    0px 4px 0 -4.18px rgba(0,0,0,0.126),
+    0px 4px 0 -5.68px rgba(0,0,0,0.128),
+    0px 4px 0 -7.18px rgba(0,0,0,0.101);
+  --sombra-halo:
     0 0 0 2px var(--color-dorado),
-    0 0 18px -2px rgba(201, 146, 46, 0.85);
+    0px 0px 0 15.46px rgba(201,146,46,0.022),
+    0px 0px 0 13.96px rgba(201,146,46,0.011),
+    0px 0px 0 12.46px rgba(201,146,46,0.015),
+    0px 0px 0 10.96px rgba(201,146,46,0.019),
+    0px 0px 0 9.46px rgba(201,146,46,0.025),
+    0px 0px 0 7.96px rgba(201,146,46,0.032),
+    0px 0px 0 6.46px rgba(201,146,46,0.040),
+    0px 0px 0 4.96px rgba(201,146,46,0.049),
+    0px 0px 0 3.46px rgba(201,146,46,0.058),
+    0px 0px 0 1.96px rgba(201,146,46,0.068),
+    0px 0px 0 0.46px rgba(201,146,46,0.079),
+    0px 0px 0 -1.04px rgba(201,146,46,0.089),
+    0px 0px 0 -2.54px rgba(201,146,46,0.098),
+    0px 0px 0 -4.04px rgba(201,146,46,0.107),
+    0px 0px 0 -5.54px rgba(201,146,46,0.113),
+    0px 0px 0 -7.04px rgba(201,146,46,0.118),
+    0px 0px 0 -8.54px rgba(201,146,46,0.120),
+    0px 0px 0 -10.04px rgba(201,146,46,0.119),
+    0px 0px 0 -11.54px rgba(201,146,46,0.114),
+    0px 0px 0 -13.04px rgba(201,146,46,0.106),
+    0px 0px 0 -14.54px rgba(201,146,46,0.095);
+  --sombra-baza:
+    0px 0px 0 8.79px rgba(0,0,0,0.018),
+    0px 0px 0 7.29px rgba(0,0,0,0.026),
+    0px 0px 0 5.79px rgba(0,0,0,0.050),
+    0px 0px 0 4.29px rgba(0,0,0,0.080),
+    0px 0px 0 2.79px rgba(0,0,0,0.110),
+    0px 0px 0 1.29px rgba(0,0,0,0.128),
+    0px 0px 0 -0.21px rgba(0,0,0,0.126),
+    0px 0px 0 -1.71px rgba(0,0,0,0.102),
+    0px 0px 0 -3.21px rgba(0,0,0,0.066);
+  --sombra-medallon:
+    0 0 0 2px var(--color-dorado),
+    0 0 0 3.5px rgba(0,0,0,0.65),
+    0px 6px 0 10.58px rgba(0,0,0,0.024),
+    0px 6px 0 9.08px rgba(0,0,0,0.016),
+    0px 6px 0 7.58px rgba(0,0,0,0.023),
+    0px 6px 0 6.08px rgba(0,0,0,0.033),
+    0px 6px 0 4.58px rgba(0,0,0,0.045),
+    0px 6px 0 3.08px rgba(0,0,0,0.059),
+    0px 6px 0 1.58px rgba(0,0,0,0.075),
+    0px 6px 0 0.08px rgba(0,0,0,0.093),
+    0px 6px 0 -1.42px rgba(0,0,0,0.112),
+    0px 6px 0 -2.92px rgba(0,0,0,0.130),
+    0px 6px 0 -4.42px rgba(0,0,0,0.148),
+    0px 6px 0 -5.92px rgba(0,0,0,0.163),
+    0px 6px 0 -7.42px rgba(0,0,0,0.174),
+    0px 6px 0 -8.92px rgba(0,0,0,0.180),
+    0px 6px 0 -10.42px rgba(0,0,0,0.178),
+    0px 6px 0 -11.92px rgba(0,0,0,0.168),
+    0px 6px 0 -13.42px rgba(0,0,0,0.149);
+  --sombra-globo:
+    0px 10px 0 11.55px rgba(0,0,0,0.016),
+    0px 10px 0 10.05px rgba(0,0,0,0.009),
+    0px 10px 0 8.55px rgba(0,0,0,0.014),
+    0px 10px 0 7.05px rgba(0,0,0,0.019),
+    0px 10px 0 5.55px rgba(0,0,0,0.025),
+    0px 10px 0 4.05px rgba(0,0,0,0.032),
+    0px 10px 0 2.55px rgba(0,0,0,0.040),
+    0px 10px 0 1.05px rgba(0,0,0,0.048),
+    0px 10px 0 -0.45px rgba(0,0,0,0.056),
+    0px 10px 0 -1.95px rgba(0,0,0,0.063),
+    0px 10px 0 -3.45px rgba(0,0,0,0.069),
+    0px 10px 0 -4.95px rgba(0,0,0,0.072),
+    0px 10px 0 -6.45px rgba(0,0,0,0.072),
+    0px 10px 0 -7.95px rgba(0,0,0,0.069),
+    0px 10px 0 -9.45px rgba(0,0,0,0.064),
+    0px 10px 0 -10.95px rgba(0,0,0,0.056),
+    0px 10px 0 -12.45px rgba(0,0,0,0.047),
+    0px 10px 0 -13.95px rgba(0,0,0,0.037),
+    0px 4px 0 1.82px rgba(0,0,0,0.020),
+    0px 4px 0 0.32px rgba(0,0,0,0.037),
+    0px 4px 0 -1.18px rgba(0,0,0,0.075),
+    0px 4px 0 -2.68px rgba(0,0,0,0.121),
+    0px 4px 0 -4.18px rgba(0,0,0,0.159),
+    0px 4px 0 -5.68px rgba(0,0,0,0.168),
+    0px 4px 0 -7.18px rgba(0,0,0,0.139);
+  --sombra-canto:
+    0px 3px 0 8.7px rgba(0,0,0,0.025),
+    0px 3px 0 7.2px rgba(0,0,0,0.024),
+    0px 3px 0 5.7px rgba(0,0,0,0.040),
+    0px 3px 0 4.2px rgba(0,0,0,0.061),
+    0px 3px 0 2.7px rgba(0,0,0,0.088),
+    0px 3px 0 1.2px rgba(0,0,0,0.117),
+    0px 3px 0 -0.3px rgba(0,0,0,0.148),
+    0px 3px 0 -1.8px rgba(0,0,0,0.176),
+    0px 3px 0 -3.3px rgba(0,0,0,0.197),
+    0px 3px 0 -4.8px rgba(0,0,0,0.206),
+    0px 3px 0 -6.3px rgba(0,0,0,0.197),
+    0px 3px 0 -7.8px rgba(0,0,0,0.170),
+    inset 0 1px 0 rgba(255,255,255,0.28);
+}
+/* ── fin de lo generado por sombras-duras.mjs ── */
+
+/* Las que van por clase. La de la carta era `shadow-lg shadow-black/50` de
+   Tailwind; la del globo, `shadow-lg shadow-black/60`; la del canto suelto,
+   `0 3px 10px -1px` con un filo claro arriba. Van antes del halo: si una
+   carta es pieza, gana el halo (misma especificidad, el que va después). */
+.sombra-carta {
+  box-shadow: var(--sombra-carta);
+}
+.sombra-globo {
+  box-shadow: var(--sombra-globo);
+}
+.sombra-canto {
+  box-shadow: var(--sombra-canto);
+}
+
+/* El halo de la muestra y de las piezas: el hilo visual que las une. Era
+   `0 0 0 2px dorado, 0 0 18px -2px rgba(201,146,46,.85)`: el brillo es el
+   mismo, sin desenfoque (ver arriba). */
+.halo-pieza {
+  box-shadow: var(--sombra-halo);
 }
 
 /* ── LAS MANCHITAS DEL MAPA: CADA CAPA EN SU PROPIA PASADA ─────────────────

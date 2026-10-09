@@ -12,6 +12,639 @@
 
 ---
 
+## 2026-10-08 — Los píxeles: eran los DESENFOQUES de las sombras de caja (arreglo aplicado, sin probar en el APK)
+
+> Pedido de Santiago (8/10): que desde ahora este archivo se escriba **al
+> detalle**: qué se probó, con qué número, qué funcionó, qué no y por qué, para
+> que el próximo modelo no repita pruebas. Esta entrada lo intenta. Al final
+> hay una tabla con **todo lo probado contra los píxeles desde el 1/9**.
+
+### Resumen, para el que llega
+
+- **La causa principal.** La basura de 4×4 de la mesa la disparan los
+  `box-shadow` **con radio de desenfoque**:
+  - las cartas (`shadow-lg`);
+  - `SOMBRA_EN_MANO`;
+  - el halo de las piezas;
+  - la sombra de la baza;
+  - el medallón;
+  - los globos;
+  - los cantos sueltos.
+
+  Skia los dibuja con máscaras desenfocadas en texturas auxiliares, y el driver
+  Vulkan de la Mali‑G52 del Redmi lo hace mal (con OpenGL no pasa).
+- **Las medidas**, por ramas alternadas, con el jugador automático y en tres
+  sesiones:
+
+  | Rama | Cuadros con basura |
+  |---|---|
+  | Como estaba | 7,9–8,6% |
+  | Sin las sombras de caja | 0,7–1,2% |
+  | Sin `text-shadow` ni filtro | 11–12%: no cambia nada |
+  | **Con las sombras rehechas sin desenfoque** | **0,5–0,8%** |
+
+- **La basura caía en la mano**: sobre la palma dibujada, justo debajo de las
+  cartas, y sobre las cartas. Nacía a los 0,5–1,5 s de tirar una carta o de
+  decir "Quiero", y a los 10–30 s de entrar a la mesa.
+- **El arreglo, aplicado en el código.** Las mismas sombras, hechas con capas de
+  `box-shadow` de radio 0 que siguen el perfil del desenfoque (diferencia media
+  0,2–0,8/255 contra las originales: a ojo son iguales). Las genera
+  `node herramientas/sombras-duras.mjs --escribir` en `app/globals.css`.
+  `mirar-mesa.mjs` falla si vuelve un `box-shadow` desenfocado a la escena.
+- **Queda un resto**, unas 10 veces menor. También cae en la mano y aparece
+  cuando esa zona se redibuja:
+  - se cierra el menú del envido;
+  - se reactiva la barra de cantos;
+  - el abanico se cierra después de tirar.
+
+  Tiene otra causa, todavía sin medir. Las candidatas están en "El resto".
+- **Para probarlo**:
+
+  ```bash
+  node herramientas/celular-usb.mjs --apk
+  ```
+
+  El APK ya está compilado con el arreglo. La app que está instalada en el
+  teléfono es la VIEJA. Esperable: mucha menos basura, no cero.
+
+### Parte 1 — La noche del 7 al 8/10 (la sesión se cortó y no se había escrito)
+
+#### El inspector del WebView: el APK de depuración lo publica SIEMPRE
+
+Se había armado `--inspeccionable` para prender el inspector sólo a pedido
+(`INSPECCIONAR_WEBVIEW=1` → `webContentsDebuggingEnabled`). **Sobraba.** El APK
+compilado con `false` es idéntico byte a byte (sha256) al que estaba instalado,
+y aun así el WebView publicaba `webview_devtools_remote_<pid>`. La razón: el
+WebView de Android prende DevTools solo en toda app *depurable*, diga lo que
+diga Capacitor. Un barrido del dex encontró sólo dos llamadas a
+`setWebContentsDebuggingEnabled`: la de `Bridge` de Capacitor (que lee la
+configuración) y la de `SystemWebViewEngine` de Cordova, que no se usa.
+
+Se sacó todo lo de `--inspeccionable`. **El `false` de `capacitor.config.ts`
+manda sólo en el APK de release**, que es el que importa. Las herramientas de
+medir andan con el `node herramientas/celular-usb.mjs --apk` de siempre.
+
+#### La firma de la basura de la mesa, medida de cerca
+
+- **Cuadrados de 4×4 px de pantalla** (2×2 px CSS a DPR 2), **perfectamente
+  planos**, de colores imposibles para el lugar (negro, verde amarillento,
+  violeta, azul, rosa).
+- **Alineados a la grilla de 4 de la capa**, que arranca en el borde de arriba
+  de la escena (y=158 px de pantalla en el Redmi). Por eso caen en x≡0, y≡2
+  (mod 4). Es el sub-bloque de la compresión AFBC de las Mali.
+- **Dónde:** alrededor de la sombra del mate, el halo del mazo, el borde de
+  abajo de la palma y de las cartas de la mano, y a veces adentro de una carta.
+- **Se oscurecen de a poco.** Sesión `19-43`: el píxel (80–87, 666–669) aparece
+  en el cuadro 530 y baja 73→62→52→39→18→…→10 en ~40 s de redibujados. O sea:
+  ese bloque la GPU no lo vuelve a pintar, y la sombra semitransparente del mate
+  se le sigue mezclando encima en cada redibujado parcial. **La basura queda
+  pegada en la textura del mosaico**; no es un cuadro que sale mal y se va.
+
+#### El árbol de capas en el teléfono (CDP `LayerTree`)
+
+La mesa entera es **UNA sola capa de contenido**, la raíz (720×1600, la que
+dibuja). Las demás son las barras de scroll y el viewport. Los grupos
+`.escena > * { opacity: .999 }` **no** son capas del compositor: Skia los dibuja
+como `saveLayer` (texturas auxiliares) DENTRO del rasterizado de los mosaicos.
+
+#### El detector y el jugador automático
+
+- **El detector** (`bloques4.mjs` en el temporal; desde el 8/10,
+  `bloquesPlanosDe` en `herramientas/bloques.mjs` y
+  `medir-celular.mjs --pixeles`). Busca exactamente esa firma: plano, alineado a
+  la grilla de la capa, distinto del anillo de alrededor y de color único en el
+  vecindario. El control es la misma prueba con la grilla corrida 2 px.
+  - Calibración: la sesión con OpenGL (`19-55`) da **0**.
+  - Dos falsos positivos que se arreglaron:
+    - los dos puntos de "GANÁS LA MANO: +1" (de ahí la regla del color único);
+    - una versión que comparaba cuadros vecinos (`motas-nuevas`), que dio 0 con
+      basura a la vista: la basura no va y vuelve, se queda.
+  - Hay que **muestrear por tiempo** (`--cada 200`): la rama D1 mandaba 18 mil
+    cuadros, y contarlos todos la pesaba distinto que al control.
+- **El jugador automático** (`jugador.mjs` en el temporal; desde el 8/10,
+  `herramientas/jugar-celular.mjs`): `input tap` de verdad, con cerrojo en cada
+  toque. **En la mesa SÍ reproduce la basura** (~10% de los cuadros
+  muestreados, del orden de lo que se veía con Santiago jugando). Eso desarma la
+  regla del 9/9 ("sólo Santiago la reproduce"), que era cierta para el menú.
+  Desde ahora las mediciones de la mesa no necesitan las manos de nadie.
+  Tropiezos que tuvo:
+  - se trababa con las respuestas de la flor ("Yo también", "Me achico"). Ahora
+    elige un botón al azar;
+  - la etiqueta cortada a 40 letras se comía la palabra "rival" de "Jugando
+    contra…". Ahora corta a 90;
+  - un anuncio lo dejaba parado, porque el cerrojo no lo deja tocar. Ahora lo
+    cierra con Atrás.
+
+#### Tres experimentos, con el detector y el jugador
+
+Todos son ramas de CSS inyectadas en vivo y alternadas con el control A en
+tramos de 3 minutos.
+
+**M0 — sin animaciones** (`.escena *` con animaciones de 1 ms y sin
+transiciones). **REFUTADA.** A dio 0,0–0,1 bloques por cuadro y M0 0,1–0,3.
+Santiago, jugando, también: "no es por la animación".
+
+**D1 — daño total en cada cuadro.** Un `html::after` fijo, casi transparente,
+con la opacidad animada cada 0,5 s, que obliga a recomponer TODA la pantalla en
+cada cuadro. **REFUTADA.** A dio 6–13% de cuadros sucios y D1 10–11%. La basura
+está pegada en las texturas de los mosaicos, y recomponer no la limpia: haría
+falta RE-RASTERIZAR.
+
+**B0 — sin ningún desenfoque en la escena.** La regla fue
+`.escena *, .escena *::before, .escena *::after { box-shadow: none !important;
+filter: none !important; text-shadow: none !important; backdrop-filter: none
+!important; }`. **CONFIRMADA:**
+
+| Par | A (control) | B0 |
+|---|---|---|
+| 1 | 26 / 315 | 3 / 271 |
+| 2 | 35 / 322 | 0 / 325 |
+| 3 | 26 / 266 | (el jugador se trabó: 21 cuadros, no cuenta) |
+| 4 | 18 / 170 | 3 / 335 |
+| **Total** | **9,8%** de los cuadros | **0,7%** (~15 veces menos) |
+
+Y además es más rápida: gfxinfo p90 de 69–73 ms contra 85–93, y p99 de 117–133
+contra 150.
+
+**Inventario de los desenfoques de la escena**, medido por CDP sobre la mesa
+viva:
+
+- **`filter`**: uno solo, `rival-foco` (`feGaussianBlur` σ=1,5 sobre el cuerpo
+  del rival).
+- **`box-shadow` con desenfoque**:
+  - las cartas del mazo, la baza y la mano (`shadow-lg shadow-black/50` de
+    `Carta.tsx`, y `SOMBRA_EN_MANO` en la mano);
+  - las sombras de la baza (`.anim-sombra`);
+  - el aro del medallón;
+  - los globos de diálogo (`p.anim-pop`).
+- **`text-shadow`**:
+  - el cartel de la muestra;
+  - las etiquetas de la tabla;
+  - el nombre y los renglones del rival;
+  - los textos de la mano ("Tu tanto…").
+- **El mate NO tiene desenfoque**: su sombra está dibujada.
+
+**Lo que esto contradice:** desde el 2/9 el proyecto cambiaba los `filter`
+por `box-shadow`, convencido de que la sombra de caja "no crea superficie"
+(está escrito así en `page.tsx`, `Tantos.tsx` y `Mazo.tsx`). En este teléfono,
+**el desenfoque de un `box-shadow` o de un `text-shadow` también cuenta**:
+Skia lo dibuja con una máscara desenfocada en texturas auxiliares, igual que
+un filtro.
+
+#### La lentitud de la primera vez (L9) y el ensayo
+
+Las trazas de Chromium en el teléfono muestran que la primera visita a cada
+pantalla se va en **compilar los pipelines de Vulkan**
+(`VulkanCreateGraphicsPipelines`, `CreateGraphicsPipeline-CompileAfterCacheMiss`),
+todo adentro del rasterizado (`RasterDecoderImpl::DoEndRasterCHROMIUM::Flush`).
+El toque adentro de la mesa anda bien: p50 80 ms, p90 136–152 ms. Los cuadros
+largos los traba la GPU; el hilo principal de la página va liviano.
+
+Con una copia de la pantalla inyectada antes:
+
+| Primera visita | Normal | Con la copia antes |
+|---|---|---|
+| Menú | 887–1043 ms, 74 pipelines | 60–69 ms, 0 pipelines |
+| Mesa | 1127–1144 ms, ~185 pipelines | 220–256 ms, 45 pipelines |
+
+De ahí salió **el ensayo** de `PantallaCarga.tsx`: debajo de la pantalla de
+carga, la app pasa por `/jugar` y `/jugar/mesa` y vuelve al inicio, así las
+pipelines quedan compiladas antes del primer toque. En el teléfono alarga la
+pantalla de carga unos 2,3 s. Tiene su excepción declarada en
+`lib/entradas-unicas.test.ts`: no es una partida, no cuenta como la primera ni
+pide anuncio.
+
+Por qué falló el "ensayo general" del 3/10:
+
+- con `visibility:hidden` no se pinta nada, y sin pintar no se compila nada;
+- la copia de la mesa medía 0 px de alto, porque el alto de la mesa sale de que
+  `body` es `flex flex-col`.
+
+Commiteado por Santiago en `2d49c58`.
+
+#### Tropiezos de la noche, para no repetirlos
+
+- **Corrí `npx prettier --write` y reformateó todo `PantallaCarga.tsx`.** El
+  proyecto NO usa Prettier. Se reconstruyó el archivo desde `git show HEAD` más
+  el diff del 3/10 y se volvieron a aplicar los cambios.
+- **El teléfono se bloqueó solo** después de más de 5 minutos sin un toque de
+  verdad: los clics por CDP no cuentan como actividad. No se lo desbloqueó y se
+  cortó la sesión (`sesion-…-01-37` quedó vacía). **El jugador no se apaga
+  entre experimentos.**
+- **El temporal de la sesión se borró al día siguiente**, y con él el detector y
+  el jugador. Es la segunda vez que pasa (el 8/9 se perdió el rig). Se
+  reconstruyeron del registro de la conversación y ahora viven en `herramientas/`.
+
+### Parte 2 — El 8/10: dónde cae, y cuál de los desenfoques es
+
+Santiago jugó y sigue viendo píxeles chicos, que sólo se notan con zoom, **casi
+siempre en el mazo o en la mano**. La app no estaba instalada. Se instaló con
+`celular-usb.mjs --apk`: el primer intento lo rechazó MIUI
+(`INSTALL_FAILED_USER_RESTRICTED`) y el segundo entró.
+
+**Hipótesis:** lo que queda lo disparan las sombras con desenfoque, y las más
+grandes de la mesa son justo las del mazo (15 px) y la mano (12 y 8 px).
+
+**Predicciones, fijadas antes de medir:**
+
+1. En la rama A, ≥ 70% de las posiciones con basura caen a menos de 16–24 px
+   CSS de un elemento con sombra desenfocada, sobre todo en el mazo y la mano.
+2. Si son las sombras de caja, S0b (sin `box-shadow`) da como B0 y TR0 (sin
+   `text-shadow` ni `filter`) da como A.
+   - Una rama "lleva el efecto" si queda en ≤ 1,5% en ≥ 3 pares.
+   - Una rama "no lo lleva" si queda dentro de ±30% de A.
+3. Con el arreglo en el APK: ≤ 1% de cuadros sucios en ≥ 12 min de juego, y
+   ≥ 5 veces menos que A medida el mismo día.
+
+**Primer dato, sin teléfono:** las ramas A de la sesión `00-48`. Esa sesión
+sólo guardaba la caja de la mano. De 29 posiciones distintas con basura,
+**24 caen en el abanico de la mano** (±16 px) y 5 en la franja de los cantos.
+Desde hoy el muestreo guarda también el mazo, la baza, el mate, la muestra, el
+rival y el medallón.
+
+**Santiago aclaró a mitad de sesión:** "cuando digo la mano me refiero a la mano
+de verdad, no a las cartas". Ve mini píxeles abajo de las cartas, **sobre la palma
+dibujada** (`DedosAtras`/`PulgarAdelante` de `Manos.tsx`). Desde ahí el muestreo
+separa `palma`, `pulgar` y `cartas`. La atribución busca primero la caja que
+contiene el bloque y, si no cae en ninguna, la que tiene cerca, a menos de 16 px
+("cerca de X"). Lo que cae lejos de todo sale como "otro": así se ve si un cambio
+corre la basura a otro lado.
+
+#### Sesión 1 (`sesion-2026-10-08-14-45`): ¿cuál desenfoque es?
+
+Jugador automático y ramas alternadas cada 3 minutos (A, S0b, TR0 ×3).
+
+| Rama | Qué saca | Cuadros | Sucios | Nacen cada 100 cuadros | Dónde (posiciones distintas) |
+|---|---|---|---|---|---|
+| A | nada | 816 | **8,6%** | 5,1 | palma 7 · pulgar 5 · cartas 5 |
+| **S0b** | sólo `box-shadow` | 734 | **1,2%** | 1,1 | cartas 3 · pulgar 2 · palma 2 |
+| TR0 | `text-shadow` + `filter` (incluye el rival) | 652 | **11,2%** | 6,1 | cartas 7 · palma 5 · pulgar 4 |
+
+Por tramo, S0b dio 1,8% · 1,1% · 0,6%. A dio 4,9% · 11,9% · 8,7%. TR0 dio 14,3% · 7,9%.
+
+**Veredicto: CONFIRMADO, son las sombras de caja.**
+
+- Sacar los `box-shadow` baja la basura unas 7 veces.
+- Sacar los `text-shadow` y el `feGaussianBlur` del rival no la baja: TR0 queda dentro
+  del ±30% de A.
+- Toda la basura cae en la mano: **en la palma, debajo de las cartas**, justo donde
+  cae la sombra de `SOMBRA_EN_MANO`, que va 10 px corrida hacia abajo.
+- Hoy no cayó nada en el mazo con el jugador automático.
+
+**Una medida nueva: "nacen".** El % de cuadros sucios depende de cuánto tarda la
+mesa en redibujar ese pedazo. Un bloque pegado ensucia decenas de cuadros
+seguidos: en el primer tramo, TR0 tuvo 4 posiciones distintas, como A, y cuatro
+veces más cuadros sucios. "Nacen" cuenta cuántas veces aparece un bloque donde no
+hubo ninguno en el último segundo, y ésa es la tasa del evento. Se informan las
+dos.
+
+#### El reemplazo: la misma sombra sin desenfoque (`herramientas/sombras-duras.mjs`)
+
+**La idea.** Una sombra desenfocada se puede rehacer con varias `box-shadow` de
+radio 0: rectángulos redondeados rellenos, cada vez más grandes y más
+transparentes, que siguen el perfil del desenfoque. Ninguna pide una textura
+auxiliar.
+
+**Lo que se midió, en la compu a DPR 2**:
+
+- **El perfil real de Chromium.** Se dibujó la sombra corrida 300 px, para que
+  el elemento no la tape, y se leyó el borde píxel por píxel. Es gaussiano con
+  **σ = 0,485 × el radio**; la norma dice 0,5. El error es menor a 2/255 con
+  radios de 6 a 18.
+- **Las rayitas.** Con capas cada 1,5 px, en la mano se veían rayitas donde la
+  sombra de una carta cae sobre el papel de la de al lado, porque las cartas van
+  giradas.
+- **Más fino no ayuda.** Con capas cada 0,5 px las rayitas se van, pero la
+  diferencia media SUBE de 0,64 a 1,29. Cada capa suma su borde con antialias, y
+  con 70 capas se acumula un filo.
+- **Las esquinas.** Con spread negativo, la norma calcula el radio como
+  radio + spread, con piso en 0. Las capas de adentro quedan con la esquina
+  recta y se forma un pliegue en diagonal, de hasta ~30/255 en pocos píxeles.
+  Con `box-shadow` eso no tiene arreglo.
+- **El barrido en la mesa real** (σ × {0,47 · 0,485 · 0,5}, paso {0,75 · 1 ·
+  1,5}, corrimiento {−0,25 · 0 · 0,25}): todas las variantes quedan en **~0,5/255
+  de diferencia media**, en la mano y en el mazo. Se eligió σ 0,485, paso 1,5 y
+  corrimiento 0,25.
+
+**Descartado: un pseudo-elemento con degradés en nueve partes.** Es como Skia
+arma la sombra por dentro, no tiene pliegues y son 9 dibujos en vez de ~40 capas.
+Pero no acompaña a la carta cuando se da vuelta: el giro (`anim-voltea`) lo hace
+el `<svg>`, y un `<svg>` no admite `::before`. Tampoco sirve `border-image` con un
+degradé: un degradé no tiene tamaño propio, y el corte en nueve no estira nada.
+
+#### Sesión 2 (`sesion-2026-10-08-15-12`): ¿el reemplazo sirve igual que sacar la sombra?
+
+| Rama | Tramos | Cuadros | Sucios | Nacen /100 | Dónde (posiciones) |
+|---|---|---|---|---|---|
+| A | 6,6% · 9,4% · 8,8% | 869 | **8,3%** | 5,3 | cartas 10 · palma 5 · pulgar 4 |
+| **S1** (las sombras de caja de la escena con capas sin desenfoque) | 0,4% · 0,9% · 1,1% | 790 | **0,8%** | 0,5 | pulgar 2 · cartas 1 · palma 1 |
+| S0b (sin `box-shadow`) | 0,7% | 294 | 0,7% | 0,7 | pulgar 2 |
+| TR0 | 12,1% | 331 | 12,1% | 6,6 | cartas 3 · palma 1 |
+
+**Veredicto: CONFIRMADO.** Con S1 la mesa se ve igual (~0,5/255) y la basura baja
+unas 10 veces: lo mismo que sacar las sombras.
+
+**El resto NO es ruido del detector.** Los bloques que quedan con S1 se miraron
+uno por uno, ampliados: son cuadraditos planos de un color ajeno al lugar. Uno
+marrón sobre el papel de una carta, al lado de las espadas. Otros negros, verdes
+o grises sobre la palma, justo debajo de las cartas. B0, que sacaba todos los
+desenfoques, también dejaba ~0,7%. **Hay otro disparador, más chico, en la misma
+zona**: es la próxima hipótesis. Candidatos, en orden:
+
+1. el contexto 3D del volteo de las cartas de la mano (`.perspectiva-carta` y
+   `anim-voltea`), que crea y destruye capas en cada reparto;
+2. los grupos `opacity .999` mismos;
+3. el dibujo de la palma (`Manos.tsx`).
+
+#### Sesión 3 (`sesion-2026-10-08-15-39`): jugando VARIADO, para medir el principio
+
+Santiago avisó de un riesgo de método: "capaz que después de cierto tiempo se ve
+bien". La basura suele salir **al principio**, y jugando de corrido mucho rato se
+mide la mesa ya asentada. Por eso `jugar-celular.mjs --variado` hace una de estas
+cosas cada 40–80 s:
+
+- cambia de rival;
+- sale de la mesa y vuelve a entrar;
+- sale de la app y vuelve.
+
+Cada una queda anotada en la línea de tiempo. `--pixeles` cuenta cada cuadro según
+cuánto pasó desde la última **entrada**: llegar a la mesa, volver a la app o un
+rival nuevo. En la sesión hubo 18.
+
+| Rama | Cuadros | Sucios | Nacen /100 | 0–10 s | 10–30 s | 30–90 s |
+|---|---|---|---|---|---|---|
+| A | 535 | **7,9%** | 6,7 | 3,1% | **11,3%** | 5,0% |
+| S1 | 273 | 1,8% | 1,1 | 0% | 3,0% | 1,1% |
+| **S1m** (sólo la sombra de las cartas de la mano) | 429 | **0,5%** | 0,5 | 0% | 0% | 0,9% |
+
+- **En A, la basura se concentra a los 10–30 s de entrar**, no en los primeros 10.
+  En esos 10 s la mesa todavía está repartiendo.
+- **Con el arreglo, el principio también queda limpio.**
+- **S1m, sólo la mano, ya da 0,5%.** La sombra que importa es ésa, la que cae
+  sobre la palma.
+- Ojo: S1 tuvo pocos cuadros, porque su segundo tramo fue el de la falla de abajo.
+
+**Tres tropiezos de la sesión**:
+
+1. **El jugador quedó trabado detrás del cartel de "Gira nacional bloqueada".**
+   Santiago lo vio: "¿por qué estás en la pantalla de gira nacional?". Un toque cayó
+   sobre la tarjeta de la Gira y, de ahí en más, el jugador seguía tocando
+   "Partida rápida" debajo del cartel, durante ~1,5 min. Ahora sólo toca un botón si
+   es lo que está arriba en su centro (`elementFromPoint`), y cierra los carteles
+   ("Ahora no").
+2. **MIUI mató la app en segundo plano.** Fue en 1 de 6 salidas a Inicio, a los
+   ~15 s, y al volver era otro proceso. El inspector quedó colgado del proceso
+   muerto, y `medir-celular` se quedó esperando para siempre un `await`: no paraba
+   ni con Ctrl-C, hubo que matarla con KILL y cerrar el puente a mano. Arreglos:
+   - cada pedido al inspector tiene 5 s para volver;
+   - si la app pasa a ser otro proceso, la sesión se cierra sola;
+   - el jugador ya no sale de la app salvo con `--salir-app`.
+
+   Salir y volver se mide con **arranques en frío**, una sesión por arranque.
+3. **El teléfono se bloqueó** mientras las herramientas estaban colgadas. No se lo
+   desbloqueó: lo desbloqueó Santiago.
+
+Un dato que importa para la lentitud y para "al principio": **en este teléfono,
+salir de la app y volver puede ser un arranque en frío completo**, con pantalla de
+carga, ensayo y todo.
+
+#### Los arranques en frío, con la app como estaba (la de ANTES del arreglo)
+
+`frio.sh` (en el temporal; la receta está abajo) hace, una vuelta tras otra:
+
+1. cierra la app del todo (`am force-stop`);
+2. la abre (`am start`);
+3. espera a que el WebView publique el inspector. **Sin esa espera, la sesión no
+   engancha**: la tercera vuelta falló así;
+4. graba una sesión corta mientras el jugador juega variado unos 3 minutos.
+
+Fueron 4 vueltas. Santiago tuvo que desenchufar antes de las 4 con el APK
+arreglado.
+
+| Vuelta | Cuadros | Sucios |
+|---|---|---|
+| 1 | 308 | 14,3% |
+| 2 | 309 | 9,4% |
+| 3 | 296 | 10,5% |
+| 4 (cortada) | 100 | 9,0% |
+| **Total** | 1013 | **11,2%** (el primer minuto en la mesa: 10,9%) |
+
+Recién abierta es algo peor que jugando de corrido (7,9–8,6%), pero del mismo
+orden. **No se pudo medir el arranque en frío CON el arreglo.** Es lo primero
+que falta.
+
+#### El resto: qué lo dispara (análisis de todas las muestras)
+
+Se tomaron todos los bloques que **nacen** en las ocho sesiones del día. Para cada
+uno se miró qué se había tocado antes y cuánto antes. Se compararon dos grupos:
+A, y las ramas sin desenfoque (S0b, S1, S1m y B0).
+
+| | Nacimientos | Cada 100 cuadros | Después de… | Cuándo |
+|---|---|---|---|---|
+| A | 271 en 4308 cuadros | 6,3 | tirar una carta 48% · "Quiero" 25% · un canto 18% · el reparto 9% | 50% entre 0,5 y 1,5 s del toque |
+| Sin desenfoque | 25 en 3472 | **0,7** | tirar 52% · "Quiero" 44% · un canto 4% · el reparto 0% | 17 de 25 entre 0,5 y 1,5 s |
+
+- **El reparto, con el volteo 3D de las cartas, casi no aparece** (9% en A, 0 en
+  el resto). Queda descartado como causa.
+- **Los dos grupos nacen en los mismos momentos.** El desenfoque no es el
+  momento: multiplica por ~9 la probabilidad de que salga mal un redibujado que
+  igual iba a pasar.
+- Se miraron los restos uno por uno, con el cuadro de 600 ms antes y el de 250 ms
+  antes. Los tres casos muestran lo mismo: **la zona de la mano se redibuja
+  porque cambió algo encima o al lado de las cartas**.
+  1. La barra "Truco / Mazo" se prende: es tu turno, y además las cartas cambian
+     de clase (`habilitada`).
+  2. Se cierra el menú del envido, que estaba encima de las cartas.
+  3. Se tira una carta y el abanico se cierra.
+
+  El bloque cae en una carta o en la palma, al lado de lo que se redibujó. Es el
+  mismo patrón del 8/9 ("la basura empieza al abrir el menú de envido").
+- Las cartas y la mano no tienen `clipPath`, ni máscaras, ni filtros. Las
+  `opacity` de `Carta.tsx` y `Manos.tsx` son sobre figuras sueltas: Chromium las
+  pliega en el color y no crea capas. **Lo único que todavía pide una textura
+  auxiliar en esa zona es el `opacity: .999` de la hija de abajo de la escena**,
+  la que lleva la mano y los cantos.
+
+**Candidatas para el resto, en orden. NINGUNA está medida:**
+
+1. **P1b: una opacidad .999 por carta de la mano**, en lugar de, o además de, la
+   del grupo entero.
+   - A favor: el 10/9, en el menú, la opacidad en CADA carta fue lo que curó (de
+     879 px a 10), y la de los bloques grandes fue inerte.
+   - En contra: el 8/9, en el mapa, partir en 19 grupos dio 6,7 contra 1,8.
+2. **C1: la mano en su propia capa del compositor** (`will-change`), para que
+   tirar no redibuje la mesa de abajo. En contra: en el mapa salió 5 veces PEOR
+   (8/9).
+3. Que cambiar de turno no le cambie las clases a las cartas, para que no se
+   redibujen enteras.
+
+#### La decisión: qué se cambió, y por qué ESO y no otra cosa
+
+**Se cambió: todas las sombras de caja de la escena, sin desenfoque.**
+
+- Es lo único con evidencia fuerte: tres sesiones, pares alternados, el criterio
+  fijado antes de medir y cumplido (S1 ≤ 1,5% en 3 pares), y limpio también al
+  principio (sesión 3).
+- Se ve igual: medido píxel por píxel en la mesa real, y en las capturas de
+  `capturas/sombras/`.
+- Va en todas las sombras de caja y no sólo en la mano. Santiago ve basura
+  también en el mazo, donde están la muestra con su halo (el desenfoque más
+  grande de la mesa, 18 px) y las cartas del mazo con `shadow-lg`. Mi jugador no
+  la agarró ahí, pero la medición no ve todo lo que ve Santiago.
+- `Carta.tsx` lleva la clase `sombra-carta` también fuera de la mesa (el menú,
+  las lecciones). Se ve igual, y saca un desenfoque más del menú, que tuvo su
+  propio bug el 10/9.
+
+**No se cambió:**
+
+- **los `text-shadow` ni el desenfoque del rival**: TR0 se midió en 3 tramos y
+  queda igual o peor que A. La regla del 4/9 dice que lo medido inerte no entra;
+- **ninguna de las candidatas del resto**: sin el teléfono no se pueden medir, y
+  la historia de este bug tiene esos mismos cambios (opacidades y capas)
+  midiendo **5 a 12 veces PEOR** en otras pantallas. Metidos a ciegas, si la
+  prueba de Santiago sale mal no se sabría si falló el arreglo o lo empeoró el
+  agregado. Quedan como ramas listas (`P1b`, `C1`) para medirlas en diez
+  minutos la próxima vez.
+
+#### Los instrumentos, que quedan en el repo
+
+```bash
+node herramientas/medir-celular.mjs --sesion 27 --jpeg 90
+node herramientas/jugar-celular.mjs 25 CARPETA/jugador.log --variado --control CARPETA/control.txt
+node herramientas/medir-celular.mjs --pixeles CARPETA [--guardar 12] [--zona palma=x,y,w,h]
+node herramientas/sombras-duras.mjs --escribir
+```
+
+- La primera graba la sesión, con las ramas por `control.txt`.
+- La segunda juega en otra terminal. Su cerrojo va antes de cada toque:
+  - la actividad de arriba tiene que ser `.MainActivity`;
+  - la pantalla tiene que estar prendida;
+  - el botón tiene que ser lo de arriba de todo;
+  - si sale un anuncio, Atrás.
+- La tercera da por rama y por tramo: % de cuadros sucios, bloques que nacen,
+  dónde caen y segundos desde la entrada.
+- La cuarta escribe las sombras en `globals.css`.
+
+Las ramas de `medir-celular`:
+
+- **A** es ahora la mesa ARREGLADA.
+- **D0** devuelve las sombras desenfocadas de antes.
+- **S0b**, **TR0**, **B0**, **S1** y **S1m** son las de hoy.
+- **P1b** y **C1** son las candidatas para el resto.
+
+**Para no repetir los tropiezos del día:**
+
+- **Las sesiones se encadenan una detrás de la otra.** Si nadie toca, el
+  teléfono se bloquea, y se bloqueó dos veces.
+- **Nunca `pkill -f` con un texto que esté en el propio comando.** Se mata a sí
+  mismo: pasó tres veces. Se usa `pgrep -f "^node herramientas/…"`.
+- Los scripts del temporal se borraron **otra vez** (tercera). Lo que importa
+  está en `herramientas/`.
+
+#### Estado al cerrar
+
+- **Tests:** `npm test` da **319/319** · `tsc` limpio.
+- **Guardianes, todos TODO OK:** `mirar-mesa`, `mirar-mesa-nueva`,
+  `mirar-app-compilada` y `mirar-carga`. El de `mirar-mesa` ahora también
+  revisa sombras desenfocadas.
+- **Dos sabotajes** a `mirar-mesa`, y los dos dan FALLA:
+  - la sombra desenfocada de vuelta en la mano: "box-shadow con desenfoque" en
+    `[data-mano="tuya"]`;
+  - la de vuelta en las cartas del mazo: lo mismo en `[data-mesa="tabla"]`.
+
+  Los archivos volvieron idénticos (sha256).
+- **El build y el APK:** `next dev` había cambiado `next-env.d.ts` y se volvió a
+  dejar como estaba. El APK está compilado (22:08) y tiene las siete variables
+  `--sombra-*` adentro. **No está instalado.**
+- **Barrido de datos sensibles** con `/usr/bin/grep` sobre el diff y los dos
+  archivos nuevos: sin rutas de la máquina, correos, la serie del teléfono,
+  claves ni IPs. Las capturas quedan en `capturas/`, que está ignorado.
+
+**Revisión de seguridad:**
+
+- **`security-review`: sin hallazgos.** Ningún candidato llegó a 8/10. Se miró:
+  - **la app:** constantes, sin datos de la persona en el CSS, sin
+    `localStorage`, sin cambios en la CSP ni en el origen;
+  - **`sombras-duras.mjs`:** escribe sólo entre dos marcas fijas de
+    `globals.css`;
+  - **`jugar-celular.mjs`:** las coordenadas de `input tap` son números o
+    `NaN`, `spawnSync` va sin shell y no abre ningún puerto;
+  - **el puente:** sigue atado a una sola IP.
+
+  Dos notas que el revisor descartó por imposibles en la práctica se cerraron
+  igual, porque cuestan una línea cada una:
+  - las `nota` del jugador ahora van en una sola línea (un salto de línea en un
+    texto de la página sería otra orden de `control.txt`);
+  - el nombre de la rama se limpia antes de usarlo en el nombre de un PNG.
+- **`09-web-security`: limpio.**
+  - Las 208 líneas nuevas de la app no traen `url()`, `@import`, URLs ni `data:`.
+  - No hay `innerHTML` ni `eval`.
+  - No se lee `localStorage`.
+  - `layout.tsx`, `next.config.ts`, `capacitor.config.ts`, `android/` y `public/`
+    están intactos.
+- **`17-mobile-security`: no se corrió**, porque no se tocó Capacitor, ni el
+  `AndroidManifest`, ni nada nativo. El APK cambia sólo en el CSS y el JS de la
+  web.
+
+**Archivos tocados, sin commitear:**
+
+- **Nuevos:** `herramientas/jugar-celular.mjs` y `herramientas/sombras-duras.mjs`.
+- **De la app:** `app/globals.css`, `app/jugar/mesa/page.tsx`,
+  `components/Carta.tsx`, `components/mesa/Dialogo.tsx` y
+  `components/mesa/Medallon.tsx`.
+- **Herramientas:** `herramientas/bloques.mjs`, `herramientas/medir-celular.mjs`,
+  `herramientas/mirar-mesa.mjs` y `herramientas/puente-devtools.mjs`.
+- `Historial.md`.
+
+#### Pendiente, en orden
+
+1. **Que Santiago pruebe el APK nuevo** (`node herramientas/celular-usb.mjs --apk`).
+2. **Medirlo en el teléfono**: A (la mesa arreglada) contra D0 (las sombras de
+   antes), jugando variado y en arranques en frío, que es lo que no se llegó a
+   medir con el arreglo puesto. El criterio, fijado de antemano: ≤ 1% de
+   cuadros sucios y ≥ 5 veces menos que D0.
+3. **El resto**: P1b y C1 contra A, en pares alternados. Son pocos bloques (~0,7
+   cada 100 cuadros), así que hacen falta tramos largos: al menos 6 pares.
+4. Lo que sigue de la sesión del 7/10:
+   - las cartas enseñadas que caen corridas, sobre el mazo;
+   - decidir si la pantalla de carga sigue esperando a AdMob.
+
+#### Todo lo probado contra los píxeles, del 1/9 al 8/10
+
+| Fecha | Qué se probó | Resultado | Veredicto |
+|---|---|---|---|
+| 1/9 | Sacar el `filter` de adentro de la mano, que se apagaba con `opacity` | la banda de la mano bajó ~7 veces | sirvió |
+| 4/9 | Sacar los 9 filtros de la escena (blur animado, drop-shadow, backdrop-blur) | medido por el espejo de Windows, no se pudo decidir; el 5/9 se atribuyó ~7× a 1/9+4/9 | sirvió (quedó) |
+| 4/9 | Trazos sub-píxel de las cartas (piso de grosor) | 2,07 → 2,08 | no era |
+| 4/9 | "Se rompe al tocar" (`:hover` y transiciones en el celular) | nada cambia al tocar | no era |
+| 5/9 | `mix-blend-mode` | medición inválida (pestañas nuevas) | sin dato |
+| 7/9 | El apagado de la mano (`opacity` del grupo) | la banda de la mano se fue | sirvió |
+| 7/9 | `.anim-pop` con `both` → `backwards`; el rebote del sombrero del mapa | menos capas (45 → 21) | quedó (no medido en basura) |
+| 8/9 | Mapa: alto fijo, sin cambio de tamaño al abrir la ficha | 40/40 → 0/40 | sirvió |
+| 8/9 | Sin el `feTurbulence` del mapa | 40/40 igual | no era |
+| 8/9 | Aplanar los 37 grupos con `opacity` del mapa | 12 veces PEOR | no |
+| 8/9 | `opacity .999` en `.escena > *` y en `.mapa-gira > *` | mesa 9/21 → 0/26 · mapa 1,8 → 0,0 | sirvió (sigue) |
+| 8/9 | `will-change` / `translateZ` en el mapa | 5 veces PEOR | no |
+| 8/9 | `isolation`, `contain: paint` | igual | no |
+| 8/9 | `android:hardwareAccelerated="false"` | igual | no |
+| 8/9 | Banderas de Chromium por `webview-command-line` | el teléfono no las lee | vía cerrada |
+| 10/9 | Menú: `opacity` en cada carta | 879 → 10 px | sirvió (sigue) |
+| 10/9 | Menú: `opacity` en los 3 bloques de la pantalla | inerte | no |
+| 10/9 | El cambio de tamaño del `body` en cada vuelta | pasa en todas, limpias y sucias | no era |
+| 7/10 | L2: sacar `.escena > * {opacity .999}` | peor, y la basura por toda la mesa | no |
+| 7/10 | P4: OpenGL (`debug.hwui.renderer=skiagl`) | sin basura | confirmado: es el camino Vulkan |
+| 7/10 | P5: `use_partial_updates=false` | igual | no |
+| 8/10 | M0: animaciones de 1 ms | igual | no |
+| 8/10 | D1: recomponer toda la pantalla en cada cuadro | igual | no (hay que re-rasterizar) |
+| 8/10 | B0: sin ningún desenfoque en la escena | 9,8% → 0,7% | sirvió |
+| 8/10 | S0b: sin `box-shadow` | 8,6% → 1,2% · 8,3% → 0,7% | sirvió |
+| 8/10 | TR0: sin `text-shadow` ni el `feGaussianBlur` del rival | 11,2% · 12,1% | no |
+| 8/10 | **S1: las sombras de caja sin desenfoque (lo que quedó)** | 8,3% → 0,8% · variado 7,9% → 1,8% | **sirvió (aplicado)** |
+| 8/10 | S1m: sólo la sombra de las cartas de la mano | variado 7,9% → 0,5% | sirvió |
+| 8/10 | Volteo 3D del reparto como disparador | 9% de los nacimientos en A, 0% sin desenfoque | no es |
+
+---
+
 ## 2026-10-07 — Medir primero: los píxeles son del camino Vulkan, y lo lento es rasterizar
 
 **Sesión cortada por límite de uso, sin cierre completo (ver Pendiente).**
@@ -20,8 +653,13 @@ Método pedido por Santiago: medir → hipótesis → arreglo → medir → info
 Santiago toca, Claude mide.
 
 ### Instrumentos nuevos
-- `capacitor.config.ts`: el inspector se prende SÓLO con `INSPECCIONAR_WEBVIEW=1`
-  (`celular-usb.mjs --apk --inspeccionable`); el archivo dice `false` siempre.
+- ~~`capacitor.config.ts`: el inspector se prende SÓLO con `INSPECCIONAR_WEBVIEW=1`
+  (`celular-usb.mjs --apk --inspeccionable`); el archivo dice `false` siempre.~~
+  **CORREGIDO el 8/10: eso se sacó esa misma noche.** El WebView de Android
+  publica DevTools en TODO APK de depuración, diga lo que diga
+  `webContentsDebuggingEnabled`. Ese `false` sólo manda en el APK de release.
+  `--inspeccionable` e `INSPECCIONAR_WEBVIEW` ya no existen. Las herramientas de
+  medir andan con el `--apk` de siempre. El detalle está en la entrada del 8/10.
 - `herramientas/puente-devtools.mjs`: el puente sacado de `rig-celular.mjs`; elige
   el socket por el PID de la app (no se mete en el WebView de los anuncios).
 - `herramientas/medir-celular.mjs`: `--sesion` (cuadros por screencast, Event
@@ -56,8 +694,8 @@ Santiago toca, Claude mide.
   barrido (`enseñadas && !barrida`). Sin probar en el teléfono todavía.
 
 ### Pendiente (en orden)
-1. **Reinstalar el APK normal** (el instalado tiene el inspector): `node
-   herramientas/celular-usb.mjs --apk`, aceptar el cartel de MIUI.
+1. ~~**Reinstalar el APK normal** (el instalado tiene el inspector)~~. No hacía
+   falta: el APK de depuración es inspeccionable siempre (ver la entrada del 8/10).
 2. Revisión de seguridad (`security-review`, `17-mobile-security`, `09-web-security`),
    `npm test`, `tsc`, guardianes de Playwright: NO se corrieron.
 3. Próximo experimento: rama **M0** (animaciones de 1 ms) para ver si la basura sale

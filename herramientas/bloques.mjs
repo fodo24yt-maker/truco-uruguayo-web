@@ -37,6 +37,28 @@
  *
  * Por eso este número es el que hay que mirar al cambiar el dibujo.
  *
+ * ── La causa, corregida dos veces: leer antes de creer lo de arriba ───────
+ *
+ * El 10/9 Santiago mostró que la basura del menú es DEL COLOR DE LA PANTALLA
+ * ANTERIOR, y el modelo pasó a ser "un mosaico viejo que se reusa sin
+ * terminar de taparse" (`Historial.md`, 10/9). La FORMA de arriba sigue
+ * siendo cierta.
+ *
+ * El 7 y el 8/10, en la mesa, se midió esto:
+ *
+ *   · con OpenGL (`debug.hwui.renderer=skiagl`) no hay basura, y con Vulkan
+ *     sí: es el camino Vulkan del driver de la Mali;
+ *   · un bloque que la GPU no limpia se va OSCURECIENDO de a poco: cada vez
+ *     que se redibuja la zona, la sombra semitransparente del mate se vuelve
+ *     a mezclar encima (73→62→52→39→18→…→10 en 40 s);
+ *   · sacar los DESENFOQUES de la escena (`box-shadow`, `text-shadow` y
+ *     `filter`) la baja ~15 veces.
+ *
+ * Las dos cosas son ciertas a la vez: los sub-bloques de 4×4 de la textura
+ * del mosaico quedan sin escribir (de ahí el color viejo y la forma), y lo
+ * que más lo provoca son los dibujos que obligan a Skia a usar texturas
+ * auxiliares, como los desenfoques. Detalle y números en `Historial.md`, 8/10.
+ *
  * ── Cómo los encuentra ────────────────────────────────────────────────────
  *
  * La paleta del proyecto es CÁLIDA en todos lados: la madera, el pergamino y
@@ -334,4 +356,92 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log("  bloques    4×4 grises y planos, en la grilla de compresión (5/9/2026)");
   console.log("  cromáticas 1 px CSS de un color que su vecindario no puede explicar (7/9/2026)");
   console.log("Sirven para comparar un antes con un después de la MISMA pantalla.\n");
+}
+
+// ── Los bloques PLANOS de cualquier color (7–8/10/2026) ───────────────────
+
+/* `bloquesDe` busca bloques NEUTROS (grises, blancos), y eso fue cierto el 5/9.
+   La basura que sigue en la mesa desde el 7/10 es de colores "imposibles"
+   para el lugar —negro, verde amarillento, violeta, azul, rosa— y él da 0
+   sobre ella. Esto busca la misma forma sin pedir el color:
+
+     · un cuadrado de 4×4 px de pantalla PERFECTAMENTE PLANO (cada canal varía
+       menos de `PLANO_4`: el JPEG del screencast mete algo de ruido);
+     · ALINEADO a la grilla de 4 DE LA CAPA de la mesa, que arranca en el borde
+       de arriba de la escena (en el Redmi, y=158 px de pantalla: por eso los
+       bloques caen en x≡0, y≡2 mod 4). Es el sub-bloque de la compresión AFBC
+       de las Mali;
+     · distinto de lo que lo rodea: al menos `ANILLO_4` de los 20 píxeles del
+       anillo se separan `SALTO_4` o más de su color;
+     · de un color ÚNICO en el vecindario (radio 10, a lo sumo 3 píxeles
+       gemelos). Sin esto, los dos puntos de "GANÁS LA MANO: +1" —planos y
+       cuadrados igual que la basura— contaban: su color está en las letras de
+       al lado, y el de la basura viene de otro lado.
+
+   **El control va siempre al lado**: la misma prueba con la grilla corrida
+   2 px, donde la basura no cae. Si el control sube, lo que se está contando
+   es dibujo y no basura.
+
+   Calibrado contra la sesión con OpenGL del 7/10 (`19-55`, donde Santiago no
+   vio basura): 0 bloques en todos los cuadros. Con Vulkan, la misma mesa da
+   bloques en ~10% de los cuadros, y el control queda en 0.
+
+   Fue un archivo del temporal (`bloques4.mjs`) que se perdió con él. Se
+   reconstruyó el 8/10 del registro de la sesión, y se comprobó que da lo
+   mismo que esa noche, número por número (A 26/315, 35/322, 18/170; B0 3/271,
+   0/325, 3/335). */
+const PLANO_4 = 30;
+const SALTO_4 = 45;
+const ANILLO_4 = 0.8;
+const RADIO_GEMELOS = 10;
+const MAX_GEMELOS = 3;
+
+/**
+ * Los bloques planos de un cuadro.
+ *
+ * @param data  los píxeles crudos, RGB (3 canales), fila por fila
+ * @param ox,oy el origen de la grilla de 4 (la capa de la mesa)
+ * @param y0,y1 la franja a mirar (la escena), en px de pantalla
+ * @returns `[{ x, y, rgb }]`, con (x, y) la esquina de arriba a la izquierda
+ */
+export function bloquesPlanosDe(data, W, H, ox, oy, y0, y1) {
+  const out = [];
+  const px = (x, y, k) => data[(y * W + x) * 3 + k];
+  for (let y = y0 + (((oy - y0) % 4) + 4) % 4; y + 5 < Math.min(H, y1); y += 4) {
+    if (y < 1) continue;
+    for (let x = ox; x + 5 < W; x += 4) {
+      if (x < 1) continue;
+      const lo = [255, 255, 255], hi = [0, 0, 0], s = [0, 0, 0];
+      for (let dy = 0; dy < 4; dy++)
+        for (let dx = 0; dx < 4; dx++)
+          for (let k = 0; k < 3; k++) {
+            const v = px(x + dx, y + dy, k);
+            if (v < lo[k]) lo[k] = v;
+            if (v > hi[k]) hi[k] = v;
+            s[k] += v;
+          }
+      if (hi[0] - lo[0] > PLANO_4 || hi[1] - lo[1] > PLANO_4 || hi[2] - lo[2] > PLANO_4) continue;
+      const m = s.map((v) => v / 16);
+      const lejos = (xx, yy, umbral) => {
+        let d = 0;
+        for (let k = 0; k < 3; k++) d = Math.max(d, Math.abs(px(xx, yy, k) - m[k]));
+        return d >= umbral;
+      };
+      let distintos = 0, total = 0;
+      const mirar = (xx, yy) => { total++; if (lejos(xx, yy, SALTO_4)) distintos++; };
+      for (let dx = -1; dx <= 4; dx++) { mirar(x + dx, y - 1); mirar(x + dx, y + 4); }
+      for (let dy = 0; dy < 4; dy++) { mirar(x - 1, y + dy); mirar(x + 4, y + dy); }
+      if (distintos / total < ANILLO_4) continue;
+      let gemelos = 0;
+      for (let yy = y - RADIO_GEMELOS; yy < y + 4 + RADIO_GEMELOS; yy++)
+        for (let xx = x - RADIO_GEMELOS; xx < x + 4 + RADIO_GEMELOS; xx++) {
+          if (xx >= x - 1 && xx <= x + 4 && yy >= y - 1 && yy <= y + 4) continue;
+          if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+          if (!lejos(xx, yy, 24)) gemelos++;
+        }
+      if (gemelos > MAX_GEMELOS) continue;
+      out.push({ x, y, rgb: m.map(Math.round) });
+    }
+  }
+  return out;
 }

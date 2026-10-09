@@ -135,6 +135,16 @@ for (const [w, h] of TAMANOS) {
                 con.push(`${sel} ${el.tagName.toLowerCase()}: ${cs.filter}`);
               if (cs.backdropFilter && cs.backdropFilter !== "none")
                 con.push(`${sel} ${el.tagName.toLowerCase()}: backdrop ${cs.backdropFilter}`);
+              /* ── NI UNA SOMBRA DE CAJA DESENFOCADA (8/10/2026) ────────────
+                 Un `box-shadow` con radio de desenfoque > 0 también rompía en
+                 el Redmi: la basura caía sobre la palma y las cartas de la
+                 mano (8,3% de los cuadros con desenfoque, 0,8% sin él, medido
+                 en el teléfono). Las sombras son las mismas, hechas con capas
+                 de radio 0 que escribe `sombras-duras.mjs` en `globals.css`.
+                 Los `text-shadow` NO entran acá: se midió que no cambian nada. */
+              const desenfocadas = [...cs.boxShadow.matchAll(/(-?[\d.]+)px (-?[\d.]+)px ([\d.]+)px/g)].filter((m) => +m[3] > 0);
+              if (desenfocadas.length)
+                con.push(`${sel} ${el.tagName.toLowerCase()}.${(el.getAttribute("class") || "").split(" ")[0]}: box-shadow con desenfoque (${desenfocadas.length} de sus sombras)`);
             }
             if (zona.querySelector("filter")) con.push(`${sel}: hay un <filter> declarado`);
           }
