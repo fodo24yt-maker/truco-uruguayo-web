@@ -52,6 +52,7 @@ import { caraDe } from "@/lib/caras";
 import { porSlugDeDepartamento } from "@/lib/gira";
 import { botonera } from "@/lib/botonera";
 import { cartasEnMesa } from "@/lib/cartas-en-mesa";
+import { BAZA, uDeBaza, uDeEnseñada, uEnFila, vDeFila } from "@/lib/lugares-en-mesa";
 import { tantosAlCierre } from "@/lib/tantos-al-cierre";
 import {
   anotarPartida,
@@ -262,15 +263,10 @@ const MESA: DisenoDeMesa = {
      tres veces por lo mismo: la medida del objeto, el tamaño de la escena y la
      escala en perspectiva se multiplican y no se pueden separar leyendo. */
   mate: { u: 0.78, v: 0.34, alto: "min(23cqw, 22.5cqh)" },
-  /* Las bazas bajaron el 2/9/2026: con las dos puestas y el mate al costado, la
-     mitad de la mesa quedaba ocupada y no se veía la madera. */
-  baza: {
-    suya: 0.46,
-    tuya: 0.64,
-    ganador: 0.31,
-    ancho: "min(14cqw, 15cqh)",
-    paso: 0.13,
-  },
+  /* Las bazas viven en `lib/lugares-en-mesa.ts` desde el 9/10/2026, con su
+     historia: ahí está también dónde cae cada carta enseñada, y de ahí las lee
+     `mirar-mesa-nueva.mjs` para medir todos los lugares posibles. */
+  baza: BAZA,
   reparto: { v: 0.22, ancho: "min(10cqw, 9.5cqh)" },
 };
 
@@ -861,13 +857,28 @@ function Mesa() {
   );
 
   /**
+   * LAS CARTAS QUE TENÉS EN LA MANO, que es lo que se dibuja en el abanico.
+   *
+   * Las que se apoyaron sobre la mesa no están (ver arriba), y con el barrido
+   * no queda ninguna: lo que te quedaba se va con la mesa, que es lo que eligió
+   * Santiago el 9/10/2026 para que cada reparto arranque igual —la mano entra
+   * desde abajo con la primera carta— en vez de bajar y volver a subir.
+   *
+   * DE ACÁ SALE TODO lo de abajo: el abanico, su ancho y si la mano se dibuja.
+   * Hasta ese día el ancho contaba `p.cartas.vos` y no lo que había en el
+   * abanico, así que cuando TUS cartas se enseñaban quedaba una mano grande y
+   * vacía; y con la última tirada quedaba un puño pelado hasta el reparto.
+   */
+  const enAbanico = barrida ? [] : p.cartas.vos.filter((carta) => !enMesaMias.has(carta));
+
+  /**
    * El ancho del abanico, para que la mano lo siga.
    *
    * Las cartas se montan 16px entre vecinas (el `-mx-2` de cada una). Si la mano
    * se dimensionara con un múltiplo fijo del ancho de UNA carta, al quedarte una
    * sola seguiría siendo la mano de tres y taparía media pantalla.
    */
-  const nCartas = p.cartas.vos.length;
+  const nCartas = enAbanico.length;
 
   /**
    * Cuántas bazas tienen algo puesto, y en qué lugar va cada una.
@@ -877,8 +888,7 @@ function Mesa() {
    * corrido media posición a la izquierda y la mesa se vería torcida.
    */
   const bazasJugadas = p.bazas.filter((b) => b.vos || b.rival).length;
-  const lugarDeBaza = (i: number) =>
-    (i - (Math.max(bazasJugadas, 1) - 1) / 2) * d.baza.paso;
+  const lugarDeBaza = (i: number) => uDeBaza(i, bazasJugadas);
   const anchoAbanico = `calc(${nCartas} * ${d.mano.ancho} - ${Math.max(0, nCartas - 1) * 16}px)`;
   /**
    * EL ANCHO DE LA MANO. Ojo: NO es el del abanico.
@@ -1259,7 +1269,7 @@ function Mesa() {
                   <div
                     data-mesa="baza"
                     className={barrida ? "anim-al-mazo" : undefined}
-                    style={alMazo(0.5 + lugarDeBaza(i), d.baza.suya, i * 2)}
+                    style={alMazo(uEnFila("rival", lugarDeBaza(i), ladoMazo), vDeFila("rival"), i * 2)}
                   >
                     <CartaApoyada
                       carta={baza.rival}
@@ -1273,8 +1283,8 @@ function Mesa() {
                     data-mesa="baza"
                     className={barrida ? "anim-al-mazo" : undefined}
                     style={alMazo(
-                      0.53 + lugarDeBaza(i),
-                      d.baza.tuya,
+                      uEnFila("vos", lugarDeBaza(i), ladoMazo),
+                      vDeFila("vos"),
                       i * 2 + 1,
                     )}
                   >
@@ -1288,7 +1298,7 @@ function Mesa() {
                 {baza.ganador && (
                   <div
                     className={barrida ? "anim-al-mazo" : undefined}
-                    style={alMazo(0.5 + lugarDeBaza(i), d.baza.ganador, i * 2)}
+                    style={alMazo(uEnFila("rival", lugarDeBaza(i), ladoMazo), d.baza.ganador, i * 2)}
                   >
                     <span /* `text-shadow` y no `drop-shadow`: el segundo es un `filter` y
                           sobre texto chico dentro de un contenedor que la
@@ -1326,7 +1336,14 @@ function Mesa() {
                    jugado: si estas cartas entraran en esa cuenta, todas las
                    que ya están apoyadas se correrían de golpe. "La mesa no
                    se mueve" es justo lo que vigila `mirar-mesa-nueva.mjs`.
-                   Éstas caen al costado, que es donde se apoyan de verdad. */}
+                   Éstas caen al costado, que es donde se apoyan de verdad.
+
+                ── Y AL COSTADO CONTRARIO AL MAZO (9/10/2026) ─────────────
+                Hasta ese día caían siempre a la derecha, y con la mano
+                cortada temprano la tercera quedaba ENCIMA del mazo —tapando
+                la muestra— cuando el mazo estaba a la derecha. Ahora las que
+                caen afuera del grupo van hacia el lado libre. La regla y el
+                porqué están en `uDeEnseñada` (`lib/lugares-en-mesa.ts`). */}
             {enMesa.cartas.map((c) => (
               <div
                 key={`${c.quien}-${c.carta.numero}-${c.carta.palo}`}
@@ -1334,8 +1351,8 @@ function Mesa() {
                 className={barrida ? "anim-al-mazo" : undefined}
                 style={{
                   ...alMazo(
-                    (c.quien === "rival" ? 0.5 : 0.53) + lugarDeBaza(c.baza),
-                    c.quien === "rival" ? d.baza.suya : d.baza.tuya,
+                    uEnFila(c.quien, uDeEnseñada(c.baza, bazasJugadas, ladoMazo), ladoMazo),
+                    vDeFila(c.quien),
                     c.baza * 2 + (c.quien === "rival" ? 0 : 1),
                   ),
                   // escalonadas, para que se lea el gesto de ir dándolas vuelta
@@ -1540,7 +1557,13 @@ function Mesa() {
                 cuesta una sesión. */}
             <div
               /* El agarre con el que `mirar-mesa.mjs` comprueba que acá adentro
-                 no haya ni un `filter`. Ver el comentario de arriba. */
+                 no haya ni un `filter`. Ver el comentario de arriba.
+
+                 Y ES LO QUE VA EN SU PROPIA CAPA (11/10/2026): `globals.css`
+                 le pone `will-change: transform` a `[data-mano="tuya"]`, y eso
+                 se llevó el resto de los cuadraditos de las cartas. Si este
+                 agarre cambia de nombre, la regla deja de aplicar en silencio;
+                 `mirar-mesa.mjs` lo agarra. */
               data-mano="tuya"
               className="pointer-events-auto"
             >
@@ -1557,8 +1580,12 @@ function Mesa() {
                   —el tanto de una mano cerrada no lo vas a cantar—: es que
                   justo ahí aparece el papel de "acá está mi flor", que sale de
                   este mismo lado, y las dos cosas quedaban una encima de la
-                  otra. */}
-              {ayudas && carasArriba && p.fase === "jugando" && (
+                  otra.
+
+                  Y SIN CARTAS EN LA MANO TAMPOCO (9/10/2026): habla de tus
+                  cartas, y desde que la mano se va al quedarse vacía quedaba
+                  flotando sola sobre la madera. */}
+              {ayudas && carasArriba && p.fase === "jugando" && nCartas > 0 && (
                 <p className="relative z-10 mb-2 text-center font-[family-name:var(--font-ui)] text-[11px] uppercase leading-tight tracking-wide text-dorado [text-shadow:0_1px_3px_rgba(0,0,0,0.95)] sm:text-xs">
                   {miFlor.tiene ? (
                     <>
@@ -1582,47 +1609,69 @@ function Mesa() {
 
               {/* LAS CARTAS VAN ENTRE LOS DEDOS. El dorso de la mano se dibuja
                   antes que el abanico y el pulgar después: por eso son dos
-                  piezas y no una. */}
+                  piezas y no una.
+
+                  ── SIN CARTAS NO HAY MANO (9/10/2026) ─────────────────────
+                  Las dos piezas existen sólo mientras hay algo en el abanico
+                  (`enAbanico`, arriba). Se DESMONTAN, no se apagan: ni
+                  `opacity: 0`, ni `visibility`, ni una animación de salida que
+                  quede pegada con `forwards`. Una opacidad sobre la mano es lo
+                  que dejaba la banda de rayas del 7/9, y una animación pegada
+                  mantiene viva su capa (ver `.anim-pop` en `globals.css`).
+                  Desmontada, en el teléfono es un redibujado y nada más.
+
+                  `data-pieza` es el agarre de `mirar-mesa-nueva.mjs`, que
+                  comprueba que no salten al repartir y que se vayan sin cartas.
+
+                  ── EL DORSO SE CENTRA CON `transform`, NO CON `-translate-x-1/2`
+                  En Tailwind 4 esa clase escribe la propiedad `translate`, que
+                  es la MISMA que anima `anim-entra-mano`: mientras subía, la
+                  animación le pisaba el −50% y la palma entraba corrida media
+                  mano a la derecha (141 px a 390×844), con el pulgar en su
+                  lugar, y al terminar saltaba. Es "la mano se mueve del lugar"
+                  que vio Santiago el 9/10/2026. */}
               <div
                 className="relative flex items-end justify-center"
                 style={{ paddingBottom: `calc(0.26 * ${d.mano.ancho})` }}
               >
-                <span
-                  className={`pointer-events-none absolute left-1/2 z-0 -translate-x-1/2 ${
-                    repartiendo ? "anim-entra-mano" : ""
-                  }`}
-                  style={{
-                    bottom: `calc(-0.06 * ${d.mano.ancho})`,
-                    width: anchoMano,
-                    animationDelay: `${retrasoDeReparto("vos", 0, soyMano)}ms`,
-                  }}
-                >
-                  <DedosAtras ancho="100%" luz={ambiente.luz} />
-                </span>
+                {nCartas > 0 && (
+                  <span
+                    data-pieza="dedos"
+                    className={`pointer-events-none absolute left-1/2 z-0 ${
+                      repartiendo ? "anim-entra-mano" : ""
+                    }`}
+                    style={{
+                      bottom: `calc(-0.06 * ${d.mano.ancho})`,
+                      width: anchoMano,
+                      transform: "translateX(-50%)",
+                      animationDelay: `${retrasoDeReparto("vos", 0, soyMano)}ms`,
+                    }}
+                  >
+                    <DedosAtras ancho="100%" luz={ambiente.luz} />
+                  </span>
+                )}
 
                 <div className="mano-abanico relative z-10 flex justify-center">
                   {/* Las que ya se apoyaron sobre la mesa NO se dibujan
                       acá: si no, la misma carta se ve dos veces, en la mano y
                       en la mesa. */}
-                  {p.cartas.vos
-                    .filter((carta) => !enMesaMias.has(carta))
-                    .map((carta, i, quedan) => (
-                      <CartaEnMano
-                        key={`${carta.numero}-${carta.palo}`}
-                        carta={carta}
-                        posicion={i}
-                        total={quedan.length}
-                        pieza={ayudas && esPieza(carta, p.muestra)}
-                        habilitada={miTurno && b.jugar}
-                        tapada={!carasArriba}
-                        viajando={faseReparto === "repartiendo"}
-                        retrasoViaje={retrasoDeReparto("vos", i, soyMano)}
-                        retrasoVolteo={i * ENTRE_VOLTEOS}
-                        desdeX={ladoMazo === "izquierda" ? -140 : 140}
-                        ancho={d.mano.ancho}
-                        onClick={() => hacer({ tipo: "jugar", carta })}
-                      />
-                    ))}
+                  {enAbanico.map((carta, i, quedan) => (
+                    <CartaEnMano
+                      key={`${carta.numero}-${carta.palo}`}
+                      carta={carta}
+                      posicion={i}
+                      total={quedan.length}
+                      pieza={ayudas && esPieza(carta, p.muestra)}
+                      habilitada={miTurno && b.jugar}
+                      tapada={!carasArriba}
+                      viajando={faseReparto === "repartiendo"}
+                      retrasoViaje={retrasoDeReparto("vos", i, soyMano)}
+                      retrasoVolteo={i * ENTRE_VOLTEOS}
+                      desdeX={ladoMazo === "izquierda" ? -140 : 140}
+                      ancho={d.mano.ancho}
+                      onClick={() => hacer({ tipo: "jugar", carta })}
+                    />
+                  ))}
                 </div>
 
                 {/* El pulgar se mide contra LA MANO, no contra una carta.
@@ -1631,19 +1680,22 @@ function Mesa() {
                     entera: la proporción se rompía justo en el caso que se veía
                     mal. 0,48 es la proporción que YA tenía con tres cartas, así
                     que con tres no cambia nada y con una y dos se arregla. */}
-                <span
-                  className={`pointer-events-none absolute left-1/2 z-20 ${
-                    repartiendo ? "anim-entra-mano" : ""
-                  }`}
-                  style={{
-                    bottom: `calc(-0.068 * (${anchoMano}))`,
-                    width: `calc(0.48 * (${anchoMano}))`,
-                    transform: "translateX(-56%)",
-                    animationDelay: `${retrasoDeReparto("vos", 0, soyMano)}ms`,
-                  }}
-                >
-                  <PulgarAdelante ancho="100%" luz={ambiente.luz} />
-                </span>
+                {nCartas > 0 && (
+                  <span
+                    data-pieza="pulgar"
+                    className={`pointer-events-none absolute left-1/2 z-20 ${
+                      repartiendo ? "anim-entra-mano" : ""
+                    }`}
+                    style={{
+                      bottom: `calc(-0.068 * (${anchoMano}))`,
+                      width: `calc(0.48 * (${anchoMano}))`,
+                      transform: "translateX(-56%)",
+                      animationDelay: `${retrasoDeReparto("vos", 0, soyMano)}ms`,
+                    }}
+                  >
+                    <PulgarAdelante ancho="100%" luz={ambiente.luz} />
+                  </span>
+                )}
               </div>
             </div>
           </div>

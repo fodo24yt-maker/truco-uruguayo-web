@@ -4,6 +4,7 @@
  *     node herramientas/celular-usb.mjs            → vista previa EN VIVO en el celular
  *     node herramientas/celular-usb.mjs --apk      → compila el APK, lo instala y lo abre
  *     node herramientas/celular-usb.mjs --compilar → sólo deja el .apk, sin instalar
+ *     node herramientas/celular-usb.mjs --instalar X.apk → instala ESE apk, sin compilar
  *     node herramientas/celular-usb.mjs --foto     → una foto del celular, sin pérdida
  *     node herramientas/celular-usb.mjs --vigilar  → 5 fotos seguidas y las compara
  *     node herramientas/celular-usb.mjs --tiempos [N] → cuánto tarda en abrir, N veces
@@ -95,6 +96,13 @@ const j = args.indexOf("--vigilar");
    comparaciones sin que la espera se vuelva molesta. */
 const cuantasFotos = j === -1 ? 5 : Number(args[j + 1]) || 5;
 const medirTiempos = args.includes("--tiempos");
+/* `--instalar X.apk` (11/10/2026): instala un APK que ya existe, sin compilar.
+   Nació para medir un APK contra otro —el de un commit viejo contra el del
+   árbol— instalándolos por turno. Va con `-r` como siempre: si los dos los
+   compiló esta máquina tienen la misma clave de depuración y el progreso de la
+   gira queda. Nunca desinstala. */
+const iInstalar = args.indexOf("--instalar");
+const apkAInstalar = iInstalar === -1 ? null : args[iInstalar + 1];
 const k = args.indexOf("--tiempos");
 const cuantasVeces = k === -1 ? 3 : Math.min(10, Number(args[k + 1]) || 3);
 const conApk = args.includes("--apk") || soloCompilar;
@@ -223,7 +231,7 @@ function compilar() {
 
 // ── Instalar ────────────────────────────────────────────────────────────────
 
-function instalar(celular) {
+function instalar(celular, apk = APK) {
   /* El APK vive en el disco de Linux. `adb.exe` es un programa de Windows y
      leerlo por `\\wsl.localhost\...` es un sistema de archivos de red que a
      veces le cuesta. Copiarlo primero al temporal de Windows son 10 MB y saca
@@ -231,7 +239,7 @@ function instalar(celular) {
   const temp = variableDeWindows("TEMP");
   if (!temp) morir("No pude leer %TEMP% de Windows.");
   const destinoLinux = path.join(aLinux(temp), "truco-uruguayo-debug.apk");
-  copyFileSync(APK, destinoLinux);
+  copyFileSync(apk, destinoLinux);
 
   console.log(`\n── Instalando en ${celular.serie}`);
   const r = adb("install", "-r", aWindows(destinoLinux));
@@ -452,6 +460,11 @@ if (desinstalar) {
   await fotos(elCelular(), vigilar ? cuantasFotos : 1);
 } else if (medirTiempos) {
   await tiempos(elCelular(), cuantasVeces);
+} else if (apkAInstalar !== null) {
+  if (!apkAInstalar || !apkAInstalar.endsWith(".apk") || !existsSync(apkAInstalar)) {
+    morir("Uso:  node herramientas/celular-usb.mjs --instalar ARCHIVO.apk  (y que exista)");
+  }
+  instalar(elCelular(), apkAInstalar);
 } else if (soloCompilar) {
   compilar();
   console.log(`\nPara instalarlo:  node herramientas/celular-usb.mjs --apk\n`);

@@ -152,6 +152,20 @@ for (const [w, h] of TAMANOS) {
           /* Hay mesa pero falta un agarre: el guard se quedó ciego de ese
              lado y eso ES la falla, no un detalle. */
           for (const sel of faltan) con.push(`${sel}: EL AGARRE NO ENGANCHA — esta zona quedó sin revisar`);
+          /* ── LAS DOS DEFENSAS DE LA MANO (11/10/2026) ─────────────────────
+             Medidas en el Redmi (`globals.css` y `Historial.md`, 11/10): la
+             mano en su propia capa se lleva el resto de los cuadraditos, y la
+             opacidad .999 del grupo de abajo de la escena, si se saca, los
+             duplica. Las dos parecen sobrar mirando el código: por eso acá. */
+          const mano = document.querySelector('[data-mano="tuya"]');
+          if (mano) {
+            if (!/transform/.test(getComputedStyle(mano).willChange))
+              con.push(`[data-mano="tuya"]: perdió su capa propia (will-change: ${getComputedStyle(mano).willChange})`);
+            let abajo = mano;
+            while (abajo.parentElement && !abajo.parentElement.classList.contains("escena")) abajo = abajo.parentElement;
+            if (abajo.parentElement && !(Number(getComputedStyle(abajo).opacity) < 1))
+              con.push(`el grupo de abajo de la escena perdió su opacity .999 (tiene ${getComputedStyle(abajo).opacity})`);
+          }
           return con;
         })(),
         /* ── LA TIRA DE CANTOS NO PUEDE TAPAR UNA CARTA ────────────────────
@@ -193,9 +207,9 @@ for (const [w, h] of TAMANOS) {
       if (scroll || tapada || conFiltro || cartaTapada) {
         fallos++;
         console.log(`FALLA ${w}x${h} [${etiqueta}] scroll=${scroll} manoTapada=${tapada} ` +
-          `filtroEnLaEscena=${conFiltro} cartaTapadaPorLosCantos=${cartaTapada} ` +
+          `dibujoPeligroso=${conFiltro} cartaTapadaPorLosCantos=${cartaTapada} ` +
           `doc=${m.doc} vis=${m.vis} manoAbajo=${m.mano?.abajo?.toFixed(0)} barraArriba=${m.barra?.toFixed(0)}`);
-        if (conFiltro) console.log(`  filtros: ${m.filtros.join(" | ")}`);
+        if (conFiltro) console.log(`  en la escena: ${m.filtros.join(" | ")}`);
         if (cartaTapada)
           console.log(`  la tira de cantos ocupa ${m.cartas.filas} fila(s) de ${m.cartas.alto}px y deja ` +
             `${m.cartas.libre.join("/")}px de carta libre; hacen falta ${TOCABLE}px para poder tocarla`);
@@ -229,7 +243,7 @@ for (const [w, h] of TAMANOS) {
 await nav.close();
 console.log(
   fallos === 0
-    ? "\nTODO OK: la mesa no scrollea, la barra nunca tapa la mano, los cantos dejan carta para tocar\ny no hay ni un filtro en la escena."
+    ? "\nTODO OK: la mesa no scrollea, la barra nunca tapa la mano, los cantos dejan carta para tocar\nno hay ni un filtro en la escena, la mano tiene su capa y el grupo de abajo su opacidad."
     : `\n${fallos} FALLAS`,
 );
 process.exit(fallos === 0 ? 0 : 1);

@@ -67,6 +67,24 @@ const LOG = posicionales[1] || null;
 const VARIADO = process.argv.includes("--variado");
 const SALIR_APP = process.argv.includes("--salir-app");
 const CONTROL = process.argv.includes("--control") ? process.argv[process.argv.indexOf("--control") + 1] : null;
+/* `--dedo` (11/10/2026): toca como una persona y no como una máquina. `input
+   tap` baja y sube el dedo en el mismo instante; una persona lo deja apoyado
+   70–220 ms y no cae siempre en el mismo píxel. Con el toque instantáneo el
+   jugador no reprodujo los cuadraditos que Santiago ve jugando, y apoyar el
+   dedo cambia lo que se dibuja (el `:active`/`:hover` de la carta tocada). */
+const DEDO = process.argv.includes("--dedo");
+/* `--rapido` (11/10/2026): juega como Santiago cuando vio los cuadraditos con
+   el arreglo puesto: "cuando cantaba truco o tiraba cartas rápido". Toca cada
+   0,25–0,7 s en vez de 1,1–2,4 (las animaciones de la mano se pisan unas con
+   otras) y canta truco la mitad de las veces que puede, en vez de una de cada
+   cuatro. */
+const RAPIDO = process.argv.includes("--rapido");
+/** Un toque en (X, Y) de pantalla: instantáneo, o con el dedo apoyado. */
+const toqueEn = (X, Y) => {
+  if (!DEDO) return adb("shell", "input", "tap", String(X), String(Y));
+  const x = Math.round(X + azar(-3, 3)), y = Math.round(Y + azar(-3, 3));
+  return adb("shell", "input", "swipe", String(x), String(y), String(x), String(y), String(Math.round(azar(70, 220))));
+};
 /** Una marca en la línea de tiempo de la sesión de `medir-celular.mjs`. */
 const nota = (texto) => {
   // Una línea sola: el texto sale de la página, y un salto de línea sería otra orden.
@@ -143,9 +161,13 @@ const NUESTRA = `${PAQUETE}/.MainActivity`;
 const ANUNCIO = `${PAQUETE}/com.google.android.gms.ads.AdActivity`;
 
 function cerrojo() {
-  const s = adb("shell", "dumpsys", "activity", "activities").stdout || "";
+  /* UNA sola llamada al teléfono, con las dos preguntas filtradas allá
+     (11/10/2026). Por separado tardaban ~310 ms y, sumado al toque, el
+     jugador no bajaba de ~2 s entre toques ni con `--rapido`. Juntas, ~140 ms.
+     Es texto fijo: no entra nada de la página en esta línea. */
+  const s = adb("shell", "dumpsys activity activities | grep -m1 topResumedActivity; dumpsys power | grep -m1 mWakefulness=").stdout || "";
   const arriba = /topResumedActivity=\S+\s+\S+\s+(\S+)/.exec(s)?.[1] || "";
-  const despierta = /mWakefulness=Awake/.test(adb("shell", "dumpsys", "power").stdout || "");
+  const despierta = /mWakefulness=Awake/.test(s);
   return { ok: arriba === NUESTRA && despierta, arriba, despierta };
 }
 
@@ -167,7 +189,10 @@ function elegir(e) {
   /* Sin el filtro: la tarjeta dice "…contra el rival que elijas", y "rival"
      está en `NUNCA` (8/10/2026: el jugador se quedaba parado en el menú). */
   if (ruta === "/jugar") return e.bs.find((b) => /partida r[áa]pida/i.test(b.t)) ?? null;
-  if (ruta !== "/jugar/mesa") return null;
+  /* En una pantalla que no es de las suyas (la Gira, una lección), vuelve por
+     el enlace de arriba. El 11/10/2026 se quedó 3 minutos en la Gira tocando
+     nada, y esa vuelta de la medición se perdió. */
+  if (ruta !== "/jugar/mesa") return e.bs.find((b) => /^(jugar|volver|atr[áa]s)$/i.test(b.t)) ?? null;
 
   const quiero = busca(/^quiero$/i);
   const noQuiero = busca(/^no quiero$/i);
@@ -177,8 +202,8 @@ function elegir(e) {
   if (quiero || noQuiero) elegido = Math.random() < 0.75 ? quiero || noQuiero : noQuiero || quiero;
   else if (cartas.length) {
     // Una de cada cuatro, cantar si se puede; si no, una carta cualquiera.
-    const canto = busca(/^(envido|truco|retruco|flor)$/i);
-    elegido = canto && Math.random() < 0.25 ? canto : cartas[Math.floor(Math.random() * cartas.length)];
+    const canto = (RAPIDO && busca(/^(truco|retruco|vale cuatro)$/i)) || busca(/^(envido|truco|retruco|flor)$/i);
+    elegido = canto && Math.random() < (RAPIDO ? 0.5 : 0.25) ? canto : cartas[Math.floor(Math.random() * cartas.length)];
   } else elegido = busca(/revancha|otra|de nuevo|seguir|nueva|volver a jugar|siguiente/i);
   // Una respuesta que no conoce (la flor: "Yo también", "Me achico"…): cualquiera de las que hay.
   if (!elegido && bs.length) elegido = bs[Math.floor(Math.random() * bs.length)];
@@ -192,7 +217,7 @@ async function tocar(b, dpr, porque) {
   const c = cerrojo();
   if (!c.ok) return false;
   const X = Math.round(b.x * dpr), Y = Math.round(b.y * dpr);
-  adb("shell", "input", "tap", String(X), String(Y));
+  toqueEn(X, Y);
   log(`toque (${porque}): "${b.t}" @${X},${Y}`);
   return true;
 }
@@ -214,7 +239,13 @@ async function variar(e) {
   } else if (dado < 0.7) {
     // Salir de la mesa: el resto del bucle vuelve a entrar por Partida rápida.
     const salir = e.bs.find((b) => /^salir$/i.test(b.t));
-    if (salir && (await tocar(salir, e.dpr, "variar"))) nota("sale-de-la-mesa");
+    if (salir && (await tocar(salir, e.dpr, "variar"))) {
+      nota("sale-de-la-mesa");
+      /* Que cambie la pantalla antes de mirar de nuevo. Sin esto (11/10/2026)
+         el bucle volvía a leer la MESA, elegía una carta y el toque caía ya en
+         el menú, justo sobre la tarjeta de la Gira. */
+      await dormir(1800);
+    }
   } else {
     // Salir de la app y volver: Inicio y después abrirla de nuevo (sigue viva).
     if (!cerrojo().ok) return;
@@ -287,7 +318,7 @@ while (Date.now() < fin) {
   }
   const X = Math.round(elegido.x * e.dpr);
   const Y = Math.round(elegido.y * e.dpr);
-  const r = adb("shell", "input", "tap", String(X), String(Y));
+  const r = toqueEn(X, Y);
   const err = ((r.stderr || "") + (r.stdout || "")).trim();
   toques++;
   log(`toque ${toques}: "${elegido.t}" @${X},${Y}${err ? " ✗ " + err.slice(0, 160) : ""}`);
@@ -296,7 +327,7 @@ while (Date.now() < fin) {
     break;
   }
   // Entre 1,1 y 2,4 s: el ritmo de alguien que mira la mesa antes de tocar.
-  await dormir(azar(1100, 2400));
+  await dormir(RAPIDO ? azar(250, 700) : azar(1100, 2400));
 }
 log(`fin: ${toques} toques`);
 ws.close();

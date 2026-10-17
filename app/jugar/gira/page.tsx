@@ -27,6 +27,7 @@ import { MapaUruguay } from "@/components/mapa/MapaUruguay";
 import { Trofeos } from "@/components/Trofeos";
 import { portero } from "@/lib/entrada";
 import { armarGira, proximaParada, slugDepartamento } from "@/lib/gira";
+import { historiaDe } from "@/lib/historias";
 import { precargarDepartamento } from "@/lib/precarga";
 import { type Progreso, leerProgreso } from "@/lib/progreso";
 import { trofeosDe } from "@/lib/trofeos";
@@ -53,6 +54,22 @@ function Copa() {
         <path d="M8.8 19.5h6.4" />
         <path d="M10.2 15.4h3.6l1.4 4.1H8.8z" />
       </g>
+    </svg>
+  );
+}
+
+/** El chevron del botón de la historia: el mismo trazo que el de "Jugar" de arriba. */
+function Chevron({ hacia }: { hacia: "izquierda" | "derecha" }) {
+  return (
+    <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0" aria-hidden="true">
+      <path
+        d={hacia === "izquierda" ? "M15 5 L8 12 L15 19" : "M9 5 L16 12 L9 19"}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -86,6 +103,19 @@ export default function Gira() {
   const ganadas = paradas.filter((p) => p.estado === "ganada").length;
   const trofeos = useMemo(() => trofeosDe(marcas), [marcas]);
   const rival = parada?.personalidad;
+
+  /* La historia se lee EN EL LUGAR de la descripción, no debajo: la ficha vive
+     en un hueco de alto fijo (ver el comentario del mapa, más abajo) y no le
+     entran seis renglones más sin empujar el botón de jugar fuera de la
+     pantalla. Cambiar un texto por otro es lo mismo que ya pasa al tocar otro
+     departamento, así que el mapa no se entera.
+
+     Se guarda DE QUIÉN es la historia abierta y no un sí/no: al tocar otro
+     departamento su ficha abre otra vez en "cómo juega", sin un efecto que lo
+     tenga que volver a cerrar. */
+  const [historiaAbierta, setHistoriaAbierta] = useState<string | null>(null);
+  const historia = parada && parada.estado !== "cerrada" ? historiaDe(parada.personalidad.id) : null;
+  const verHistoria = historia !== null && historiaAbierta === rival?.id;
 
   /* Tocar una parada abre su ficha: ahí ya se sabe adónde vas a jugar, así que
      la escena de ese departamento se empieza a bajar y decodificar YA. Para
@@ -214,22 +244,63 @@ export default function Gira() {
               <p className="font-[family-name:var(--font-display)] text-2xl leading-tight text-tinta">
                 {parada.estado === "cerrada" ? "Todavía no" : rival.nombre}
               </p>
-              <p className="mt-1 text-sm leading-snug text-tinta/75">
+              {/* LAS ESTRELLAS VAN ARRIBA DEL TEXTO, y no abajo como antes de
+                  las historias, porque en este renglón está el botón que las
+                  abre. Abajo, una historia larga en un celular chico lo
+                  empujaba fuera de la ficha y te quedabas sin cómo volver.
+                  Arriba queda siempre a la vista: lo que se va para abajo, si
+                  algo, es el final del texto. */}
+              <div className="mt-1 flex items-center justify-between gap-3">
+                <p
+                  className="font-[family-name:var(--font-ui)] text-sm text-dorado"
+                  aria-label={`Dificultad ${rival.dificultad} de 5`}
+                >
+                  {"★".repeat(rival.dificultad)}
+                  <span className="text-tinta/20">{"★".repeat(5 - rival.dificultad)}</span>
+                  {parada.estado === "ganada" && <span className="ml-2 text-quiero">✓ ganado</span>}
+                </p>
+                {/* En el renglón de las estrellas, que ya existía: así la ficha
+                    no crece ni un píxel. El `-my-2 py-2` agranda la zona de
+                    toque sin agrandar el renglón. */}
+                {historia && (
+                  <button
+                    type="button"
+                    data-ver-historia
+                    aria-controls="texto-rival"
+                    onClick={() => setHistoriaAbierta(verHistoria ? null : rival.id)}
+                    className="-my-2 flex shrink-0 items-center gap-1 rounded px-1 py-2 font-[family-name:var(--font-ui)] text-xs uppercase tracking-wide text-bordo transition-colors hover:text-bordo-claro"
+                  >
+                    {verHistoria ? (
+                      <>
+                        <Chevron hacia="izquierda" />
+                        Cómo juega
+                      </>
+                    ) : (
+                      <>
+                        Su historia
+                        <Chevron hacia="derecha" />
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+              <p id="texto-rival" className="mt-1.5 text-sm leading-snug text-tinta/75">
                 {parada.estado === "cerrada"
                   ? `Primero ganale a ${parada.abreCon?.nombre ?? "el anterior"}.`
-                  : rival.descripcion}
-              </p>
-              <p
-                className="mt-1.5 font-[family-name:var(--font-ui)] text-sm text-dorado"
-                aria-label={`Dificultad ${rival.dificultad} de 5`}
-              >
-                {"★".repeat(rival.dificultad)}
-                <span className="text-tinta/20">{"★".repeat(5 - rival.dificultad)}</span>
-                {parada.estado === "ganada" && <span className="ml-2 text-quiero">✓ ganado</span>}
+                  : verHistoria
+                    ? historia
+                    : rival.descripcion}
               </p>
             </div>
 
-            {/* El enlace existe sólo si la parada está abierta o ganada */}
+            {/* El enlace existe sólo si la parada está abierta o ganada.
+
+                CON LA HISTORIA ABIERTA, EN EL CELULAR NO SE MUESTRA. Medido
+                con las 19: con el botón debajo, todas se pasaban del hueco de
+                la ficha (16 a 73 px) y el botón quedaba cortado a la mitad. Sin
+                él entran, y para jugar se vuelve con "Cómo juega". En la
+                compu el botón va al costado del texto y no le quita alto, así
+                que ahí se queda. */}
             {parada.estado === "cerrada" ? (
               <p className="shrink-0 rounded border border-tinta/25 px-6 py-3 text-center font-[family-name:var(--font-ui)] text-sm uppercase tracking-wide text-tinta/50">
                 Cerrado
@@ -240,7 +311,7 @@ export default function Gira() {
                  entrar al mapa, que es mirar). */
               <EntradaPartida
                 pedido={{ modo: "gira", depto: slugDepartamento(rival.departamento) }}
-                className="shrink-0 rounded bg-bordo px-6 py-3 text-center font-[family-name:var(--font-ui)] text-base uppercase tracking-wide text-crema transition-colors hover:bg-bordo-claro"
+                className={`shrink-0 rounded bg-bordo px-6 py-3 text-center font-[family-name:var(--font-ui)] text-base uppercase tracking-wide text-crema transition-colors hover:bg-bordo-claro ${verHistoria ? "hidden sm:block" : ""}`}
               >
                 {parada.estado === "ganada" ? "Jugar de nuevo" : "Jugar"}
               </EntradaPartida>

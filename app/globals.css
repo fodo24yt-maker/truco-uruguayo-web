@@ -530,9 +530,50 @@ footer {
    que haya una `opacity` en algún lado.
 
    Esto es lo que Santiago describía como "un frame se rompe y después vuelve":
-   la basura aparece en cuadros sueltos mientras se juega, no de forma fija. */
+   la basura aparece en cuadros sueltos mientras se juega, no de forma fija.
+
+   ── Y QUE NADIE LA SAQUE "PARA SIMPLIFICAR" (11/10/2026) ──────────────────
+   Se volvió a medir sacándosela sólo a la hija de abajo (la de la mano y los
+   cantos), con el amplificador de abajo puesto: la basura salió casi el DOBLE
+   (142 bloques nuevos en 3631 cuadros contra 71 en 3376). `mirar-mesa.mjs`
+   falla si esa hija pierde la opacidad. */
 .escena > * {
   opacity: 0.999;
+}
+
+/* ── TU MANO EN SU PROPIA CAPA (11/10/2026) ────────────────────────────────
+   El resto de los cuadraditos que quedó después del 8/10 —uno cada pocos
+   minutos, sobre las cartas de tu mano, que dura ~200 ms y Santiago veía
+   igual— se va con esto. Medido en el Redmi con el jugador automático,
+   contando TODOS los cuadros que manda el teléfono (~30 por segundo):
+
+                                   bloques nuevos / cuadros
+       como estaba                       4 / 2337   (todo el día: 16 / 8491)
+       con la mano en su capa            0 / 3149   (se esperaban ~6)
+
+   Y con un AMPLIFICADOR —cada carta de la mano en su propia textura, que
+   multiplica la basura ~8 veces— para que se vea con pocos minutos:
+
+       amplificador solo                71 / 3758
+       amplificador + esto               3 / 3269   (unas 20 veces menos)
+
+   POR QUÉ, lo más probable: la basura nace cuando la GPU re-rasteriza un
+   pedazo de un mosaico (al tirar una carta, al cantar) y en ese pedazo hay
+   texturas auxiliares chicas —eran las sombras desenfocadas hasta el 8/10—.
+   Con la mano en su capa, lo que se redibuja en la mano queda adentro de ESA
+   capa y no obliga a re-rasterizar los mosaicos de la mesa de abajo.
+
+   Lo que NO es: no cambia cómo se ve (comparado píxel a píxel, la diferencia
+   media es 0,9 sobre 255, sólo el antialias de los bordes) ni lo hace más
+   lento (los mismos tiempos de cuadro en `dumpsys gfxinfo`).
+
+   OJO, NO GENERALIZAR: en el mapa de la gira, el 8/9, `will-change` salió 5
+   veces PEOR. Cada pantalla se mide en esa pantalla. Y no reemplaza a la
+   opacidad de arriba: con las dos es como se midió. El detalle completo, con
+   lo que se probó y no sirvió, está en `Historial.md` (11/10/2026).
+   `mirar-mesa.mjs` falla si la mano pierde la capa. */
+[data-mano="tuya"] {
+  will-change: transform;
 }
 
 /* ── Y EL MENÚ DE JUGAR, QUE ERA EL TERCERO Y EL ÚLTIMO ────────────────────
@@ -837,10 +878,17 @@ footer {
    mismo retraso que la primera carta, las dos llegan juntas y no hay ni un
    cuadro de mano sola.
 
-   Va en `translate` y NO en `transform`: las dos piezas ya usan `transform`
-   para centrarse (`-translate-x-1/2` y `translateX(-56%)`), y animar
+   Va en `translate` y NO en `transform`: las dos piezas usan `transform` para
+   centrarse (`translateX(-50%)` y `translateX(-56%)`, inline), y animar
    `transform` se los comería. `translate` es una propiedad aparte que se
    compone con él en vez de pisarlo.
+
+   OJO CON LAS CLASES DE TAILWIND 4 (9/10/2026). `-translate-x-1/2` NO es un
+   `transform`: escribe la propiedad `translate`, o sea la misma que anima esto.
+   El dorso se centraba con esa clase y durante la entrada la animación le
+   pisaba el −50%: la palma subía corrida media mano a la derecha y al terminar
+   saltaba a su lugar. Lo que se anime acá tiene que centrarse con `transform`,
+   y `mirar-mesa-nueva.mjs` falla si alguna pieza de la mano salta.
 
    `backwards` para que antes de arrancar ya esté invisible y no parpadee. */
 @keyframes entra-la-mano {

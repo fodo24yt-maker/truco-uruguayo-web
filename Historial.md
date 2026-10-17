@@ -12,6 +12,910 @@
 
 ---
 
+## 2026-10-11 — El resto de los píxeles de la mano: no lo trajo el cambio del 9/10, y se fue poniendo la mano en su propia capa
+
+### Resumen, para el que llega (léase esto primero)
+
+**El síntoma.** Con el APK del 11/10, Santiago volvió a ver los cuadraditos
+de 4×4 sobre las cartas de su mano. Duran "un ratito" (~200 ms, medido en
+video) y aparecen de vez en cuando, casi siempre después de tirar una carta o
+de tocar "Quiero". Sospechó del cambio de la mano del 9/10 (la palma que se
+desmonta sin cartas y sube al repartir).
+
+**No era el cambio de la mano.** Se compiló el APK de antes del 9/10 (H,
+`938c252`) y se lo midió contra el de ahora (A), instalándolos por turno con
+el jugador automático: H 6 bloques nuevos en 3892 cuadros, A 0 en 1763. Era
+**el resto** que había quedado después del arreglo de las sombras del 8/10:
+bajo (~0,2 bloques nuevos cada 100 cuadros, uno cada 2–4 minutos de juego),
+pero visible, y presente en los dos APK. La mano del 9/10 se queda como está.
+
+**El arreglo** (`app/globals.css`):
+
+```css
+[data-mano="tuya"] { will-change: transform; }
+```
+
+Pone tu mano (cartas, palma, pulgar y "Tu tanto") en su propia capa del
+compositor.
+
+| Medido en el Redmi, todos los cuadros | Bloques nuevos / cuadros |
+|---|---|
+| Como estaba (A) | 4 / 2337 (todo el día: 16 / 8491) |
+| **Con la mano en su capa** | **0 / 3149** (se esperaban ~6; que salga 0 por suerte: ~0,3%) |
+| Amplificador solo (ver abajo) | 71 / 3758 |
+| **Amplificador + la capa** | **3 / 3269** (unas 20 veces menos) |
+
+- **Cómo se ve:** igual. Comparado píxel a píxel en la compu, la diferencia
+  media es 0,9/255, sólo el antialias de los bordes.
+- **Velocidad:** la misma (gfxinfo p50 44 ms, p90 77–85).
+
+**Por qué funciona (lo más probable, deducido de lo medido):**
+
+- La basura nace cuando la GPU re-rasteriza un pedazo de un mosaico (al tirar,
+  al cantar) y en esa zona hay texturas auxiliares.
+- Con la mano en su capa, lo que se redibuja en la mano queda adentro de ESA
+  capa y no obliga a re-rasterizar los mosaicos de la mesa de abajo.
+
+**La regla que dejó el día, con todo lo medido desde el 8/9:**
+
+- **Una textura GRANDE que envuelve la zona protege.** Es la `opacity: .999`
+  de `.escena > *`: sacársela al grupo de la mano DUPLICA la basura.
+- **Texturas CHICAS adentro de la zona la enferman:**
+  - las sombras desenfocadas, hasta el 8/10;
+  - una `opacity: .999` por carta: unas 8 veces peor, aunque en el menú el
+    10/9 había curado.
+- **Una capa propia para la mano la cura.**
+
+**OJO, NO GENERALIZAR:** en el mapa de la gira, el 8/9, `will-change` salió 5
+veces PEOR. Cada pantalla se mide en esa pantalla.
+
+**Lo que se probó y NO sirvió:**
+
+| Rama | Qué hace | Resultado |
+|---|---|---|
+| PC | `opacity .999` en cada carta de la mano | ~8× PEOR (113 / 6811 contra A 12 / 6154), sobre la palma y el pulgar |
+| PZ | `opacity .999` en la palma y el pulgar | igual que A (11 / 6619) |
+| PM | la mano envuelta en `opacity .999` | no se distingue de A (2 / 2361) |
+| PCT0 | PC sin la transición del abanico | igual que PC: el acomodo animado no es el disparador |
+| P1b | PC sin la `opacity .999` del grupo de abajo | el DOBLE de PC: ese grupo protege |
+
+**Cómo se mide ahora** (todo con el jugador automático; Santiago no juega ni
+saca fotos):
+
+```bash
+node herramientas/medir-celular.mjs --sesion 28 --jpeg 90           # graba; las ramas se cambian con control.txt
+node herramientas/jugar-celular.mjs 28 LOG --variado --dedo --control CARPETA/control.txt
+node herramientas/medir-celular.mjs --pixeles CARPETA --cada 1      # TODOS los cuadros, no 5 por segundo
+node herramientas/apk-contra-apk.mjs H=viejo.apk A=nuevo.apk --orden H,A,A,H,H,A   # un APK contra otro
+```
+
+- **La rama `SC1`** devuelve la mesa de antes (sin la capa), para volver a
+  comparar.
+- **La tabla "nacen en los 2,5 s DESPUÉS DE…"** de `--pixeles` dice qué los
+  dispara.
+- **`pantalla-real.mjs`** graba la pantalla de verdad con `screenrecord`.
+  Sirve para MIRAR un momento, no para contar: el video mancha los cuadraditos.
+
+**Trampas que costaron tiempo hoy:**
+
+1. **El análisis viejo miraba 5 cuadros por segundo** y el teléfono manda ~30
+   con la pantalla en movimiento. Un fallo de 200 ms podía caer en el hueco.
+   Ahora `--cada 1`, y `--cada 0` también anda (antes un 0 se volvía 200).
+2. **El teléfono se duerme a los 5 min sin toques.** La sesión siguiente se
+   larga apenas termina la anterior, y se cuenta en paralelo. No se desbloquea
+   nunca: lo desbloquea Santiago.
+3. **MIUI cancela a veces la instalación por USB** si nadie toca el cartel. El
+   segundo intento suele entrar.
+4. **El jugador se trababa en la Gira:** tocaba una carta justo después de
+   "Salir", y el toque caía en el menú. Arreglado (espera 1,8 s y vuelve por el
+   enlace "Jugar").
+5. **Un `MutationObserver` inyectado al crearse el documento no puede observar
+   `document.documentElement`** (todavía es `null`), y el `try` se lo traga sin
+   avisar: se observa `document`.
+6. **Contar una sesión de 28 min con todos los cuadros tarda ~15 min** de
+   compu. El bug es de baja frecuencia: hacen falta miles de cuadros por rama.
+
+**Pendiente:**
+
+- **Que Santiago instale el APK nuevo** (`node herramientas/celular-usb.mjs
+  --apk`) y juegue: el arreglo se midió en vivo como rama de CSS sobre A, que es
+  el mismo CSS, pero el APK con la regla adentro no se llegó a medir en el
+  teléfono, porque lo desconectó antes.
+- Lo que ya estaba pendiente: las historias de los personajes, y decidir si la
+  pantalla de carga sigue esperando a AdMob.
+
+---
+
+El detalle, en el orden en que pasó:
+
+### Lo que dijo Santiago
+
+- **Volvieron los cuadraditos de píxeles**, los mismos de antes, **sobre las
+  cartas de su mano** (el abanico). Lo preguntó así: ¿no será que lo de la mano
+  (que está bien) produjo fallas en las cartas?
+- Pidió una hipótesis, medir y arreglar. Él conecta el teléfono por cable.
+
+### Lo que se sabía antes de tocar nada
+
+- **El APK instalado se compiló hoy a las 14:16** desde el árbol, o sea con
+  los cambios de la mano del 9/10 adentro (sin commitear). El que él dio por
+  arreglado el 9/10 es el del 8/10, que es `938c252` más nada.
+  - La diferencia entre "andaba" y "no anda" es exactamente el diff del 9/10:
+    - el dorso centrado con `transform`;
+    - la palma y el pulgar que se desmontan sin cartas;
+    - el abanico que se vacía con el barrido;
+    - "Tu tanto" escondido sin cartas;
+    - las bazas reubicadas (`lib/lugares-en-mesa.ts`).
+- **El APK "arreglado" nunca se midió en el teléfono**, sólo se miró. El 8/10
+  quedaba un resto (0,5–1,8% de los cuadros) que nacía justo ahí, en las cartas
+  y la palma, cuando esa zona se redibujaba.
+- Tampoco se había medido nunca el arranque en frío con el arreglo puesto.
+
+### Las hipótesis, con lo que predice cada una (fijadas ANTES de medir)
+
+**H1 (principal): lo trae el cambio de la mano.** La basura nace a los 0,5–1,5
+s de redibujarse la zona de las cartas, y el cambio agrega redibujados grandes
+ahí. Hay dos mecanismos posibles:
+
+- **H1a, el centrado.** Mientras entra, la palma es una capa aparte del
+  compositor (anima `translate`). Desde el 9/10 entra justo debajo del abanico:
+  las cartas que la pisan se promueven y, al terminar, se re-rasteriza todo.
+  - *Predice:* nace sobre todo después del reparto, y la rama `A-centro` la
+    baja.
+- **H1b, el montaje.** La palma y el pulgar aparecen (reparto) y se van
+  (última carta, enseñadas, barrido): un rectángulo grande de bordes
+  fraccionarios que se re-rasteriza.
+  - *Predice:* nace después del reparto o del barrido, `A-centro` no la baja,
+    y una opacidad .999 (`PC` o `PZ`) sí.
+
+**H2: no hay regresión.** Es el resto de siempre.
+
+- *Predice:* A queda dentro de ±30% de H.
+
+**H3: algo de afuera** (el WebView del teléfono se actualizó solo, o la
+instalación nueva).
+
+- *Predice:* H también sale alto (≥ 4% de cuadros sucios).
+
+**Los criterios:**
+
+- **Experimento 1** (H contra A, instalando por turno, H A A H H A, 4 min
+  cada vuelta, en frío):
+  - H1 queda confirmada si A da ≥ 3 veces los nacimientos de H y gana en los
+    3 pares;
+  - H2, si A queda dentro de ±30% de H;
+  - si cae en el medio, se agregan 3 pares más.
+- **Experimento 2** (ramas de CSS en vivo sobre A: `A-centro`, `A-sinanim`,
+  `PC`, `PZ`, con `A` intercalada):
+  - una rama lleva el efecto si baja a ≤ 1/3 de A en ≥ 3 tramos;
+  - no lo lleva si queda dentro de ±30% de A.
+
+Los APK se llaman así en todo lo que sigue: **H** = `938c252` (el del 8/10)
+y **A** = el árbol de hoy.
+
+### Preparación (sin el teléfono)
+
+**El APK H, compilado sin tocar el árbol ni Git.**
+
+- Se exportó `git archive HEAD` a una carpeta del temporal y se corrió
+  `npm ci --ignore-scripts` y `celular-usb.mjs --compilar` adentro (~3 min).
+- Para verificar cuál es cuál, se buscó dentro del JS de cada APK:
+  - `data-pieza` (del 9/10) está en A y no en H;
+  - `sombra-mano` (del 8/10) está en los dos.
+- Comparados archivo por archivo, sólo difieren los 5 de la mesa (su JS, su
+  CSS y los manifiestos del build).
+- A pesa 2,8 MB más, pero es relleno del zip de una compilación incremental:
+  dex, assets y recursos suman exactamente lo mismo.
+
+**Herramientas nuevas o cambiadas:**
+
+- **`celular-usb.mjs --instalar X.apk`**: instala un APK ya hecho, con `-r`
+  (no borra el progreso).
+- **`apk-contra-apk.mjs`**: instala los APK por turno y graba una sesión de
+  `medir-celular` en cada uno mientras juega `jugar-celular --variado`.
+- **`medir-celular.mjs`:**
+  - **Eventos de la mesa** desde la página (un `MutationObserver`): reparto,
+    `mano-anima`, `mano-aparece`, `mano-se-va`, `tira`, `abanico-vacio`,
+    barrido y enseñadas.
+    - La primera versión no mandaba nada: el guion corre al crearse el
+      documento, cuando todavía no hay `<html>`, y `observe(null)` tiraba un
+      error que el `try` se tragaba callado. Ahora observa el `document`.
+  - **`--tramo NOMBRE`**, para el primer tramo.
+  - **El WebView y la fecha de instalación de la app**, que se anotan al
+    arrancar.
+  - **`--pixeles` con varias carpetas y `--por-tramo`**, que junta H-1, H-2…
+    en H.
+  - **La tabla "nacen en los 2,5 s DESPUÉS DE…"**, por tipo de evento y de
+    toque.
+  - **Las ramas nuevas** `A-centro`, `A-sinanim`, `PC` y `PZ`.
+  - Un error viejo: el aviso `navega` mandaba un campo `tipo` que le pisaba el
+    nombre al mensaje (llegaba como "replace"). Nada lo leía; se renombró a
+    `como`.
+- **Validación:** `--pixeles` reescrito, corrido sobre `sesion-2026-10-08-15-12`,
+  da los mismos números que esa entrada (A 869 cuadros / 8,3% / 46 nacen; S1
+  0,8%; TR0 12,1%; S0b 0,7%).
+- **Un dato que sale de esa validación**, con las sombras desenfocadas (A del
+  8/10): cada "Quiero" dejaba 0,65 bloques nuevos; cada carta tirada, 0,30;
+  cada otro botón, 0,14. Con las sombras duras (S1): 0,11 · 0,02 · 0,00.
+- **Comprobado en la compu con Playwright**, sobre los dos builds:
+  - las cuatro ramas aplican en A. `A-centro` deja la palma con
+    `transform:none` y `translate:-50%`, idéntico a H;
+  - los eventos llegan. En A sale `mano-se-va` con la última carta; en H no
+    sale nunca, como corresponde.
+
+### En el teléfono, antes de medir
+
+Se leyó sin cambiar nada:
+
+- **Apagado de pantalla:** 5 min. Alcanza para el minuto sin toques entre
+  instalaciones.
+- **WebView:** 153.0.8010.57, actualizado el **8/10 a la 01:20**. Las
+  mediciones del 8/10 (de las 14:45 en adelante) ya usaban este mismo WebView,
+  así que **H3 queda casi descartada antes de empezar**.
+- **La app:** instalada por primera vez el 11/10 a las 14:16 (o sea que entre
+  el 8 y el 11 se había desinstalado), con la clave de esta máquina. Por eso
+  `install -r` reemplaza sin borrar nada.
+
+### Lo que dijo Santiago mientras corría
+
+**La mano.** Vio la mano vieja: no sube desde abajo y no se va con el barrido.
+Era el APK H, que la comparación necesita tal cual era. Lo dejó claro: **la
+mano DEBE irse con el barrido y subir al repartir**. El arreglo se queda con la
+mano del 9/10.
+
+**La tasa de cuadros.** "El bug suele durar un ratito: ¿estás tomando 5–10
+cuadros por segundo?" **Tenía razón en el fondo**:
+
+- El screencast manda cuadros cuando la pantalla cambia. Con la pantalla en
+  movimiento llegan cada **33 ms** (mediana, ~30 por segundo); quieta, no manda
+  nada, y si hubiera basura la trae el próximo cuadro.
+- **Pero `--pixeles` muestreaba sólo cada 200 ms.** Desde hoy estas sesiones
+  se cuentan con `--cada 1`, o sea todos los cuadros.
+- Al pedir `--cada 0` salió otro error: `numero()` hacía `Number(x) ||
+  porOmision`, así que un 0 explícito volvía al valor por omisión. Arreglado.
+
+### Experimento 1: H contra A, instalando por turno (`apk-contra-apk.mjs`)
+
+Orden H A A H H A, 4 min por vuelta, jugador automático variado. Cada vuelta
+empieza con una instalación, o sea en frío.
+
+**Tres tropiezos:**
+
+1. **A-1 quedó corta.** El jugador tocó "Salir" y en el mismo bucle tocó una
+   carta sin esperar a que cambiara la pantalla. El toque cayó en el menú, sobre
+   la tarjeta de la Gira, y ahí se quedó 3 min sin saber qué tocar. Quedaron
+   sólo ~40 s de mesa.
+   - **Arreglado en `jugar-celular.mjs`:** espera 1,8 s después de salir, y en
+     una pantalla que no conoce vuelve por el enlace "Jugar".
+   - Desde la vuelta 4 se usó el jugador arreglado.
+2. **A-3 no se instaló.** MIUI pide confirmar en la pantalla cada instalación
+   por USB y, si nadie toca, la cancela (`INSTALL_FAILED_USER_RESTRICTED`). Ya
+   había pasado el 8/10.
+3. **La salida de `adb install`, cuando falla, trae la ruta del temporal de
+   Windows con el nombre de usuario adentro.** Queda en el registro del
+   scratchpad, que no se sube. Ojo si algún día se copia un registro al repo.
+
+**Los números** (todos los cuadros; "nacen" = bloques nuevos):
+
+| Vuelta | Cuadros | Sucios | Nacen | Dónde |
+|---|---|---|---|---|
+| H-1 | 1014 | 3 (0,3%) | 3 | pulgar 2 · cartas 1 |
+| A-1 (corta) | 252 | 0 | 0 | — |
+| A-2 | 1511 | 0 | 0 | — |
+| H-2 | 1318 | 8 (0,6%) | 2 | cartas 2 |
+| H-3 | 1560 | 1 (0,1%) | 1 | palma 1 |
+| **H, total** | **3892** | **12 (0,3%)** | **6 (0,15 c/100)** | cartas · pulgar · palma |
+| **A, total** | **1763** | **0** | **0** | — |
+
+- **El bloque de H-2 se miró ampliado.** Es un cuadradito marrón de 4×4 sobre el
+  papel del 5 de espada, al lado de la espada: el mismo que describe la entrada
+  del 8/10. El detector cuenta basura de verdad.
+- **En A-2 no nació nada después de nada:** 17 repartos, 17 veces que la mano
+  se fue, 15 barridos, 34 cartas tiradas, 11 "Quiero".
+
+**Veredicto, con los criterios fijados antes: H1 NO se confirma.**
+
+- A no da 3 veces H. Da menos: cero, contra el resto chico de H, que es el del
+  8/10 (0,5–1,8% de cuadros sucios entonces, 0,3% hoy).
+- Con el jugador automático, **el cambio de la mano del 9/10 no trae la basura
+  de vuelta**.
+- A tiene menos cuadros que H (una vuelta corta y una que no se instaló), así
+  que no se puede decir que A sea MEJOR. Lo que sí se puede decir es que **no
+  es 3 veces peor**.
+- **H3 tampoco:** H, con el mismo WebView de hoy, da tan bajo como el 8/10.
+
+**Lo que queda abierto:** Santiago ve los cuadraditos sobre las cartas de su
+mano, y el jugador automático no los reproduce en ninguno de los dos APK.
+Puede ser:
+
+- que los provoque algo que una persona hace y el jugador no (mantener el dedo
+  apoyado en una carta, que deja el `:hover` levantándola 12 px; el ritmo);
+- que se vean en la composición de Android y no en la captura que hace
+  Chromium de sí mismo;
+- que sean otra firma, no los 4×4 planos.
+
+Se propuso que jugara Santiago y sacara capturas. **No quiso, con razón**:
+
+- el fallo dura poco y no le da el tiempo para sacar la captura;
+- quiere que juegue un agente y que el que capture sea Claude.
+
+Se hizo así.
+
+### La pantalla de verdad: `screenrecord` contra la captura de Chromium
+
+**La pregunta:** ¿la captura de Chromium (`Page.startScreencast`) ve lo mismo
+que el ojo? Lo que llega a la pantalla pasa además por la composición de
+Android.
+
+**Lo que se probó y se descartó:**
+
+- **La pantalla cruda** (`adb exec-out screencap`, sin PNG): 4,6 MB y 629 ms
+  por captura, o sea 1,6 por segundo. Muy lento para un fallo de un ratito.
+- **El video** (`screenrecord`, en el teléfono, hasta 60 cuadros por
+  segundo; graba cuando algo cambia y en la mesa salen ~12 de promedio). Para
+  decodificarlo hace falta `ffmpeg`, que esta máquina no tiene:
+  - `python3 -m venv` no trae `pip` acá;
+  - se bajó la rueda de `imageio-ffmpeg` 0.6.0 de PyPI y se sacó de adentro el
+    `ffmpeg` 7.0.2 estático, a una carpeta del temporal. **No es dependencia
+    del proyecto.**
+
+**La herramienta nueva, `herramientas/pantalla-real.mjs`:**
+
+- `--grabar CARPETA MIN` graba en tramos de 170 s en `/data/local/tmp`, los
+  baja y los borra del teléfono;
+- `--contar CARPETA` decodifica todos los cuadros y les pasa
+  `bloquesPlanosDe`, con dos controles: la grilla corrida y la grilla del
+  códec;
+- el reloj del video se alinea solo, comparando cuadros contra los de
+  Chromium: el primer cuadro sale ~1 s después de arrancar `screenrecord`;
+- la página ocupa la pantalla entera (Chromium también da 720×1600), así que
+  las coordenadas son las mismas.
+
+**La prueba** (`sesion-2026-10-11-19-26`: A, 2 min, jugador con `--dedo`, 45 s
+de video):
+
+- **Chromium vio 2 bloques**, los primeros en A. Uno es un rectángulo oscuro
+  al lado de la espada de una carta de la mano.
+- **El video tiene el MISMO rectángulo, en el mismo lugar**, en el cuadro del
+  segundo 22,85, y en el cuadro siguiente ya no está. Dura ~200 ms: es "el
+  ratito" de Santiago.
+- **El detector no lo encuentra en el video:** la compresión lo mancha, ya no es
+  plano. Los dos controles del video dan 0, así que no inventa, pero tampoco
+  ve.
+
+**Conclusiones:**
+
+1. **La basura está en la pantalla de verdad**, no es un invento de la captura.
+2. **La captura de Chromium la ve**, y con todos los cuadros (~30 por segundo
+   con la pantalla en movimiento) agarra hasta los de 200 ms. El instrumento
+   para contar es ése. El video sirve para MIRAR un momento, no para contar.
+3. **Esto es el resto que quedó el 8/10, y lo tienen los dos APK** con la misma
+   tasa chica: 0,1–0,4 nacimientos cada 100 cuadros. **No lo trajo el cambio
+   de la mano.** Lo que Santiago ve es ese resto, que nunca llegó a cero.
+
+### `jugar-celular.mjs --dedo`
+
+`input tap` baja y sube el dedo en el mismo instante. Con `--dedo` lo deja
+apoyado 70–220 ms (con `input swipe` sobre el mismo punto) y con un temblor de
+±3 px, como una persona. Es el modo del experimento 2.
+
+### Experimento 2: eliminar el resto (ramas de CSS en vivo, sobre A)
+
+Las hipótesis del 9/10 sobre la mano (`A-centro`, `A-sinanim`) quedan sin
+medir: el experimento 1 ya las descartó como causa de una regresión.
+
+Las candidatas son las que quedaron pendientes el 8/10, y la mano nueva no se
+toca:
+
+- **PC**: `.mano-abanico > * { opacity: .999 }`, cada carta de la mano en su
+  propio búfer. Es lo que curó el menú el 10/9 (de 879 px a 10), y el resto cae
+  justamente sobre las cartas;
+- **PZ**: `[data-pieza] { opacity: .999 }`, la palma y el pulgar.
+
+Dos sesiones de 27 min (el puente del inspector se cierra solo a los 30), con
+las ramas rotando cada 3 min, y el orden invertido en la segunda:
+
+- primera: A PC PZ ×3;
+- segunda: PZ PC A ×3.
+
+El criterio es el de siempre: una rama lleva el efecto si da ≤ 1/3 de los
+nacimientos de A.
+
+**Primera sesión (`sesion-2026-10-11-19-33`, todos los cuadros):**
+
+| Rama | Tramos (nacen) | Cuadros | Sucios | Nacen | c/100 | Dónde |
+|---|---|---|---|---|---|---|
+| A | 1 · 1 · 0 | 3235 | 5 (0,2%) | 2 | **0,06** | baza 1 · palma 1 |
+| **PC** | 18 · 16 · 18 | 3534 | 177 (5,0%) | 52 | **1,5** | palma 17 · pulgar 11 · cartas 1 |
+| PZ | 1 · 3 · 1 | 3093 | 28 (0,9%) | 5 | 0,16 | cartas 3 · pulgar 2 |
+
+**PC es ~25 veces PEOR**, en los tres tramos.
+
+- La basura que agrega cae sobre la palma y el pulgar, no sobre las cartas.
+- Nace después de tirar una carta (0,51 por tirada; en A 0,03) y después de
+  tocar "Quiero" (0,45; en A 0,00).
+- **Lo que curó el menú el 10/9 enferma la mesa.** Es lo mismo que pasó con el
+  mapa el 8/9: partirlo en 19 grupos salió peor que en 8.
+
+**PZ no mejora** (0,16 contra 0,06, con pocos casos).
+
+**Segunda sesión (`sesion-2026-10-11-20-02`, el orden invertido):** repite el
+resultado.
+
+- PC: 20 · 19 · 22 nacimientos por tramo; 61 en 3277 cuadros (1,9 c/100), en
+  el pulgar y la palma.
+- A: 10 en 2919 (0,34 c/100).
+- PZ: 6 en 3526 (0,17 c/100).
+
+| Rama | Nacen / cuadros, las dos sesiones | c/100 |
+|---|---|---|
+| A | 12 / 6154 | **0,20** |
+| **PC** | 113 / 6811 | **1,66** (~8× peor) |
+| PZ | 11 / 6619 | 0,17 (igual que A) |
+
+En A, el resto nace después de tirar una carta (0,10 por tirada) y de tocar
+"Quiero" (0,15 por toque): **los mismos momentos que PC multiplica**.
+
+**A, tal cual, ya anda muy bajo**: ~1 bloque cada 4–5 minutos de juego
+automático. Bajarlo a un tercio no se puede demostrar en un rato: harían falta
+horas.
+
+### Hipótesis nueva, que sale de PC (H4)
+
+**El mecanismo.** Toda la parte de abajo de la escena (mano, cartas, cantos,
+tu globo) se pinta en un grupo con `opacity: .999`, el arreglo del 8/9. Un
+grupo translúcido con algo adentro que se anima en la GPU tiene que volverse
+una **textura aparte del compositor** mientras dura la animación. Eso pasa:
+
+- con las cartas que se acomodan al tirar una (la transición de
+  `.mano-abanico > *`);
+- con el globo "¡Quiero!" que salta (`anim-pop`).
+
+Las texturas aparte son la familia de cosas que esta GPU dibuja mal (los
+desenfoques eran eso mismo).
+
+**Por qué PC lo multiplica:** suma una textura por carta en cada acomodo.
+
+**Cómo se prueba rápido: con PC de amplificador.**
+
+- **PCT0** = PC + el abanico sin la transición;
+- **P1b** = PC + el grupo de abajo sin su opacidad.
+
+Si alguna voltea la basura de PC, el mecanismo queda encontrado, y se prueba
+lo mismo sobre A.
+
+Experimento 3: una sesión de 27 min, con PC, PCT0 y P1b rotando en cuadrado
+latino (PC PCT0 P1b / PCT0 P1b PC / P1b PC PCT0).
+
+**Resultado (`sesion-2026-10-11-20-32`): H4 REFUTADA.**
+
+| Rama | Tramos (nacen) | Nacen / cuadros | c/100 |
+|---|---|---|---|
+| PC | 27 · 16 · 28 | 71 / 3376 | 2,1 |
+| PCT0 | 35 · 17 · 16 | 68 / 2739 | 2,5 |
+| P1b | 41 · 54 · 47 | 142 / 3631 | **3,9** |
+
+- **Sin la transición del abanico, PC sigue igual.** El acomodo animado de las
+  cartas no es el disparador.
+- **Sin la opacidad del grupo de abajo, PC es casi el DOBLE de peor**, en los
+  tres tramos. Ese grupo protege: coincide con el 8/9 y con L2 del 7/10. Que
+  nadie lo saque "para simplificar".
+- Con P1b la basura nace también después del reparto (0,45 por reparto; con
+  PC, 0).
+
+**La regla que queda, con todo lo medido:**
+
+- una textura GRANDE que envuelve la zona (el `.999` del grupo) protege;
+- texturas CHICAS adentro de la zona (las sombras desenfocadas hasta el 8/10, la
+  opacidad por carta de PC) la enferman, y la basura cae al lado: en la palma y
+  el pulgar.
+
+En el dibujo de las cartas (`Carta.tsx`) y de la mano (`Manos.tsx`) no hay
+texturas chicas escondidas. Las `opacity` son de figuras sueltas (Chromium las
+pliega en el color) y no hay grupos translúcidos, máscaras ni filtros.
+
+**Experimento 4, con la misma lógica:**
+
+- **PCPM** = PC + la mano sola envuelta en `.999`, adentro del grupo, que queda
+  como está;
+- **PCC1** = PC + la mano en su propia capa (`will-change`).
+
+**No arrancó:** el teléfono se durmió y se bloqueó. Entre el final del
+experimento 3 y el comienzo del 4 hubo 15 min sin toques, porque se esperó a
+terminar de contar el 3. **Lección: la sesión siguiente se larga apenas termina
+la anterior, y el conteo va en paralelo.** El guion ahora corta en seco si la
+sesión no arranca: antes siguió con la carpeta vacía y el rotador intentó
+escribir en `/rotador.log`. Santiago lo desbloqueó y se largó a las 19:34.
+
+**Resultado (`sesion-2026-10-11-22-34`): C1 VOLTEA EL AMPLIFICADOR.**
+
+| Rama | Tramos (nacen) | Nacen / cuadros | c/100 | Después de tirar |
+|---|---|---|---|---|
+| PC | 19 · 25 · 27 | 71 / 3758 | 1,9 | 0,72 por tirada |
+| PCPM | 18 · 13 · 12 | 43 / 3150 | 1,4 | 0,47 |
+| **PCC1** | **1 · 0 · 2** | **3 / 3269** | **0,09** | **0,03** |
+
+- **Con la mano en su propia capa del compositor**
+  (`[data-mano="tuya"] { will-change: transform }`), la basura que agrega PC
+  baja ~20 veces, en los tres tramos.
+- La envoltura con `.999` sobre la mano (PCPM) apenas mueve el número.
+- **La velocidad no cambia:** gfxinfo da p50 44 ms y p90 77–81 en las tres
+  ramas, y el p99 de PCC1 es algo mejor (125–150).
+- **Por qué, lo más probable:** con la mano en su capa, lo que se redibuja al
+  tirar o al cantar se rasteriza adentro de ESA capa, y los mosaicos de la mesa
+  de abajo no se tocan.
+- **Ojo:** en el mapa, el 8/9, `will-change` salió 5 veces PEOR. Es otra
+  pantalla y otro dibujo: lo que vale para la mesa se mide en la mesa.
+
+**Experimentos 5 y 6, sobre A, sin amplificador, encadenados para que el
+teléfono no se duerma:**
+
+- 5: A, PM, C1;
+- 6: C1 contra A, 9 tramos.
+
+### Experimento 5: C1 sobre la app real (`sesion-2026-10-11-23-03`)
+
+Santiago desconectó el teléfono a las 20:26, en el séptimo tramo. Quedaron 7
+tramos y 7914 cuadros. **El 6 no llegó a correr.**
+
+| Rama | Tramos (nacen) | Nacen / cuadros | Sucios |
+|---|---|---|---|
+| A | 2 · 2 | 4 / 2337 | 8 |
+| PM | 0 · 2 | 2 / 2361 | 9 |
+| **C1** | **0 · 0 · 0** | **0 / 3149** | **0** |
+
+- A, todo el día (experimentos 2 y 5): 16 bloques nuevos en 8491 cuadros.
+- A esa tasa, en 3149 cuadros se esperaban ~6. Que salgan 0 por azar tiene
+  una probabilidad de ~0,3% (Poisson).
+- Junto con el amplificador (20 veces menos), alcanza para aplicarlo.
+- Velocidad: C1 da p50 44–48 ms y p90 77–85, igual que A.
+
+### El arreglo aplicado
+
+- **`app/globals.css`:** `[data-mano="tuya"] { will-change: transform; }`, al
+  lado de `.escena > *`, con los números y la advertencia del mapa. El
+  comentario de `.escena > *` ahora dice también que sacársela a la hija de la
+  mano duplica la basura.
+- **`app/jugar/mesa/page.tsx`:** el comentario del agarre `data-mano="tuya"`
+  avisa que de ese nombre cuelga la capa.
+- **`herramientas/mirar-mesa.mjs`:** dos guardianes nuevos.
+  - **FALLA** si la mano pierde `will-change: transform`.
+  - **FALLA** si la hija de abajo de la escena pierde su opacidad < 1.
+  - Las etiquetas pasan de `filtroEnLaEscena` a `dibujoPeligroso`, porque ya
+    no son sólo filtros.
+- **`herramientas/medir-celular.mjs`:** la rama `SC1` (la mesa sin la capa), y
+  `A` pasa a ser la mesa arreglada.
+
+**Lo que se descartó y por qué:**
+
+- **PC y P1b** empeoran.
+- **PCT0** no cambia nada.
+- **PM**: no se distingue de A.
+- **Sacar la transición del abanico**, además de no servir, habría cambiado
+  cómo se ve.
+
+**No cambia nada de lo que pidió Santiago el 9/10:** la mano se va con el
+barrido y sube al repartir. `mirar-mesa-nueva` lo vigila (palma 0 px, pulgar
+0 px) y `mirar-mano` lo filmó.
+
+### Estado al cerrar
+
+**Tests:** `npm test` da 325/325 (el 8/10 eran 319; los 6 nuevos son de
+`lugares-en-mesa`). `tsc` limpio, y todas las `herramientas/*.mjs` pasan
+`node --check`.
+
+**Guardianes, todos TODO OK:**
+
+- `mirar-mesa`, en 7 tamaños;
+- `mirar-mesa-nueva`: lugares, solapes, la mesa que no se mueve y la mano que
+  no salta;
+- `mirar-app-compilada`, `mirar-carga` y `mirar-mano`.
+
+**Dos sabotajes a `mirar-mesa`, los dos dan FALLA con el motivo exacto:**
+
+- `will-change: auto` en la mano;
+- `opacity: 1` en `.escena > *`.
+
+`globals.css` volvió idéntico (mismo sha256). `next dev` había reescrito
+`next-env.d.ts` y se dejó como estaba.
+
+**El APK compilado (`celular-usb.mjs --compilar`) trae:**
+
+- `[data-mano=tuya]{will-change:transform}` en su CSS;
+- la mano del 9/10 (`data-pieza`) en su JS.
+
+**No está instalado.**
+
+**Barrido de datos sensibles** con `/usr/bin/grep` sobre todo el diff y los 5
+archivos nuevos: sin rutas de la máquina, nombres de usuario, la serie del
+teléfono, IPs, correos, claves ni IDs de AdMob. Las sesiones, los videos y las
+fotos quedan en `capturas/`, que está ignorada. El `ffmpeg`, los APK H/A/F y
+la copia de `938c252` quedaron en el temporal de la sesión, fuera del repo.
+**El `.gitignore` no necesitó cambios.**
+
+**Revisión de seguridad:**
+
+- **`security-review`: sin hallazgos** de severidad alta ni media (≥ 8/10).
+  Cubre también el código del 9/10, que seguía sin commitear y sin revisar. Se
+  miró:
+  - **cada proceso nuevo:** todos van sin shell. A `input swipe` sólo le llegan
+    números; `--instalar` exige un `.apk` que exista; las etiquetas se validan;
+    `--tramo` se limpia;
+  - **lo que llega de la página:** el `MutationObserver` sólo manda cantidades
+    y nombres fijos;
+  - **dónde se escribe:** sólo en `capturas/` y en `/data/local/tmp`, que se
+    borra enseguida;
+  - **la app:** sin `dangerouslySetInnerHTML`, sin `localStorage` nuevo y sin
+    rutas nuevas.
+  - **Una nota de antes, fuera de alcance, cerrada igual porque cuesta una
+    línea:** la orden `tramo` de `control.txt` no se limpiaba antes de ir al
+    nombre de un archivo de traza. Ahora sí.
+- **`09-web-security`: limpio.**
+  - Las líneas nuevas de la app no tienen `innerHTML`, `eval`, URLs, `url()`,
+    `@import` ni `javascript:`.
+  - No hay rutas nuevas en `app/`.
+  - `layout.tsx` (la CSP), `next.config.ts`, `capacitor.config.ts`, `public/` y
+    `android/` están intactos.
+  - Los estilos calculados de la mesa salen de números del juego.
+- **`17-mobile-security`: no se corrió**, porque no se tocó Capacitor, ni el
+  manifiesto, ni nada nativo. El APK cambia sólo en el CSS y el JS.
+
+**Archivos tocados, sin commitear** (incluye lo del 9/10, que sigue sin
+commitear):
+
+- **App:** `app/globals.css`, `app/jugar/mesa/page.tsx`,
+  `lib/lugares-en-mesa.ts` y `lib/lugares-en-mesa.test.ts`.
+- **Herramientas nuevas:** `herramientas/apk-contra-apk.mjs`,
+  `herramientas/pantalla-real.mjs` y `herramientas/mirar-mano.mjs`.
+- **Herramientas cambiadas:** `herramientas/celular-usb.mjs`,
+  `herramientas/jugar-celular.mjs`, `herramientas/medir-celular.mjs`,
+  `herramientas/mirar-mesa.mjs`, `herramientas/mirar-mesa-nueva.mjs` y
+  `herramientas/mirar-web.mjs`.
+- `Historial.md`.
+
+### Segunda tanda: el APK con el arreglo, y Santiago todavía los ve
+
+**Lo que dijo.** Santiago instaló el APK nuevo (la app figura actualizada a
+las 21:11, después de compilarlo a las 20:51), jugó unas partidas y siguió
+viendo cuadraditos sobre las cartas de la mano, "cuando cantaba truco o tiraba
+cartas rápido", una o dos veces.
+
+**Comprobado desde adentro de la app del teléfono** (por el inspector): la
+regla `[data-mano="tuya"] { will-change: transform; }` está cargada, y la mano
+en pantalla tiene `will-change: transform`. El arreglo ESTÁ puesto.
+
+**Por qué el jugador no lo veía:** juega lento.
+
+- Esperaba 1,1–2,4 s entre toques y cantaba una de cada cuatro veces.
+- Además, el cerrojo hacía dos consultas por adb antes de cada toque
+  (`dumpsys activity` y `dumpsys power`, ~310 ms), así que nunca bajaba de ~2 s.
+- **`--rapido`:** toca cada 0,25–0,7 s y canta truco la mitad de las veces que
+  puede.
+- **El cerrojo ahora es UNA sola consulta**, con las dos preguntas filtradas en
+  el teléfono (~140 ms, medido). Sigue verificando antes de CADA toque.
+- Con eso queda en 1–2 s entre toques; el resto es esperar al rival.
+- El comando `input` de Android tarda 120–200 ms en arrancar (medido con una
+  tecla vacía, `KEYCODE_UNKNOWN`).
+
+**Una rama nueva, C2:** C1 + cada carta de la mano y la palma y el pulgar en
+su propia capa (`will-change: transform`). Si al tirar rápido lo que se
+redibuja entera es la capa de la mano, con C2 cada carta se mueve en lo suyo.
+
+**Sesión rápida** (`sesion-2026-10-12-00-26`, APK nuevo instalado): A (el APK
+tal cual), SC1 (sin la capa) y C2, en cuadrado latino de 3 min.
+
+- Una primera sesión a ritmo normal (`…-00-20`) se cortó a los 4 min, cuando
+  Santiago contó cómo los veía.
+- Una primera sesión rápida (`…-00-25`) se cortó porque el cerrojo lento no la
+  dejaba ser rápida.
+
+**Resultado, en caliente y jugando rápido** (`…-00-26` y `…-00-48`, todos los
+cuadros):
+
+| Rama | Primera | Segunda | Total |
+|---|---|---|---|
+| **A** (el APK con la capa) | 0 / 2816 | 0 / 2481 | **0 / 5297** |
+| SC1 (sin la capa) | 4 / 2603 | 4 / 1706 | **8 / 4309** (0,19 c/100) |
+| C2 (capa más a fondo) | 1 / 2850 | 0 / 1244 | 1 / 4094 |
+
+- Con la tasa de SC1, en 5297 cuadros se esperaban ~10. **El APK dio 0.**
+- Sin la capa vuelven a nacer, después de tirar y de tocar botones.
+- **C2 no mejora a A:** no se aplica.
+
+**La primera sesión rápida se cortó a las 21:46.** El jugador tocó "Salir"
+(una variación) y 7 s después el teléfono estaba en la pantalla de inicio y
+después en Spotify. El cerrojo no tocó nada afuera, como debe ser. MIUI
+reinició la app y la sesión se cerró. Se le pidió a Santiago no usar el
+teléfono mientras mide.
+
+### Tercera tanda: arranques en frío (`herramientas/arranques-en-frio.mjs`)
+
+**Lo que pidió Santiago:** "si el agente juega con el juego caliente, hacé
+que salga y entre de la app y vaya rápido a Partida rápida".
+
+**Cómo se hizo:** cada vuelta hace `am force-stop` de la app y la vuelve a
+abrir. El jugador `--rapido --dedo` entra a Partida rápida (~8 s después de
+abrir) y juega 2 min. Una sesión por vuelta, con A y SC1 turnadas.
+
+| En frío | Tanda 1 | Tanda 2 | Total |
+|---|---|---|---|
+| **A** (el APK con la capa) | 1 / 4096 | 0 / 4152 | **1 / 8248** |
+| SC1 (sin la capa) | 3 / 3935 | 7 / 4002 | **10 / 7937** |
+
+- **El arranque en frío no empeora:** en los primeros 10 s después de entrar
+  no nació ninguno, en ninguna de las dos.
+- **Sumando todo lo del día con la capa puesta** (C1 en vivo, en caliente
+  rápido y en frío): **1 bloque nuevo en 20.790 cuadros**.
+- **Sin la capa** (A antes del arreglo, SC1 rápido y SC1 en frío): **37 en
+  24.672**.
+- **El arreglo los baja ~25 veces, no a cero.** Queda más o menos uno cada
+  15–25 min de juego activo. Cuadra con lo que vio Santiago: "una o dos veces
+  en unas cuantas partidas".
+
+### Cuarta tanda: del lado de Android (lo pidió Santiago)
+
+**Qué se probó.** Lo único que la app puede decidir sobre cómo Android dibuja
+el WebView:
+
+- `LAYER_TYPE_HARDWARE` (hw);
+- `LAYER_TYPE_SOFTWARE`, el WebView sin GPU (sw);
+- `setOffscreenPreRaster` (prerraster).
+
+**Cómo:** con un interruptor de laboratorio en `MainActivity.java`, sólo en
+debug, que leía `truco_pintado` del Intent (`am start … --es truco_pintado
+sw`). Así un solo APK servía para todos.
+
+- `arranques-en-frio.mjs --modos` turnaba un modo por arranque y confirmaba en
+  el `logcat` del proceso nuevo que se había aplicado.
+- No se borró el `logcat` del teléfono: se filtró por proceso.
+- Todo con el amplificador sin la capa (rama PCSC1), para que con pocos
+  minutos se viera la diferencia.
+
+**Resultado** (primera vuelta de cada modo; Santiago desconectó a las ~23:05):
+
+| Modo | Bloques nuevos / cuadros | gfxinfo p50 · p90 · % tarde |
+|---|---|---|
+| ninguno | 19 / 739 · 22 / 859 | 57 · 113 ms · 71% · 48 · 105 · 65% |
+| hw | 22 / 805 · 22 / 791 | 46 · 89 · 56% · 48 · 97 · 58% |
+| prerraster | 17 / 830 | 46 · 89 · 57% |
+| **sw** | no se puede contar: sin GPU, la captura de Chromium no recibe ni un cuadro | **200 · 250 · 91%: ~5 cuadros por segundo** |
+
+(Las segundas vueltas de ninguno y hw las contó un agente en paralelo mientras
+se cerraba la sesión.)
+
+**Veredicto: del lado de Android no hay salida viable.**
+
+- **hw y prerraster no cambian nada.** Tiene sentido: la basura nace adentro
+  del rasterizado de Chromium (en las texturas de sus mosaicos), antes de que
+  Android componga el WebView. Cambiar cómo Android lo compone no llega ahí.
+- **sw (sin GPU) es injugable**, aunque limpiara todo: 5 cuadros por segundo.
+- **El interruptor se sacó.** `MainActivity.java` quedó idéntico a como
+  estaba, y no hay código nativo nuevo. Para volver a medir, éste era el método:
+
+  ```java
+  // en onCreate, después de super.onCreate(savedInstanceState):
+  if (BuildConfig.DEBUG && getBridge() != null && getBridge().getWebView() != null) {
+      String modo = getIntent().getStringExtra("truco_pintado");
+      WebView web = getBridge().getWebView();
+      if ("hw".equals(modo)) web.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+      else if ("sw".equals(modo)) web.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+      else if ("prerraster".equals(modo)) web.getSettings().setOffscreenPreRaster(true);
+      if (modo != null) Log.i("TrucoPintado", "modo de pintado de laboratorio: " + modo);
+  }
+  ```
+
+**Lo que queda instalado en el teléfono es el APK de laboratorio (G):** el del
+arreglo más ese interruptor, que sólo existe en debug y sin el extra no hace
+nada. El próximo `celular-usb.mjs --apk` lo reemplaza por el del árbol, que ya
+no lo trae.
+
+**Lo único que no se probó y podría ir más allá:** sacar la rasterización por
+GPU o el rasterizado parcial dentro de Chromium. Son banderas de Chromium y
+la app no las puede poner. El teléfono no lee `webview-command-line` (8/9).
+Habría que probarlas a mano desde "WebView DevTools" del teléfono (un ajuste
+de desarrollador, sólo para confirmar la causa; no sirve para publicar).
+
+### Todo lo probado contra los píxeles el 11/10 (sigue la tabla del 8/10)
+
+| Qué se probó | Resultado | Veredicto |
+|---|---|---|
+| H1: el cambio de la mano del 9/10 trajo la basura (APK H contra A) | H 6 / 3892 · A 0 / 1763 | no era |
+| H3: el WebView se actualizó solo | el 153.0.8010.57 es del 8/10, el mismo de las mediciones de ese día | no era |
+| ¿La captura de Chromium ve lo que ve el ojo? (`screenrecord`) | el mismo rectángulo, en el mismo lugar; dura ~200 ms | sí la ve |
+| PC: `opacity .999` en cada carta de la mano | 113 / 6811 contra A 12 / 6154 | ~8× PEOR |
+| PZ: `opacity .999` en la palma y el pulgar | 11 / 6619 | igual |
+| H4a, PCT0: sin la transición del abanico (sobre PC) | 68 / 2739 contra PC 71 / 3376 | no es |
+| H4b, P1b: sin el `.999` del grupo de abajo (sobre PC) | 142 / 3631 | el DOBLE: ese grupo protege |
+| PCPM: la mano envuelta en `.999` (sobre PC) | 43 / 3150 contra PC 71 / 3758 | apenas |
+| PM: la mano envuelta en `.999` (sobre A) | 2 / 2361 contra A 4 / 2337 | no se distingue |
+| **PCC1: la mano en su capa (sobre PC)** | **3 / 3269** contra 71 / 3758 | **~20× menos** |
+| **C1: la mano en su capa (sobre A)** | **0 / 3149** (se esperaban ~6) | **sirvió (aplicado)** |
+
+---
+
+## 2026-10-09 — La mano que se corría al repartir, y las cartas enseñadas encima del mazo
+
+> **Quedó sin cierre.** El código se aplicó (está en el árbol, sin commitear) y
+> hay capturas `capturas/mano/*-despues.png` del 9/10 a las 16:37. Pero la
+> sesión no escribió el estado de los tests, los guardianes ni la revisión de
+> seguridad. El 11/10 se compiló el APK con esto adentro y volvieron los
+> píxeles: ver la entrada del 11/10.
+
+### Lo que dijo Santiago
+
+- **El bug de los píxeles quedó arreglado** con el APK del 8/10 (las sombras sin
+  desenfoque). Además le parece que la app arranca algo más rápido.
+  - Él pensaba que era por algo de los anuncios: **no se tocó nada de los
+    anuncios**. El subagente de esa sesión sólo hizo la revisión de seguridad,
+    que no escribe nada.
+  - Lo más probable es que sean las mismas sombras: B0 ya había medido la mesa
+    más rápida sin desenfoques. **El arranque no se midió.**
+- **Pedido 1.** La mano dibujada (palma y pulgar) "se mueve del lugar" al
+  repartir y al terminar la mano. Preferiría que no se mostrara cuando ya no
+  quedan cartas.
+- **Pedido 2.** Las cartas que se enseñan al cerrar la mano caen corridas, a
+  veces encima del mazo. Tienen que ir al lado contrario: si el mazo está a la
+  izquierda, más a la derecha, y al revés.
+- **Para después:** las historias de los personajes.
+- **Siempre:** que nada de esto reabra los píxeles ni toque los anuncios.
+
+### Lo que se encontró, ANTES de tocar nada
+
+Se escribió `herramientas/mirar-mano.mjs`, que filma el reparto midiendo el
+centro de la palma y del pulgar, la mano después de tirar la última carta, y las
+enseñadas con el mazo a la derecha. Lo midió sobre el código sin cambios
+(`capturas/mano/*-antes.png`):
+
+| Qué | Antes |
+|---|---|
+| Palma durante el reparto | **se aparta 141 px** de su centro final (390×844) |
+| Pulgar durante el reparto | 0 px |
+| Después de tirar la última carta | palma y pulgar montados: un puño vacío |
+| Enseñadas con el mazo a la derecha | el 11 cae **encima del mazo** y tapa la muestra |
+
+**1. La palma se corre por una trampa de Tailwind 4.**
+
+- El dorso (`DedosAtras`) se centraba con `-translate-x-1/2`. En Tailwind 4.3.3
+  eso compila a la propiedad CSS **`translate`**, no a `transform`. Está
+  verificado en el CSS compilado de `out-app/`:
+  `.-translate-x-1\/2{…translate:var(--tw-translate-x) var(--tw-translate-y)}`.
+- La animación de entrada `entra-la-mano` anima justamente `translate`
+  (`0 26%` → `0 0`).
+- Así que, mientras dura, le pisa el −50% al dorso: la palma sube **corrida a la
+  derecha media mano** (141 px a 390×844) y al terminar salta a su lugar.
+- El pulgar se centra con `transform` inline y no tiene el problema. Por eso la
+  mano se veía partida: el pulgar en su lugar y la palma al costado.
+- El comentario de `globals.css` decía que "las dos piezas usan `transform` para
+  centrarse". Era cierto con Tailwind 3; con el 4 dejó de serlo.
+
+**2. La mano vacía.**
+
+- Con la última carta tirada, `nCartas = 0` y `anchoMano` baja a 1,5 cartas: un
+  puño pelado que queda hasta el próximo reparto.
+- Cuando TUS cartas se enseñan, el abanico se vacía pero `nCartas` seguía
+  contando `p.cartas.vos`, así que quedaba una mano grande sin nada adelante.
+
+**3. Las enseñadas siempre se agregaban hacia la derecha.**
+
+- `lugaresPara` (`lib/cartas-en-mesa.ts`) pone las cartas "de más" en índices
+  nuevos, y `lugarDeBaza` centra el grupo sobre las bazas JUGADAS.
+- Con 0 o 1 baza jugada, la tercera queda en u = 0,76. Es el lugar exacto del
+  mazo cuando está a la derecha, y el del mate cuando está a la izquierda.
+- Es el pendiente del 7/10: "con envido/flor del rival y 'me voy', las cartas
+  enseñadas caen corridas, sobre el mazo".
+- Ninguna herramienta lo agarraba: `mirar-mesa-nueva` no mide el cierre de mano,
+  y `mirar-web` no compara las enseñadas contra el mazo.
+
+### Lo que decidió Santiago (preguntado antes de tocar)
+
+- **En el reparto**, la mano entra con la primera carta, como se decidió el 31/8,
+  pero sin el salto.
+- **Si la mano termina con cartas en la mano** (al mazo, truco no querido), la
+  mano y lo que le quedaba se van con el barrido, a los 2 s. Así cada reparto
+  arranca igual, con la mano entrando desde abajo.
+
+---
+
 ## 2026-10-08 — Los píxeles: eran los DESENFOQUES de las sombras de caja (arreglo aplicado, sin probar en el APK)
 
 > Pedido de Santiago (8/10): que desde ahora este archivo se escriba **al

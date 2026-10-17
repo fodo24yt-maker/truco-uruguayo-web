@@ -657,9 +657,21 @@ for (const [ancho, alto] of [
         .filter((b) => !b.disabled && b.offsetParent !== null)
         .map((b) => b.dataset.canto),
     );
+  /* Espera a que la jugada se resuelva, pero SALE APENAS TERMINA LA MANO.
+     Hasta el 9/10/2026 eran 1500 ms fijos y después 900 más: si la mano
+     terminaba en el clic, se medía a los 2400 ms, con el barrido ya en marcha
+     —las cartas volando HACIA EL MAZO y el rótulo ya ido—, y salían fallas que
+     no eran de la mesa sino de la hora a la que se miraba. */
+  const esperarJugada = async () => {
+    for (let t = 0; t < 15; t++) {
+      await pag.waitForTimeout(100);
+      const fase = await pag.getAttribute("[data-fase]", "data-fase").catch(() => null);
+      if (fase && fase !== "jugando") return;
+    }
+  };
   const apretar = async (canto) => {
     await pag.locator(`[data-canto="${canto}"]`).first().click().catch(() => {});
-    await pag.waitForTimeout(1500);
+    await esperarJugada();
   };
 
   for (let intento = 0; intento < 30 && !visto; intento++) {
@@ -690,11 +702,12 @@ for (const [ancho, alto] of [
         const cartas = pag.locator(".mano-abanico button:not([disabled])");
         if ((await cartas.count()) === 0) break;
         await cartas.first().click().catch(() => {});
-        await pag.waitForTimeout(1500);
+        await esperarJugada();
       }
     }
 
-    // las cartas se apoyan a los 450ms de cerrarse la mano
+    // las cartas se apoyan a los 450ms de cerrarse la mano, y el barrido
+    // arranca a los 2000
     await pag.waitForTimeout(900);
 
     const m = await pag.evaluate(() => {
@@ -716,6 +729,8 @@ for (const [ancho, alto] of [
       const enseñadas = [...document.querySelectorAll('[data-mesa="baza-enseñada"]')].map(caja);
       const rotulo = document.querySelector('[data-mesa="cartel-tantos"]');
       if (enseñadas.length === 0) return null;
+      // si el barrido ya empezó, las cartas van volando al mazo: no se mide
+      if (document.querySelector('[data-mesa="baza-enseñada"].anim-al-mazo')) return "tarde";
 
       /* El registro de lo que dijo el rival, medido por lo que REALMENTE pinta
          y no por su contenedor: la columna del medallón es `w-[min(78%,340px)]`
@@ -734,6 +749,11 @@ for (const [ancho, alto] of [
       return {
         cuantas: enseñadas.length,
         cartas: unir(enseñadas),
+        enseñadas,
+        // las cartas de verdad del mazo y el cartelito: la caja de
+        // `[data-mesa="mazo"]` contiene al cartelito, así que no sirve
+        mazo: [...document.querySelectorAll('[data-mesa="mazo"] svg')].map(caja),
+        muestra: caja(document.querySelector('[data-mesa="muestra-cartel"]')),
         rotulo: caja(rotulo),
         textoRotulo: rotulo?.textContent.trim() ?? "",
         dialogo: unir(pinta.map((el) => caja(el)).filter((c) => c && c.der - c.izq > 0)),
@@ -751,6 +771,10 @@ for (const [ancho, alto] of [
     });
 
     if (!m) continue;
+    if (m === "tarde") {
+      console.log(`  ${etiqueta.padEnd(9)} (se llegó con el barrido empezado; otra vez)`);
+      continue;
+    }
     visto = true;
     seEnseñoAlguna = true;
 
@@ -765,6 +789,16 @@ for (const [ancho, alto] of [
     }
     if (solapan(m.cartas, m.mano)) {
       falla(etiqueta, `las cartas enseñadas se le montan a tu mano`);
+    }
+    /* NI AL MAZO NI A LA MUESTRA (9/10/2026). Caían siempre a la derecha y,
+       con el mazo de ese lado, la tercera tapaba la muestra. Ahora van al lado
+       libre; las sondas de `mirar-mesa-nueva.mjs` miden todos los lugares
+       posibles, y esto prueba que la mesa de verdad los use. */
+    const sobreElMazo = m.enseñadas.filter(
+      (c) => m.mazo.some((x) => solapan(c, x)) || solapan(c, m.muestra),
+    );
+    if (sobreElMazo.length) {
+      falla(etiqueta, `${sobreElMazo.length} carta(s) enseñada(s) se le montan al mazo o a la muestra`);
     }
     if (!m.rotulo) falla(etiqueta, `hay cartas enseñadas pero no salió el rótulo`);
     else if (solapan(m.rotulo, m.dialogo)) {

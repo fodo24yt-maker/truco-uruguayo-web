@@ -31,6 +31,9 @@ import path from "node:path";
 
 import { chromium } from "playwright";
 
+import { BAZA, uDeBaza, uDeEnseñada, uEnFila, vDeFila } from "../lib/lugares-en-mesa.ts";
+import { estiloEnMesa } from "../lib/mesa-perspectiva.ts";
+
 const SALIDA = path.join("capturas", "mesa-nueva");
 /**
  * Las seis. Medir sólo los celulares no alcanza: el feedback de la compu —el
@@ -394,6 +397,23 @@ for (const [ancho, alto] of [[390, 844], [320, 568]]) {
     if (pasos.length === 3) tiras = pasos;
   }
 
+  /* Y LA ÚLTIMA (9/10/2026): sin cartas no hay mano. Hasta ese día, tirada la
+     tercera quedaba un puño pelado hasta el reparto siguiente. */
+  if (tiras) {
+    await pag.locator(".mano-abanico button:not([disabled])").first().click().catch(() => {});
+    await pag.waitForTimeout(700);
+    const enAbanico = await pag.locator(".mano-abanico button").count();
+    const piezas = await pag.locator('[data-pieza="dedos"], [data-pieza="pulgar"]').count();
+    if (enAbanico === 0 && piezas > 0) {
+      fallos++;
+      console.log(`FALLA ${ancho}x${alto}  tiraste la última y la mano sigue dibujada (${piezas} piezas)`);
+    } else if (enAbanico === 0) {
+      console.log(`  ${ancho}x${alto}: tirada la última, la mano se fue`);
+    } else {
+      console.log(`  ${ancho}x${alto}: (no se pudo tirar la última carta)`);
+    }
+  }
+
   if (!tiras) {
     console.log(`  ${ancho}x${alto}: no se pudo llegar a una sola carta sin que terminara la mano`);
   } else {
@@ -495,6 +515,221 @@ for (const [ancho, alto] of TAMANOS) {
     await pag.screenshot({ path: path.join(SALIDA, `falla-salto-${etiqueta}.png`) });
   } else {
     console.log(`  ${etiqueta.padEnd(12)} OK  la mesa se queda en ${antes}px`);
+  }
+  await ctx.close();
+}
+
+/* ══ LAS ENSEÑADAS Y LAS BAZAS, CONTRA EL MAZO Y EL MATE (9/10/2026) ═══════
+   Las cartas que se enseñan al cerrar la mano caían siempre a la DERECHA del
+   grupo, y con la mano cortada temprano la tercera quedaba encima del mazo
+   —tapando la muestra— cuando el mazo estaba a la derecha. Ninguna medición lo
+   veía: la de arriba mide la mesa con cartas jugadas, no el cierre de mano.
+
+   Y esperar a que el azar del reparto arme cada caso no sirve: que el rival
+   gane el envido, que alguien se vaya al mazo antes de jugar, que el mazo
+   esté del lado justo... Así que esto mide TODOS LOS LUGARES POSIBLES a la vez,
+   con SONDAS: una caja del tamaño de una carta apoyada por cada lugar de la
+   fila —de 0 a 3 bazas jugadas, los tres lugares, las dos filas— puesta con
+   los MISMOS números y la MISMA cuenta con que dibuja la mesa
+   (`lib/lugares-en-mesa.ts` y `estiloEnMesa`), adentro de la tabla de verdad.
+   Se miden y se sacan.
+
+   Que la mesa use esas funciones lo verifica, con una mano de verdad,
+   `mirar-web.mjs` ("lo que se enseña al cerrar la mano").
+
+   Falla si alguna se le monta a una carta del mazo, al cartelito de la
+   muestra o al mate, o si se sale de la escena. Con el mazo de los DOS lados:
+   la primera mano lo tiene a la izquierda; se va al mazo y la segunda lo tiene
+   a la derecha.
+
+   De paso comprueba lo que eligió Santiago ese día: cuando la mano termina con
+   cartas en la mano, tu mano se va con el barrido. */
+console.log("\n── las enseñadas y las bazas contra el mazo y el mate ─────────");
+
+/** Todos los lugares de la fila, con su `u` y su `v`. */
+function lugaresPosibles(lado) {
+  const lugares = [];
+  for (let jugadas = 0; jugadas <= 3; jugadas++) {
+    for (let baza = 0; baza <= 2; baza++) {
+      for (const quien of ["rival", "vos"]) {
+        const enseñada = baza >= jugadas;
+        const desvio = enseñada ? uDeEnseñada(baza, jugadas, lado) : uDeBaza(baza, jugadas);
+        lugares.push({
+          que: `${enseñada ? "enseñada" : "jugada"} de ${quien === "vos" ? "vos" : "él"} ` +
+            `(baza ${baza}, ${jugadas} jugada${jugadas === 1 ? "" : "s"})`,
+          enseñada,
+          estilo: estiloEnMesa(uEnFila(quien, desvio, lado), vDeFila(quien)),
+        });
+      }
+    }
+  }
+  return lugares;
+}
+
+/** Pone las sondas en la tabla, las mide, las saca, y mide el mazo y el mate. */
+const medirSondas = (pag, lugares) =>
+  pag.evaluate(
+    ({ lugares, ancho }) => {
+      const caja = (el) => {
+        const r = el.getBoundingClientRect();
+        return { arriba: r.top, abajo: r.bottom, izq: r.left, der: r.right };
+      };
+      const tabla = document.querySelector('[data-mesa="tabla"]');
+      const sondas = lugares.map(({ estilo }) => {
+        const s = document.createElement("div");
+        Object.assign(s.style, estilo, { width: ancho, aspectRatio: "2 / 3", pointerEvents: "none" });
+        tabla.appendChild(s);
+        return s;
+      });
+      const medidas = sondas.map(caja);
+      sondas.forEach((s) => s.remove());
+      const mazo = document.querySelector('[data-mesa="mazo"]');
+      const t = caja(tabla);
+      const m = caja(mazo);
+      return {
+        sondas: medidas,
+        lado: (m.izq + m.der) / 2 > (t.izq + t.der) / 2 ? "derecha" : "izquierda",
+        canto: t.arriba,
+        mazo: [...mazo.querySelectorAll("svg")].map(caja),
+        cartel: (() => {
+          const c = document.querySelector('[data-mesa="muestra-cartel"]');
+          return c ? caja(c) : null;
+        })(),
+        mate: caja(document.querySelector('[data-mesa="mate"]')),
+      };
+    },
+    { lugares: lugares.map(({ estilo }) => ({ estilo })), ancho: BAZA.ancho },
+  );
+
+/** Cuánto se meten dos cajas una en la otra, en el eje que menos (0 si no se tocan). */
+const cuantoSeMete = (a, b) =>
+  seCruzan(a, b) ? Math.min(a.der - b.izq, b.der - a.izq, a.abajo - b.arriba, b.abajo - a.arriba) : 0;
+
+const piezasDeLaMano = (pag) => pag.locator('[data-pieza="dedos"], [data-pieza="pulgar"]').count();
+
+for (const [ancho, alto] of TAMANOS) {
+  const ctx = await nav.newContext({ viewport: { width: ancho, height: alto } });
+  const pag = await ctx.newPage();
+  const etiqueta = `${ancho}x${alto}`;
+  await abrir(pag);
+
+  for (const ladoEsperado of ["izquierda", "derecha"]) {
+    if (ladoEsperado === "derecha") {
+      /* A LA MANO SIGUIENTE. Irse al mazo con las tres en la mano es además
+         el caso de "terminó con cartas en la mano": a los 2 s, con el
+         barrido, tu mano se tiene que haber ido. */
+      for (let i = 0; i < 3; i++) {
+        const quiero = pag.locator('[data-canto="no-quiero"]');
+        if (await quiero.count()) await quiero.first().click().catch(() => {});
+        await pag.locator('[data-canto="irse-al-mazo"]').first().click().catch(() => {});
+        await pag.waitForTimeout(500);
+        const fase = await pag.getAttribute("[data-fase]", "data-fase").catch(() => null);
+        if (fase && fase !== "jugando") break;
+      }
+      await pag.waitForTimeout(2300);
+      const quedan = await piezasDeLaMano(pag);
+      if (quedan > 0) {
+        fallos++;
+        console.log(`FALLA ${etiqueta}  terminada la mano y pasado el barrido, tu mano sigue ahí (${quedan} piezas)`);
+      }
+      const seguir = pag.getByRole("button", { name: /Siguiente mano|Otra contra/ });
+      await seguir.waitFor({ timeout: 8000 }).catch(() => {});
+      await seguir.click().catch(() => {});
+      await pag.waitForTimeout(2600);
+    }
+
+    const lugares = lugaresPosibles(ladoEsperado);
+    const m = await medirSondas(pag, lugares);
+    if (m.lado !== ladoEsperado) {
+      fallos++;
+      console.log(`FALLA ${etiqueta}  se esperaba el mazo a la ${ladoEsperado} y está a la ${m.lado}`);
+      continue;
+    }
+    const problemas = [];
+    let margenMazo = Infinity;
+    let margenMate = Infinity;
+    m.sondas.forEach((s, i) => {
+      const { que } = lugares[i];
+      const contraMazo = Math.max(0, ...m.mazo.map((c) => cuantoSeMete(s, c)));
+      if (contraMazo > 0) problemas.push(`la ${que} se le monta al mazo (${contraMazo.toFixed(0)}px)`);
+      if (m.cartel && seCruzan(s, m.cartel)) problemas.push(`la ${que} tapa el cartelito de la muestra`);
+      const contraMate = cuantoSeMete(s, m.mate);
+      if (contraMate > 0) problemas.push(`la ${que} se le monta al mate (${contraMate.toFixed(0)}px)`);
+      if (s.izq < -1 || s.der > ancho + 1) problemas.push(`la ${que} se sale por el costado`);
+      if (s.arriba < m.canto - TOLERANCIA) problemas.push(`la ${que} cruza el canto`);
+      // lo que sobra hasta el mazo y el mate, en horizontal, de las que se tocan en vertical
+      for (const c of m.mazo) {
+        if (s.arriba < c.abajo && c.arriba < s.abajo) {
+          margenMazo = Math.min(margenMazo, Math.max(c.izq - s.der, s.izq - c.der));
+        }
+      }
+      if (s.arriba < m.mate.abajo && m.mate.arriba < s.abajo) {
+        margenMate = Math.min(margenMate, Math.max(m.mate.izq - s.der, s.izq - m.mate.der));
+      }
+    });
+    const margen = (n) => (n === Infinity ? "—" : `${n.toFixed(0)}px`);
+    if (problemas.length) {
+      fallos += problemas.length;
+      console.log(`FALLA ${etiqueta} mazo a la ${ladoEsperado}`);
+      for (const p of problemas) console.log(`   ${p}`);
+      await pag.screenshot({ path: path.join(SALIDA, `falla-ensenadas-${etiqueta}-${ladoEsperado}.png`) });
+    } else {
+      console.log(
+        `  ${etiqueta.padEnd(9)} mazo a la ${ladoEsperado.padEnd(9)} OK  (${lugares.length} lugares; ` +
+          `lo más cerca: ${margen(margenMazo)} del mazo, ${margen(margenMate)} del mate)`,
+      );
+    }
+  }
+  await ctx.close();
+}
+
+/* ══ LA MANO NO SALTA AL REPARTIR (9/10/2026) ═══════════════════════════════
+   La palma se centraba con `-translate-x-1/2`, que en Tailwind 4 escribe la
+   propiedad `translate`: la misma que anima la entrada de la mano. Mientras
+   subía, la animación le pisaba el −50% y la palma entraba corrida media mano
+   a la derecha —141 px a 390x844— con el pulgar en su lugar, y al terminar
+   saltaba. Se mide el centro de las dos piezas durante todo el reparto contra
+   donde terminan. */
+console.log("\n── la mano no salta al repartir ───────────────────────────────");
+for (const [ancho, alto] of [[390, 844], [1280, 620]]) {
+  const ctx = await nav.newContext({ viewport: { width: ancho, height: alto } });
+  const pag = await ctx.newPage();
+  const etiqueta = `${ancho}x${alto}`;
+  await pag.goto("http://localhost:3000/jugar/mesa?depto=montevideo", { waitUntil: "domcontentloaded" });
+  await pag.addStyleTag({ content: "nextjs-portal{display:none!important}" });
+  const centros = () =>
+    pag.evaluate(() =>
+      ["dedos", "pulgar"].map((pieza) => {
+        const el = document.querySelector(`[data-pieza="${pieza}"]`);
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return (r.left + r.right) / 2;
+      }),
+    );
+  await pag.waitForSelector('[data-pieza="dedos"]', { timeout: 15000 }).catch(() => {});
+  const muestras = [];
+  const t0 = Date.now();
+  while (Date.now() - t0 < 1500) {
+    muestras.push(await centros());
+    await pag.waitForTimeout(40);
+  }
+  await pag.waitForTimeout(300);
+  const final = await centros();
+  if (final.some((c) => c === null)) {
+    fallos++;
+    console.log(`FALLA ${etiqueta}  no se encontró [data-pieza]: ¿se le sacó el agarre a la mano?`);
+  } else {
+    const salto = ["palma", "pulgar"].map((nombre, k) => ({
+      nombre,
+      px: Math.max(0, ...muestras.filter((m) => m[k] !== null).map((m) => Math.abs(m[k] - final[k]))),
+    }));
+    const malo = salto.filter((s) => s.px > 2);
+    if (malo.length) {
+      fallos++;
+      console.log(`FALLA ${etiqueta}  ${malo.map((s) => `la ${s.nombre} se corre ${s.px.toFixed(0)}px`).join(", ")} al repartir`);
+    } else {
+      console.log(`  ${etiqueta.padEnd(9)} OK  (${muestras.length} cuadros; palma ${salto[0].px.toFixed(0)}px, pulgar ${salto[1].px.toFixed(0)}px)`);
+    }
   }
   await ctx.close();
 }

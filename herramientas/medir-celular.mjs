@@ -7,6 +7,7 @@
  *     node herramientas/medir-celular.mjs --sesion --jpeg [CALIDAD]  cuadros en JPEG (90): muchos más por segundo
  *     node herramientas/medir-celular.mjs --analizar CARPETA  el informe de una sesión grabada
  *     node herramientas/medir-celular.mjs --pixeles CARPETA   la basura de la mesa, por rama y por zona
+ *     node herramientas/medir-celular.mjs --pixeles C1 C2… --por-tramo   varias sesiones juntas, por APK
  *
  * Anda con el APK de depuración de siempre (`celular-usb.mjs --apk`), que
  * publica el inspector del WebView por su cuenta (ver `puente-devtools.mjs`).
@@ -60,6 +61,11 @@
  *
  *     tramo NOMBRE     cierra el tramo anterior (con su gfxinfo) y abre otro
  *     rama X           pone la rama de CSS X (ver `RAMAS`); "rama A" la saca
+ *
+ * `--tramo NOMBRE` le pone nombre al primer tramo (si no, es "inicio", que el
+ * análisis deja afuera). Es para medir un APK contra otro (11/10/2026): una
+ * sesión por instalación, con `--tramo H-1`, `--tramo A-1`…, y después
+ * `--pixeles` con todas las carpetas y `--por-tramo`, que junta H-1, H-2… en H.
  *     traza N          una traza de Chromium de N segundos (máx 60)
  *     definir X CSS    una rama nueva sin reiniciar (después, "rama X")
  *     nota TEXTO       una marca en la línea de tiempo ("Santiago vio algo")
@@ -101,7 +107,10 @@ const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 const args = process.argv.slice(2);
 const numero = (bandera, porOmision) => {
   const i = args.indexOf(bandera);
-  return i === -1 ? porOmision : Number(args[i + 1]) || porOmision;
+  /* Con `|| porOmision` un 0 explícito se volvía el valor por omisión:
+     `--cada 0` (todos los cuadros) muestreaba igual cada 200 ms (11/10/2026). */
+  const v = i === -1 || args[i + 1] === undefined || args[i + 1] === "" ? NaN : Number(args[i + 1]);
+  return Number.isFinite(v) ? v : porOmision;
 };
 
 // ── Las ramas de CSS ────────────────────────────────────────────────────────
@@ -117,6 +126,14 @@ const numero = (bandera, porOmision) => {
 const HIJA_DE_ABAJO = '.escena > :has([data-mano="tuya"])';
 export const RAMAS = {
   A: { que: "control: como está", css: "", revisar: [] },
+  /* Desde el 11/10/2026 la mano va en su propia capa EN EL CÓDIGO (C1, abajo,
+     ganó), así que "A" ya la trae. Ésta es la mesa de antes, sin la capa, para
+     volver a compararlas. */
+  SC1: {
+    que: "la mano SIN su capa propia (como era antes del 11/10/2026)",
+    css: `[data-mano="tuya"] { will-change: auto !important; }`,
+    revisar: [['[data-mano="tuya"]', "willChange"]],
+  },
   L2: {
     que: "la escena SIN la opacity .999 de sus hijas (el arreglo del 8/9): ¿cuánto le cuesta a la GPU?",
     css: ".escena > * { opacity: 1 !important; }",
@@ -210,6 +227,91 @@ export const RAMAS = {
     ].map(([sel, sombra]) => `${sel} { box-shadow: ${sombra} !important; }`).join("\n"),
     revisar: [['[data-mano="tuya"] .carta:not(.halo-pieza)', "boxShadow"], ['[data-mesa="mazo"] .carta', "boxShadow"]],
   },
+  /* LA MANO DEL 9/10/2026, partida en sus piezas (11/10/2026). Con el APK
+     de ese día Santiago volvió a ver cuadraditos sobre las cartas de la mano.
+     Ese cambio centró el dorso con `transform` (antes era la clase
+     `-translate-x-1/2`, que en Tailwind 4 escribe `translate` y la animación
+     de entrada le pisaba), y hace que la palma y el pulgar se monten y se
+     desmonten según haya cartas. Éstas separan una cosa de la otra y prueban
+     dos arreglos que no cambian cómo se ve. `[data-pieza]` sólo existe en el
+     APK con ese cambio. */
+  "A-centro": {
+    que: "el dorso centrado como ANTES del 9/10 (la propiedad translate, que la entrada le pisa)",
+    css: `[data-pieza="dedos"] { transform: none !important; translate: -50% 0; }`,
+    revisar: [['[data-pieza="dedos"]', "transform"], ['[data-pieza="dedos"]', "translate"]],
+  },
+  "A-sinanim": {
+    que: "la palma y el pulgar SIN la animación de entrada (aparecen de golpe): ¿la capa de la entrada?",
+    css: `[data-pieza] { animation: none !important; }`,
+    revisar: [['[data-pieza="dedos"]', "animationName"]],
+  },
+  PC: {
+    que: "cada carta de la mano en su propio búfer (opacity .999), sin sacarle el suyo al grupo",
+    css: `.mano-abanico > * { opacity: 0.999; }`,
+    revisar: [[".mano-abanico > *", "opacity"], [HIJA_DE_ABAJO, "opacity"]],
+  },
+  PZ: {
+    que: "la palma y el pulgar en su propio búfer (opacity .999)",
+    css: `[data-pieza] { opacity: 0.999; }`,
+    revisar: [['[data-pieza="dedos"]', "opacity"], ['[data-pieza="pulgar"]', "opacity"]],
+  },
+  /* EL AMPLIFICADOR (11/10/2026). PC multiplicó la basura ~25 veces, sobre la
+     palma y después de tirar. Hipótesis: lo que la dispara es que el grupo de
+     abajo de la escena (opacity .999) tiene que pintarse en una textura aparte
+     cada vez que algo de adentro se anima en la GPU —las cartas que se
+     acomodan al tirar una— y PC suma una textura por carta. Sobre PC, sacar
+     el acomodo animado (PCT0) o la opacidad del grupo (P1b) tendría que
+     voltearla. Si la voltea, se prueba lo mismo sobre A. */
+  T0: {
+    que: "el abanico SIN la transición al tirar (las cartas se acomodan de golpe)",
+    css: `.mano-abanico > * { transition: none !important; }`,
+    revisar: [[".mano-abanico > *", "transitionProperty"]],
+  },
+  PCT0: {
+    que: "PC + el abanico sin la transición al tirar",
+    css: `.mano-abanico > * { opacity: 0.999; transition: none !important; }`,
+    revisar: [[".mano-abanico > *", "opacity"], [".mano-abanico > *", "transitionProperty"]],
+  },
+  /* EL AMPLIFICADOR, SEGUNDA VUELTA (11/10/2026). PCT0 y P1b no la voltearon:
+     sin la transición sigue igual, y sin la opacidad del grupo de abajo es el
+     DOBLE de peor. La regla que queda: una textura grande que envuelve la zona
+     protege, texturas chicas adentro enferman. PCPM envuelve la mano sola
+     (adentro del grupo de abajo, que queda como está); PCC1 la saca a su
+     propia capa del compositor. */
+  PCPM: {
+    que: "PC + la mano (sin los cantos) envuelta en su propia textura, sin tocar la del grupo de abajo",
+    css: `.mano-abanico > * { opacity: 0.999; } [data-mano="tuya"] { opacity: 0.999; }`,
+    revisar: [[".mano-abanico > *", "opacity"], ['[data-mano="tuya"]', "opacity"], [HIJA_DE_ABAJO, "opacity"]],
+  },
+  PCC1: {
+    que: "PC + la mano en su propia capa del compositor (will-change)",
+    css: `.mano-abanico > * { opacity: 0.999; } [data-mano="tuya"] { will-change: transform; }`,
+    revisar: [[".mano-abanico > *", "opacity"], ['[data-mano="tuya"]', "willChange"]],
+  },
+  PM: {
+    que: "la mano (sin los cantos) envuelta en su propia textura, sin tocar la del grupo de abajo",
+    css: `[data-mano="tuya"] { opacity: 0.999; }`,
+    revisar: [['[data-mano="tuya"]', "opacity"], [HIJA_DE_ABAJO, "opacity"]],
+  },
+  /* EL AMPLIFICADOR SIN LA CAPA (11/10/2026, tercera tanda). Con la capa en
+     el código, PC ya no amplifica (PCC1 3 / 3269): para medir los modos de
+     pintado de Android (`MainActivity.java`, `arranques-en-frio.mjs --modos`)
+     hace falta la basura alta, o sea PC y sin la capa. */
+  PCSC1: {
+    que: "PC + la mano SIN su capa propia: el amplificador, con el APK que ya trae la capa",
+    css: `.mano-abanico > * { opacity: 0.999; } [data-mano="tuya"] { will-change: auto !important; }`,
+    revisar: [[".mano-abanico > *", "opacity"], ['[data-mano="tuya"]', "willChange"]],
+  },
+  /* MÁS A FONDO QUE C1 (11/10/2026, segunda tanda). Con C1 en el APK,
+     Santiago siguió viendo uno o dos "cuando cantaba truco o tiraba cartas
+     rápido". C2 le da capa propia también a cada carta y a la palma y el
+     pulgar, arriba de la capa de la mano: al tirar rápido cada carta se mueve
+     en lo suyo y la capa de la mano no se redibuja entera. */
+  C2: {
+    que: "C1 + cada carta de la mano y la palma y el pulgar en su propia capa",
+    css: `.mano-abanico > *, [data-pieza] { will-change: transform; }`,
+    revisar: [[".mano-abanico > *", "willChange"], ['[data-pieza="dedos"]', "willChange"], ['[data-mano="tuya"]', "willChange"]],
+  },
   /* Sólo la sombra de las cartas de la mano (`SOMBRA_EN_MANO`), que es la que
      cae sobre la palma: el "uno primero" del arreglo. */
   S1m: {
@@ -231,7 +333,7 @@ export const RAMAS = {
 
    `quien` describe lo tocado sin leer contenido de la persona: la etiqueta, el
    aria-label o hasta 24 letras del texto del botón ("Truco", "Envido"). */
-const GUION_PAGINA = `(() => {
+export const GUION_PAGINA = `(() => {
   if (window.__medir) return;
   window.__medir = 1;
   const enviar = (tipo, datos) => {
@@ -271,8 +373,45 @@ const GUION_PAGINA = `(() => {
     }); }).observe({ type: "long-animation-frame", buffered: true });
   } catch {}
   try {
-    navigation.addEventListener("navigate", (e) => enviar("navega", { t: performance.now(), a: new URL(e.destination.url).pathname, tipo: e.navigationType }));
+    navigation.addEventListener("navigate", (e) => enviar("navega", { t: performance.now(), a: new URL(e.destination.url).pathname, como: e.navigationType }));
     navigation.addEventListener("navigatesuccess", () => enviar("navegado", { t: performance.now(), ruta: location.pathname }));
+  } catch {}
+  /* LO QUE PASA EN LA MESA (11/10/2026), con la hora: para saber después de
+     qué nace cada bloque de basura. Los toques no alcanzan: el reparto, la
+     carta del bot, el barrido y la mano que aparece o se va no los toca
+     nadie. Se cuenta qué hay en el DOM una vez por cuadro con cambios y se
+     avisa cuando algo pasa de no estar a estar (o al revés). "mano-aparece" y
+     "mano-se-va" son la palma (\`z-0\`): con el APK del 9/10 se desmonta sin
+     cartas; con el de antes queda siempre y esos dos no salen nunca. */
+  try {
+    const q = (s) => document.querySelectorAll(s).length;
+    const contar = () => ({
+      reparte: q(".anim-reparte"), entra: q(".anim-entra-mano"),
+      palma: q('[data-mano="tuya"] span.pointer-events-none.absolute.z-0'),
+      abanico: q(".mano-abanico > *"), barre: q(".anim-al-mazo"), ensena: q('[data-mesa="baza-enseñada"]'),
+    });
+    /* Se arranca con lo que hay AHORA y se observa el \`document\`, no
+       \`document.documentElement\`: este guion también corre al crearse cada
+       documento nuevo, cuando todavía no existe ni el <html>, y observar null
+       tira un error que el try se traga callado (pasó en la primera prueba). */
+    let antes = contar(), pedido = false;
+    const mirar = () => {
+      pedido = false;
+      const t = performance.now(), ahora = contar();
+      const avisar = (que) => enviar("mesa", { t, que });
+      {
+        if (!antes.reparte && ahora.reparte) avisar("reparto");
+        if (!antes.entra && ahora.entra) avisar("mano-anima");
+        if (!antes.palma && ahora.palma) avisar("mano-aparece");
+        if (antes.palma && !ahora.palma) avisar("mano-se-va");
+        if (!antes.barre && ahora.barre) avisar("barrido");
+        if (!antes.ensena && ahora.ensena) avisar("enseñadas");
+        if (ahora.abanico < antes.abanico) avisar(ahora.abanico ? "tira" : "abanico-vacio");
+      }
+      antes = ahora;
+    };
+    new MutationObserver(() => { if (!pedido) { pedido = true; requestAnimationFrame(mirar); } })
+      .observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
   } catch {}
 })()`;
 
@@ -466,10 +605,17 @@ async function sesion(minutos, conCuadros, jpeg) {
   const ahoraTel = () => Math.round(Date.now() + reloj);
 
   let rama = "A";
-  let tramo = "inicio";
+  const iTramo = args.indexOf("--tramo");
+  let tramo = iTramo === -1 ? "inicio" : String(args[iTramo + 1] || "inicio").replace(/[^\w.-]/g, "_").slice(0, 40);
   let fuera = false;
   const cuenta = { cuadros: 0, descartados: 0, pagina: 0 };
-  anotar("eventos.jsonl", { t: ahoraTel(), que: "inicio", pid, renderer, conCuadros });
+  /* Qué WebView dibuja y cuándo se instaló la app (11/10/2026). Si los
+     píxeles vuelven sin haber tocado nada, lo primero es saber si el teléfono
+     se actualizó el WebView solo, o si es otro APK. */
+  const webview = /Current WebView package \(name, version\): \(([^)]+)\)/.exec(texto("shell", "dumpsys", "webviewupdate"))?.[1] ?? null;
+  const instalada = /lastUpdateTime=([^\r\n]+)/.exec(texto("shell", "dumpsys", "package", PAQUETE))?.[1]?.trim() ?? null;
+  anotar("eventos.jsonl", { t: ahoraTel(), que: "inicio", pid, renderer, conCuadros, tramo, webview, instalada });
+  console.log(`   WebView ${webview ?? "?"} · app instalada ${instalada ?? "?"} · primer tramo "${tramo}"`);
 
   // Desde adentro de la página
   cdp.on("Runtime.bindingCalled", (e) => {
@@ -583,7 +729,7 @@ async function sesion(minutos, conCuadros, jpeg) {
       else if (orden === "tramo" && valor) {
         const g = cerrarTramo();
         console.log(`   ▸ tramo "${tramo}" cerrado: ${g.cuadros} cuadros · ${g.tarde}% tarde · p50 ${g.p50} · p90 ${g.p90} · p99 ${g.p99} ms`);
-        tramo = valor.slice(0, 40);
+        tramo = valor.replace(/[^\w.-]/g, "_").slice(0, 40); // va en nombres de archivo (las trazas)
         anotar("eventos.jsonl", { t: ahoraTel(), que: "tramo", tramo });
         console.log(`   ▸ tramo "${tramo}"`);
       } else if (orden === "rama" && RAMAS[valor]) {
@@ -866,25 +1012,29 @@ function resumenTraza(ruta) {
        node herramientas/medir-celular.mjs --pixeles CARPETA [--cada MS] [--guardar N] [--zona NOMBRE=x,y,w,h] */
 const MARGEN_ZONA = 16; // px CSS: la sombra de una carta sale ~15 px de su caja
 
-async function pixeles(carpeta) {
+/* DESPUÉS DE QUÉ NACE (11/10/2026). Para cada tipo de cosa que pasa en la
+   mesa —lo que avisa `GUION_PAGINA` y los toques— cuántos bloques nacen en los
+   `VENTANA_NACE` ms siguientes, dividido por cuántas veces pasó. El 8/10 se
+   midió que nacen a los 0,5–1,5 s del redibujado y se muestrea cada 200 ms:
+   2,5 s los agarra a casi todos. Un bloque cuenta para todos los tipos que
+   tenga en su ventana (al barrer, por ejemplo, el abanico se vacía en el mismo
+   cuadro): esto da una tasa por tipo, no un reparto de culpas. */
+const VENTANA_NACE = 2500;
+const claseDeTocado = (quien) =>
+  quien.startsWith("mano>") ? (/quiero/i.test(quien) ? "toca-quiero" : quien.includes("Tirar") ? "toca-carta" : "toca-mano")
+  : /quiero|achico/i.test(quien) ? "toca-quiero" : /^button/.test(quien) ? "toca-botón" : "toca-otro";
+
+async function pixeles(carpetas) {
   const sharp = (await import("sharp")).default;
   const { bloquesPlanosDe } = await import("./bloques.mjs");
-  const f = (n) => path.join(carpeta, n);
-  const cuadros = leerJsonl(f("cuadros.jsonl")).sort((a, b) => a.t - b.t);
-  const muestras = leerJsonl(f("muestras.jsonl")).sort((a, b) => a.ahora - b.ahora);
-  const eventos = leerJsonl(f("eventos.jsonl"));
-  if (!cuadros.length) morir("Esa sesión no tiene cuadros (¿se grabó con --sin-cuadros?).");
   const cada = numero("--cada", 200);
   const guardar = numero("--guardar", 0);
-
-  // Los ratos en que la app no estaba arriba (un anuncio, otra app): afuera.
-  const fueras = [];
-  let desde = null;
-  for (const e of eventos) {
-    if (e.que === "app-fuera") desde = e.t;
-    if (e.que === "app-vuelve" && desde != null) { fueras.push([desde, e.t]); desde = null; }
-  }
-  if (desde != null) fueras.push([desde, Infinity]);
+  /* `--por-tramo`: junta por el nombre del tramo sin el número del final
+     (H-1, H-2 → H), para medir un APK contra otro con una sesión por
+     instalación. Sin eso junta por rama de CSS, como siempre. */
+  const porNombre = args.includes("--por-tramo");
+  const grupoDe = (tramo, rama) => (porNombre ? String(tramo).replace(/-\d+$/, "") : String(rama));
+  const varias = carpetas.length > 1;
 
   /* Zonas fijas para sesiones grabadas antes de que el muestreo las guardara
      (`--zona palma=73,654,214,103`, en px CSS; se puede repetir). */
@@ -912,134 +1062,208 @@ async function pixeles(carpeta) {
     return "otro";
   };
 
-  /* Las ENTRADAS (8/10/2026): llegar a la mesa, volver a la app y un rival
-     nuevo. Santiago: "la basura suele salir al principio". Cada cuadro se
-     cuenta según cuánto pasó desde la última, para no concluir con la mesa
-     que ya se asentó. */
-  const entradas = [];
-  let antes = null;
-  for (const m of muestras) {
-    const enMesa = !!m.ruta?.startsWith("/jugar/mesa") && !m.carga;
-    if (enMesa && antes === false) entradas.push(m.ahora);
-    antes = enMesa;
-  }
-  for (const e of eventos) {
-    if (e.que === "app-vuelve" || (e.que === "nota" && /^(cambia-rival|vuelve-a-la-app)/.test(e.nota || ""))) entradas.push(e.t);
-  }
-  entradas.sort((a, b) => a - b);
   const TRAMOS_ENTRADA = [[0, 10], [10, 30], [30, 90], [90, Infinity]];
-  const tramoEntrada = (t) => {
-    let ultima = null;
-    for (const x of entradas) { if (x > t) break; ultima = x; }
-    if (ultima == null) return null;
-    const s = (t - ultima) / 1000;
-    const i = TRAMOS_ENTRADA.findIndex(([a, b]) => s >= a && s < b);
-    return i;
-  };
-  const porEntrada = new Map(); // rama → [{ cuadros, sucios, nacen }] por tramo de tiempo
-
+  const porEntrada = new Map(); // grupo → [{ cuadros, sucios, nacen }] por tramo de tiempo
   const porTramo = new Map();
-  const vistos = new Map(); // dónde hubo un bloque, y cuándo fue la última vez
-  const filas = [];
-  let j = 0;
-  let ultimo = -Infinity;
-  for (const c of cuadros) {
-    if (c.t - ultimo < cada) continue;
-    if (fueras.some(([a, b]) => c.t >= a && c.t <= b)) continue;
-    while (j + 1 < muestras.length && muestras[j + 1].ahora <= c.t) j++;
-    const m = muestras[j];
-    if (!m || m.ahora > c.t || !m.ruta?.startsWith("/jugar/mesa") || m.carga || !m.escena) continue;
-    let img;
-    try {
-      img = await sharp(f(`cuadros/${c.f}`)).removeAlpha().raw().toBuffer({ resolveWithObject: true });
-    } catch {
-      continue;
-    }
-    ultimo = c.t;
-    const W = img.info.width, H = img.info.height;
-    const esc = W / (c.dw || m.escena[2] || 360);
-    const arriba = c.arriba || 0;
-    // La grilla de la capa de la mesa arranca en el borde de arriba de la escena.
-    const y0 = Math.round((m.escena[1] + arriba) * esc);
-    const y1 = Math.round((m.escena[1] + m.escena[3] + arriba) * esc);
-    const bs = bloquesPlanosDe(img.data, W, H, 0, y0 % 4, y0, y1);
-    const ctl = bloquesPlanosDe(img.data, W, H, 2, (y0 + 2) % 4, y0, y1).length;
-    for (const b of bs) b.zona = zonaDe(m, (b.x + 2) / esc, (b.y + 2) / esc - arriba);
+  const porSuceso = new Map(); // grupo → Map(tipo → { veces, nacen })
+  const versiones = new Set();
 
-    const clave = `${c.tramo}|${c.rama}`;
-    if (!porTramo.has(clave)) porTramo.set(clave, { tramo: c.tramo, rama: c.rama, cuadros: 0, sucios: 0, suma: 0, max: 0, ctl: 0, nacen: 0, posiciones: new Map() });
-    const T = porTramo.get(clave);
-    let nacenAca = 0;
-    for (const b of bs) {
-      const k = `${b.x},${b.y}`;
-      if (!(c.t - (vistos.get(k) ?? -Infinity) < 1000)) { T.nacen++; nacenAca++; }
-      vistos.set(k, c.t);
+  for (const carpeta of carpetas) {
+    if (!existsSync(carpeta)) morir(`No existe ${carpeta}`);
+    const f = (n) => path.join(carpeta, n);
+    const corto = path.basename(carpeta).replace(/^sesion-\d{4}-/, "");
+    const cuadros = leerJsonl(f("cuadros.jsonl")).sort((a, b) => a.t - b.t);
+    const muestras = leerJsonl(f("muestras.jsonl")).sort((a, b) => a.ahora - b.ahora);
+    const eventos = leerJsonl(f("eventos.jsonl"));
+    const pagina = leerJsonl(f("pagina.jsonl"));
+    if (!cuadros.length) morir(`${carpeta} no tiene cuadros (¿se grabó con --sin-cuadros?).`);
+    const inicio = eventos.find((e) => e.que === "inicio");
+    if (inicio?.webview) versiones.add(`WebView ${inicio.webview}`);
+
+    // Los ratos en que la app no estaba arriba (un anuncio, otra app): afuera.
+    const fueras = [];
+    let desde = null;
+    for (const e of eventos) {
+      if (e.que === "app-fuera") desde = e.t;
+      if (e.que === "app-vuelve" && desde != null) { fueras.push([desde, e.t]); desde = null; }
     }
-    const iE = tramoEntrada(c.t);
-    if (iE != null && c.tramo !== "inicio") {
-      if (!porEntrada.has(c.rama)) porEntrada.set(c.rama, TRAMOS_ENTRADA.map(() => ({ cuadros: 0, sucios: 0, nacen: 0 })));
-      const E = porEntrada.get(c.rama)[iE];
-      E.cuadros++;
-      if (bs.length) E.sucios++;
-      E.nacen += nacenAca;
+    if (desde != null) fueras.push([desde, Infinity]);
+
+    /* Las ENTRADAS (8/10/2026): llegar a la mesa, volver a la app y un rival
+       nuevo. Santiago: "la basura suele salir al principio". Cada cuadro se
+       cuenta según cuánto pasó desde la última, para no concluir con la mesa
+       que ya se asentó. */
+    const entradas = [];
+    let antes = null;
+    for (const m of muestras) {
+      const enMesa = !!m.ruta?.startsWith("/jugar/mesa") && !m.carga;
+      if (enMesa && antes === false) entradas.push(m.ahora);
+      antes = enMesa;
     }
-    T.cuadros++;
-    T.suma += bs.length;
-    T.ctl += ctl;
-    T.max = Math.max(T.max, bs.length);
-    if (bs.length) T.sucios++;
-    for (const b of bs) T.posiciones.set(`${b.x},${b.y}`, b.zona);
-    filas.push({ n: c.n, f: c.f, t: c.t, tramo: c.tramo, rama: c.rama, bloques: bs, control: ctl, ancho: W, alto: H });
-    if (filas.length % 300 === 0) console.error(`   … ${filas.length} cuadros`);
+    for (const e of eventos) {
+      if (e.que === "app-vuelve" || (e.que === "nota" && /^(cambia-rival|vuelve-a-la-app)/.test(e.nota || ""))) entradas.push(e.t);
+    }
+    entradas.sort((a, b) => a - b);
+    const tramoEntrada = (t) => {
+      let ultima = null;
+      for (const x of entradas) { if (x > t) break; ultima = x; }
+      if (ultima == null) return null;
+      const seg = (t - ultima) / 1000;
+      return TRAMOS_ENTRADA.findIndex(([a, b]) => seg >= a && seg < b);
+    };
+    const muestraEn = (t) => {
+      let m = null;
+      for (const x of muestras) { if (x.ahora > t) break; m = x; }
+      return m;
+    };
+
+    const vistos = new Map(); // dónde hubo un bloque, y cuándo fue la última vez
+    const filas = [];
+    const nacimientos = []; // [t, grupo]
+    let desdeCuadro = Infinity, hastaCuadro = -Infinity;
+    let j = 0;
+    let ultimo = -Infinity;
+    for (const c of cuadros) {
+      if (c.t - ultimo < cada) continue;
+      if (fueras.some(([a, b]) => c.t >= a && c.t <= b)) continue;
+      while (j + 1 < muestras.length && muestras[j + 1].ahora <= c.t) j++;
+      const m = muestras[j];
+      if (!m || m.ahora > c.t || !m.ruta?.startsWith("/jugar/mesa") || m.carga || !m.escena) continue;
+      let img;
+      try {
+        img = await sharp(f(`cuadros/${c.f}`)).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+      } catch {
+        continue;
+      }
+      ultimo = c.t;
+      desdeCuadro = Math.min(desdeCuadro, c.t);
+      hastaCuadro = Math.max(hastaCuadro, c.t);
+      const W = img.info.width, H = img.info.height;
+      const esc = W / (c.dw || m.escena[2] || 360);
+      const arriba = c.arriba || 0;
+      // La grilla de la capa de la mesa arranca en el borde de arriba de la escena.
+      const y0 = Math.round((m.escena[1] + arriba) * esc);
+      const y1 = Math.round((m.escena[1] + m.escena[3] + arriba) * esc);
+      const bs = bloquesPlanosDe(img.data, W, H, 0, y0 % 4, y0, y1);
+      const ctl = bloquesPlanosDe(img.data, W, H, 2, (y0 + 2) % 4, y0, y1).length;
+      for (const b of bs) b.zona = zonaDe(m, (b.x + 2) / esc, (b.y + 2) / esc - arriba);
+
+      const grupo = grupoDe(c.tramo, c.rama);
+      const clave = `${carpeta}|${c.tramo}|${c.rama}`;
+      if (!porTramo.has(clave)) porTramo.set(clave, { corto, tramo: c.tramo, rama: c.rama, grupo, cuadros: 0, sucios: 0, suma: 0, max: 0, ctl: 0, nacen: 0, posiciones: new Map() });
+      const T = porTramo.get(clave);
+      let nacenAca = 0;
+      for (const b of bs) {
+        const k = `${b.x},${b.y}`;
+        if (!(c.t - (vistos.get(k) ?? -Infinity) < 1000)) {
+          T.nacen++;
+          nacenAca++;
+          if (c.tramo !== "inicio") nacimientos.push([c.t, grupo]);
+        }
+        vistos.set(k, c.t);
+      }
+      const iE = tramoEntrada(c.t);
+      if (iE != null && c.tramo !== "inicio") {
+        if (!porEntrada.has(grupo)) porEntrada.set(grupo, TRAMOS_ENTRADA.map(() => ({ cuadros: 0, sucios: 0, nacen: 0 })));
+        const E = porEntrada.get(grupo)[iE];
+        E.cuadros++;
+        if (bs.length) E.sucios++;
+        E.nacen += nacenAca;
+      }
+      T.cuadros++;
+      T.suma += bs.length;
+      T.ctl += ctl;
+      T.max = Math.max(T.max, bs.length);
+      if (bs.length) T.sucios++;
+      for (const b of bs) T.posiciones.set(`${b.x},${b.y}`, b.zona);
+      filas.push({ n: c.n, f: c.f, t: c.t, tramo: c.tramo, rama: c.rama, bloques: bs, control: ctl, ancho: W, alto: H });
+      if (filas.length % 300 === 0) console.error(`   … ${corto}: ${filas.length} cuadros`);
+    }
+
+    /* Los sucesos de la mesa y los toques, sólo los que pasaron con la mesa a
+       la vista y mientras había cuadros medidos (un toque en el menú no
+       cuenta, y uno al final de la sesión no tiene ventana para mirar). */
+    for (const e of pagina) {
+      if (e.tipo !== "mesa" && e.tipo !== "toque") continue;
+      if (e.tramo === "inicio" || typeof e.origen !== "number") continue;
+      const t = e.origen + e.t;
+      if (t < desdeCuadro || t + VENTANA_NACE > hastaCuadro) continue;
+      if (fueras.some(([a, b]) => t >= a && t <= b)) continue;
+      const m = muestraEn(t);
+      if (!m?.ruta?.startsWith("/jugar/mesa") || m.carga) continue;
+      const tipo = e.tipo === "mesa" ? e.que : claseDeTocado(e.quien || "");
+      const grupo = grupoDe(e.tramo, e.rama);
+      if (!porSuceso.has(grupo)) porSuceso.set(grupo, new Map());
+      const S = porSuceso.get(grupo);
+      const x = S.get(tipo) ?? { veces: 0, nacen: 0 };
+      x.veces++;
+      x.nacen += nacimientos.filter(([tn, g]) => g === grupo && tn >= t && tn <= t + VENTANA_NACE).length;
+      S.set(tipo, x);
+    }
+
+    const salida = f("pixeles");
+    mkdirSync(salida, { recursive: true });
+    writeFileSync(path.join(salida, "bloques.jsonl"), filas.map((x) => JSON.stringify(x)).join("\n") + "\n");
+    if (guardar) {
+      // Los cuadros con más bloques, marcados en verde, para mirarlos con los ojos
+      for (const p of [...filas].sort((a, b) => b.bloques.length - a.bloques.length).slice(0, guardar)) {
+        if (!p.bloques.length) break;
+        const svg = `<svg width="${p.ancho}" height="${p.alto}">${p.bloques.map((b) => `<rect x="${b.x - 4}" y="${b.y - 4}" width="12" height="12" fill="none" stroke="#00ff00" stroke-width="2"/>`).join("")}</svg>`;
+        const marcado = await sharp(f(`cuadros/${p.f}`)).composite([{ input: Buffer.from(svg) }]).png().toBuffer();
+        await sharp(marcado).png().toFile(path.join(salida, `${String(p.n).padStart(6, "0")}-${String(p.rama).replace(/[^\w-]/g, "_")}-${p.bloques.length}.png`));
+      }
+    }
   }
-  const salida = f("pixeles");
-  mkdirSync(salida, { recursive: true });
-  writeFileSync(path.join(salida, "bloques.jsonl"), filas.map((x) => JSON.stringify(x)).join("\n") + "\n");
 
   const pct = (a, b) => (b ? ((100 * a) / b).toFixed(1) : "—").padStart(5);
-  console.log(`\n── Basura en la mesa (bloques de 4×4 planos) · ${carpeta}`);
-  console.log("   tramo        rama   cuadros  sucios      %   media   máx  posiciones  nacen  c/100  control");
+  console.log(`\n── Basura en la mesa (bloques de 4×4 planos) · ${varias ? `${carpetas.length} sesiones` : carpetas[0]}`);
+  if (versiones.size) console.log(`   ${[...versiones].join(" · ")}`);
+  console.log(`   ${varias ? "sesión       " : ""}tramo        rama   cuadros  sucios      %   media   máx  posiciones  nacen  c/100  control`);
   for (const T of porTramo.values()) {
-    console.log(`   ${T.tramo.padEnd(12)} ${String(T.rama).padEnd(5)} ${String(T.cuadros).padStart(7)} ${String(T.sucios).padStart(7)} ${pct(T.sucios, T.cuadros)}% ${(T.suma / T.cuadros).toFixed(2).padStart(7)} ${String(T.max).padStart(5)} ${String(T.posiciones.size).padStart(11)} ${String(T.nacen).padStart(6)} ${((100 * T.nacen) / T.cuadros).toFixed(1).padStart(6)} ${(T.ctl / T.cuadros).toFixed(2).padStart(8)}`);
+    console.log(`   ${varias ? T.corto.padEnd(13) : ""}${T.tramo.padEnd(12)} ${String(T.rama).padEnd(5)} ${String(T.cuadros).padStart(7)} ${String(T.sucios).padStart(7)} ${pct(T.sucios, T.cuadros)}% ${(T.suma / T.cuadros).toFixed(2).padStart(7)} ${String(T.max).padStart(5)} ${String(T.posiciones.size).padStart(11)} ${String(T.nacen).padStart(6)} ${((100 * T.nacen) / T.cuadros).toFixed(1).padStart(6)} ${(T.ctl / T.cuadros).toFixed(2).padStart(8)}`);
   }
-  /* Por rama, sumando sus tramos. El tramo "inicio" (antes de la primera
-     orden) se deja afuera: es la llegada a la mesa, no una rama medida. */
-  const ramas = new Map();
+  /* Por rama (o por APK, con `--por-tramo`), sumando sus tramos. El tramo
+     "inicio" (antes de la primera orden) se deja afuera: es la llegada a la
+     mesa, no una rama medida. */
+  const grupos = new Map();
   for (const T of porTramo.values()) {
     if (T.tramo === "inicio") continue;
-    const R = ramas.get(T.rama) ?? { cuadros: 0, sucios: 0, nacen: 0, posiciones: new Map() };
+    const R = grupos.get(T.grupo) ?? { cuadros: 0, sucios: 0, nacen: 0, posiciones: new Map() };
     R.cuadros += T.cuadros;
     R.sucios += T.sucios;
     R.nacen += T.nacen;
-    for (const [p, z] of T.posiciones) R.posiciones.set(`${T.tramo}|${p}`, z);
-    ramas.set(T.rama, R);
+    for (const [p, z] of T.posiciones) R.posiciones.set(`${T.corto}|${T.tramo}|${p}`, z);
+    grupos.set(T.grupo, R);
   }
-  console.log("\n   por rama        cuadros  sucios      %   posiciones  nacen  c/100  ·  dónde caen (posiciones distintas)");
-  for (const [r, R] of ramas) {
+  console.log(`\n   por ${porNombre ? "tramo (APK)" : "rama"}    cuadros  sucios      %   posiciones  nacen  c/100  ·  dónde caen (posiciones distintas)`);
+  for (const [r, R] of grupos) {
     const zonas = new Map();
     for (const z of R.posiciones.values()) zonas.set(z, (zonas.get(z) ?? 0) + 1);
     const dónde = [...zonas].sort((a, b) => b[1] - a[1]).map(([z, n]) => `${z} ${n}`).join(" · ");
     console.log(`   ${r.padEnd(14)} ${String(R.cuadros).padStart(7)} ${String(R.sucios).padStart(7)} ${pct(R.sucios, R.cuadros)}% ${String(R.posiciones.size).padStart(11)} ${String(R.nacen).padStart(6)} ${((100 * R.nacen) / R.cuadros).toFixed(1).padStart(6)}  ·  ${dónde || "—"}`);
   }
 
-  if (entradas.length) {
-    console.log(`\n   según el tiempo desde la última ENTRADA (a la mesa, a la app, rival nuevo: ${entradas.length} en la sesión)`);
-    console.log(`   rama    ${TRAMOS_ENTRADA.map(([a, b]) => `${a}–${b === Infinity ? "" : b} s`.padEnd(24)).join("")}`);
+  if (porEntrada.size) {
+    console.log("\n   según el tiempo desde la última ENTRADA (a la mesa, a la app, rival nuevo)");
+    console.log(`   grupo   ${TRAMOS_ENTRADA.map(([a, b]) => `${a}–${b === Infinity ? "" : b} s`.padEnd(24)).join("")}`);
     for (const [r, xs] of porEntrada) {
       console.log(`   ${r.padEnd(7)} ${xs.map((x) => `${x.sucios}/${x.cuadros} (${pct(x.sucios, x.cuadros)}%) n${((100 * x.nacen) / (x.cuadros || 1)).toFixed(1)}`.padEnd(24)).join("")}`);
     }
   }
 
-  if (guardar) {
-    // Los cuadros con más bloques, marcados en verde, para mirarlos con los ojos
-    for (const p of [...filas].sort((a, b) => b.bloques.length - a.bloques.length).slice(0, guardar)) {
-      if (!p.bloques.length) break;
-      const svg = `<svg width="${p.ancho}" height="${p.alto}">${p.bloques.map((b) => `<rect x="${b.x - 4}" y="${b.y - 4}" width="12" height="12" fill="none" stroke="#00ff00" stroke-width="2"/>`).join("")}</svg>`;
-      const marcado = await sharp(f(`cuadros/${p.f}`)).composite([{ input: Buffer.from(svg) }]).png().toBuffer();
-      await sharp(marcado).png().toFile(path.join(salida, `${String(p.n).padStart(6, "0")}-${String(p.rama).replace(/[^\w-]/g, "_")}-${p.bloques.length}.png`));
+  if (porSuceso.size) {
+    const tipos = [...new Set([...porSuceso.values()].flatMap((S) => [...S.keys()]))].sort();
+    const cols = [...porSuceso.keys()];
+    console.log(`\n   nacen en los ${VENTANA_NACE / 1000} s DESPUÉS DE… (veces · nacen · por vez)`);
+    console.log(`   ${"".padEnd(15)}${cols.map((g) => g.padEnd(22)).join("")}`);
+    for (const tipo of tipos) {
+      console.log(`   ${tipo.padEnd(15)}${cols.map((g) => {
+        const x = porSuceso.get(g).get(tipo);
+        return (x ? `${x.veces} · ${x.nacen} · ${(x.nacen / x.veces).toFixed(2)}` : "—").padEnd(22);
+      }).join("")}`);
     }
   }
-  console.log(`\n   cada cuadro, en ${path.join(salida, "bloques.jsonl")}${guardar ? " (y los peores marcados al lado)" : ""}\n`);
+  console.log(`\n   cada cuadro, en CARPETA/pixeles/bloques.jsonl${guardar ? " (y los peores marcados al lado)" : ""}\n`);
 }
 
 // ── Andar ───────────────────────────────────────────────────────────────────
@@ -1048,7 +1272,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (args.includes("--sesion")) {
     await sesion(numero("--sesion", 30), !args.includes("--sin-cuadros"), args.includes("--jpeg") ? numero("--jpeg", 90) : 0);
   } else if (args.includes("--pixeles")) {
-    await pixeles(args[args.indexOf("--pixeles") + 1]);
+    // Todas las carpetas que vengan después, hasta la próxima bandera
+    const i = args.indexOf("--pixeles") + 1;
+    const fin = args.findIndex((x, k) => k >= i && x.startsWith("--"));
+    const carpetas = args.slice(i, fin === -1 ? undefined : fin);
+    if (!carpetas.length) morir("Uso:  --pixeles CARPETA [CARPETA…] [--por-tramo] [--cada MS] [--guardar N]");
+    await pixeles(carpetas);
   } else if (args.includes("--analizar")) {
     await analizar(args[args.indexOf("--analizar") + 1]);
   } else {
