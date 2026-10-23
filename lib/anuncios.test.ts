@@ -539,3 +539,23 @@ test("cargas quietas: pedida ANTES de que termine el arranque, espera también l
   motor.soltar("intersticial", "bien");
   assert.equal(await cumplida(quietas), true);
 });
+
+test("anuncioEnPantalla: sí mientras se ve, no antes ni después, y avisa en cada cambio (la música lo escucha)", async () => {
+  const x = await armar();
+  await entrar(x);
+  x.reloj.avanzar(7 * MIN);
+  const vistos: boolean[] = [];
+  const quitar = x.g.suscribir(() => vistos.push(x.g.anuncioEnPantalla()));
+  assert.equal(x.g.anuncioEnPantalla(), false);
+  const espera = x.g.alEntrarAPartida();
+  await vaciar();
+  x.motor.emitir({ tipo: "mostrado", formato: "intersticial" });
+  await vaciar();
+  assert.equal(x.g.anuncioEnPantalla(), true, "con el anuncio delante, dice que no hay");
+  x.motor.emitir({ tipo: "cerrado", formato: "intersticial" });
+  await espera;
+  await vaciar();
+  assert.equal(x.g.anuncioEnPantalla(), false, "cerrado el anuncio, sigue diciendo que hay");
+  assert.ok(vistos.includes(true) && vistos.at(-1) === false, "los suscriptos no se enteraron de los dos cambios");
+  quitar();
+});

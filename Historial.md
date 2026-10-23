@@ -12,6 +12,605 @@
 
 ---
 
+## 2026-10-19 — El sonido: las voces se generan acá, la cata, y los 19 rivales
+
+> **La sesión tuvo dos partes.** Primero la cata (todo lo de abajo, hasta
+> "Pendiente de la primera parte"). Después Santiago la escuchó, eligió
+> Chatterbox, y se generaron los 14 cantos de los 19 rivales: eso está en
+> **"Segunda parte"**, al final de esta entrada, y es lo que manda.
+
+### Resumen, para el que llega
+
+**Las voces ya no las graban Santiago y los amigos.** Santiago no puede hacer
+ni las voces ni la música, y preguntó si Claude podía. Se decidió:
+
+- **Las voces se generan en esta PC, gratis y sin cuentas**, con modelos
+  abiertos que corren en la placa de video (**RTX 3060 de 12 GB**, que WSL ve
+  con `nvidia-smi`).
+- **Una voz por rival (19)**, con los 14 cantos de `ideas/sonido.md`, **sin los
+  números** del envido.
+- **Sólo habla el rival.** Tus cantos no tienen voz: no se le pone a quien
+  juega una voz de un género que no es el suyo.
+- **Efectos por código**, horneados una vez, como las texturas.
+- **Música:** se hace un loop de 40 s por código y otro con IA local
+  (ACE-Step 1.5, MIT), y Santiago elige de oído. Son 3 pistas: portada,
+  partida y gira.
+
+El plan entero, por fases, está en el plan de la sesión. Lo esencial:
+cata → Luquita entero + el motor de sonido + 8 efectos → los otros 18 → la
+música. **Cada fase espera el permiso de Santiago** (la regla de "primero UNO").
+
+**Hoy se hizo la fase 0 (herramientas) y la 1 (la cata).** En el repo no se
+tocó NADA: todo lo nuevo está en `~/herramientas-audio/` (afuera) y en
+`audio-fuente/cata/` (ignorado). **Falta que Santiago escuche la cata.**
+
+### Lo que se descartó, y por qué
+
+- **ElevenLabs gratis:** el plan gratis **prohíbe el uso comercial** (lo dice
+  su centro de ayuda), y la app tiene AdMob. El pago (US$5 un mes) sí sirve:
+  queda como plan B si el acento local no convence.
+- **Azure (es-UY):** tiene dos voces uruguayas de verdad y es gratis hasta
+  500.000 letras por mes, pero pide cuenta con tarjeta y suena a locutor. Plan B.
+- **F5-TTS, Fish/OpenAudio y XTTS:** licencias no comerciales.
+- **Clonar la voz de gente real** sin su permiso: no. Las voces se INVENTAN
+  con una descripción ("varón de 72, de campo, voz grave y lenta").
+
+### Las herramientas: `~/herramientas-audio/`, fuera del repo
+
+Igual que `~/herramientas-android/`. **Si ya están, no se vuelven a bajar.**
+Pesan ~20 GB, casi todo modelos.
+
+| qué | de dónde | cómo se verificó |
+|---|---|---|
+| `bin/uv` 0.12.19 | GitHub de astral-sh | sha256 del release. Se eligió una de más de 3 semanas, no la última (5 días) |
+| `bin/ffmpeg`, `bin/ffprobe` 8.1 | BtbN/FFmpeg-Builds | sha256 del release. Trae el codificador `aac` |
+| Python 3.12 | lo baja `uv` | — |
+| `venv-qwen/` | `qwen-tts==0.1.1` (Apache 2.0), torch 2.14 cu130 | `torch.cuda.is_available()` → la 3060 |
+| `venv-chatterbox/` | `chatterbox-tts==0.1.7` (MIT), torch 2.6 cu124 | idem |
+| `hf/` | los modelos, **fijados por commit** | ver abajo |
+| `entorno.sh` | las variables para que todo quede adentro de la carpeta | — |
+
+**Son dos entornos porque se pisan:** qwen-tts fija `transformers==4.57.3`
+y chatterbox `transformers==5.2.0`.
+
+**Los modelos, fijados por commit** (no "main", para que la cata y la tanda
+final salgan del mismo modelo):
+
+- `Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign` `5ecdb673…`: inventa la voz.
+- `Qwen/Qwen3-TTS-12Hz-1.7B-Base` `fd4b2543…`: la clona.
+- `ResembleAI/chatterbox` `5bb1f6ee…`: más grito (`exaggeration`).
+- `openai/whisper-large-v3-turbo` `41f01f3f…`: el que "escucha" en el control.
+
+Ninguno usa `trust_remote_code`. Chatterbox carga sus `.pt` con
+`weights_only=True` (se miró en el código).
+
+**Dos tropiezos, ya resueltos:**
+
+1. **torch 2.14 manda operaciones a kernels de Triton, y Triton necesita un
+   compilador de C.** Esta máquina no tiene ninguno, ni `sudo`. Se apagan al
+   principio de cada script con
+   `torch._native.registry.deregister_op_overrides(disable_dsl_names="triton")`
+   y vuelven a la versión de siempre, que no compila nada.
+2. **La marca de agua de Chatterbox no cargaba** (`PerthImplicitWatermarker`
+   era `None`), porque falta `pkg_resources`, que se fue con setuptools 81. Se
+   instaló `setuptools<81` en ese entorno. **La marca se deja puesta:** es
+   inaudible y deja asentado que la voz es generada.
+
+Además, chatterbox baja al importarse un zip de segmentación china
+(`spacy-pkuseg`) a `~/.pkuseg/`. Es del proyecto spaCy y está fuera del repo.
+
+### La cata: 6 voces × 3 frases × 3 formas
+
+- **Las voces:** el pibe (Luquita), la mujer (La Porota), el hombre (Beto), el
+  veterano (Don Aparicio), el de la frontera (El Chicharra, portuñol) y el ★5
+  (El Turco, que no grita).
+- **Las frases:** "¡Truco!", "¡Quiero!" y "Me voy al mazo".
+- **Las tres formas:**
+  - **A:** Qwen diseña la voz en cada frase.
+  - **B:** Qwen diseña la voz UNA vez, diciendo una frase larga, y después la
+    clona para cada canto.
+  - **C:** Chatterbox clona esa misma frase larga, con más energía.
+
+**Las descripciones de voz se le dan al modelo en inglés**, porque sigue mejor
+las instrucciones así. El texto que DICE va en español. La versión en
+castellano de cada descripción está en `voces.json`, para la página.
+
+**El control automático (Claude no puede escuchar, pero puede medir):** recorta
+el aire de las puntas y pasa cada toma por Whisper. Se rechaza si:
+
+- lo que oye Whisper no es la frase;
+- la toma dura de más o de menos;
+- tiene un silencio adentro de más de 0,35 s;
+- satura.
+
+De las tomas que quedan, se presenta una por celda, nivelada a −18 dBFS y en
+`.m4a` mono de 64 kbps, que es el formato final.
+
+| forma | pasaron el control |
+|---|---|
+| **B, diseñada una vez y clonada** | **60 / 72** |
+| A, diseñada en cada frase | 39 / 72 |
+| C, Chatterbox | 31 / 72 |
+
+**El filtro agarra fallas de verdad:**
+
+- en la A, El Chicharra se ríe ("ja ja ja…", 3 s) en vez de decir "¡Quiero!":
+  tomó "burlón" al pie de la letra;
+- en la A, Beto estira un "KIIII…";
+- en la C sobran silencios y respiraciones después de la palabra;
+- la frase larga, Whisper la entendió entera en las seis voces.
+
+### Lo que se aprendió: "¡Truco!" suelta es la palabra difícil
+
+Con la voz de Luquita, 4 tomas por variante (`experimento_palabra.py`):
+
+| texto que se le da | Whisper entiende "truco" |
+|---|---|
+| `¡Truco!` | 1 / 4 ("truque", "troco") |
+| `¡TRUCO!` | 1 / 4 (una salió "¡Suscríbete al canal!") |
+| **`Truco.`** | **4 / 4** |
+| `¡Truco, che!` | 4 / 4, pero habría que recortar el "che" |
+| `¡Truco! ¡Truco!` | 1 / 4 |
+| `¡Retruco!`, `¡Vale cuatro!`, `¡Envido!` | 4 / 4 |
+| `¡Flor!` | 3 / 4 |
+
+**Por eso cada frase tiene una lista de textos** (`textos`), y el control se
+queda con la primera toma que pasa: primero el `¡Truco!` y, si ninguna pasa, el
+`Truco.`. Hay que acordarse de esto en la tanda final.
+
+**El "Gracias por ver el video" de Whisper** es su alucinación clásica con un
+audio corto que no entiende. No es la voz: se rechaza sola, porque no es la
+frase.
+
+### Dónde está todo (nada de esto sube)
+
+- **`audio-fuente/cata/index.html`**: la página para escuchar, con
+  `audio/<id>/*.m4a`.
+- **`crudo/`**: las 222 tomas sin cortar, más las 6 frases largas.
+- **`calidad.json`**: qué oyó Whisper en CADA toma y por qué se rechazó.
+- **`elegidas.json`**: qué toma quedó en cada celda.
+- **`herramientas-cata/`**: los scripts. `correr.sh <carpeta>` hace todo, en
+  ~20 min.
+- **Para verla:** levantar el servidor y abrir `http://localhost:8765` en el
+  navegador de Windows.
+
+  ```bash
+  python3 -I -m http.server 8765 --bind 127.0.0.1 --directory audio-fuente/cata
+  ```
+
+  Escucha sólo en `127.0.0.1`: no se ve desde la red.
+- **Se miró con Playwright** (390×844 y 1366×768): 58 audios, ninguno roto, se
+  decodifican, sin errores y sin scroll de costado.
+
+### Seguridad y fugas
+
+- **`git status`: igual que al empezar.** No se tocó ningún archivo del repo,
+  salvo esta entrada. Todo lo nuevo está en `/audio-fuente/` (`.gitignore`
+  línea 178, verificado con `git check-ignore`) o fuera del repo.
+- **`security-review`, `09-web-security` y `17-mobile-security` no se
+  corrieron.** No cambió una línea de código servido, ni Capacitor, ni el
+  manifest. Se dice en vez de correrlas por costumbre. Se corren en la fase 2,
+  que es la que toca la app.
+- **Cadena de suministro:**
+  - los dos binarios, con sha256;
+  - los paquetes de Python, con la versión fijada;
+  - los modelos, por commit, sin código remoto, y los `.pt` cargados con
+    `weights_only`.
+
+### Pendiente de la primera parte (ya resuelto: ver la segunda)
+
+Era que Santiago escuchara la cata y eligiera forma, acento y voces.
+
+### Segunda parte: Santiago eligió Chatterbox, y salieron los 19
+
+**Lo que dijo Santiago, escuchando la cata:**
+
+- "Está bastante bien. Muy, muy bien."
+- **Chatterbox (la C) es la mejor**: "son más consistentes, no cambian tanto
+  de la referencia". Las otras cambian de cómo era la voz.
+- **Se queda sólo esa forma.** Que los cantos puedan variar un poco en cómo se
+  dicen, pero **sin que cambie el acento**: la referencia tiene que pesar.
+- Pidió **los 14 cantos** (faltaban envido, real, falta, no quiero, retruco,
+  vale cuatro…) para **los 19 rivales**, y después los escucha uno por uno.
+
+**Lo que borró de la cata** (se comparó `elegidas.json` contra el disco): las
+tres tomas de la forma A de Don Aparicio y de El Turco. Ninguna de Chatterbox.
+
+**Los números le dan la razón.** Se midió con el codificador de voz de
+Chatterbox cuánto se parece cada toma a su referencia (1 = idéntica):
+
+| forma | parecido medio |
+|---|---|
+| C, Chatterbox | 0,72 |
+| B, clonada con Qwen | 0,71 |
+| A, diseñada en cada frase | 0,60 |
+
+La A es la que se va. Ojo: el codificador es el de Chatterbox, así que la C
+podría tener una ventaja de casa contra la B. Contra la A no cambia nada.
+
+#### El generador, ahora en el repo
+
+| archivo | qué hace |
+|---|---|
+| `herramientas/generar-voces.mjs` | Encadena todo. `luki beto` hace sólo esos, `--referencias` sólo inventa y compara las voces, `--pagina` sólo la página. Valida los `id` contra el reparto (terminan siendo carpetas) |
+| `herramientas/voces/reparto.json` | Las 19 voces: `id` (el de `personalidades.ts`), la descripción en inglés para Qwen, en castellano para la página, `exagera` y, si se rehízo, `semilla` |
+| `herramientas/voces/cantos.json` | Los 14 cantos: los textos que se prueban en orden, lo que tiene que oír Whisper y la duración admitida |
+| `herramientas/voces/referencias.py` | Qwen inventa la frase larga. **Si ya existe no la toca**: la referencia ES la voz del personaje |
+| `herramientas/voces/parecidos.py` | Compara las 19 referencias entre sí |
+| `herramientas/voces/cantar.py` | Chatterbox clona los cantos, con Whisper y el parecido como control |
+| `herramientas/voces/pagina.py` | La página de escucha |
+
+Todo escribe en `audio-fuente/voces/` (ignorado). **Todavía nada va a
+`public/`**: a la app va lo que Santiago apruebe, no lo que pase el control.
+
+**Las 6 voces de la cata se reusaron tal cual**: se copió su `referencia.wav`.
+Las otras 13 se inventaron hoy.
+
+#### Lo que se aprendió generando
+
+**1. La cola de Chatterbox era la causa de casi todos los rechazos.** Dice bien
+el canto, se calla, y agrega algo. Whisper lo deja clarito: "Me voy al mazo.
+Trantarse liproc", "Falta envido. Hay seto o treseta". Ahora `recortar()`
+corta en el primer silencio de 0,3 s y controla lo que queda.
+
+| Luquita | intentos por canto | cantos con 2 tomas |
+|---|---|---|
+| sin cortar la cola | 6,8 | 8 de 12 |
+| **cortando la cola** | **2,6** (36 en 14) | **14 de 14** |
+
+La primera fila es de los 12 cantos que quedaron en pantalla: el informe de
+esa pasada se borró para rehacerla.
+
+Las tomas crudas se guardan, así que la segunda pasada casi no generó nada:
+volvió a controlar las mismas.
+
+**2. Whisper y las frases largas.** Oye "contraflora al resto": la vocal de
+enlace, al hablar, se escucha así. A las frases de 15 letras o más (sin
+espacios) se les perdona **una** letra. Las cortas van exactas: "troco" no es
+"truco".
+
+**3. Dos voces distintas pueden salir casi iguales.** Para saber cuánto es
+"demasiado", se calibró: la MISMA voz, mitad de su frase contra la otra
+mitad, da **0,887–0,939**. Dos voces distintas, mitad contra mitad, dan 0,68
+de media y nunca más de 0,861. Así que se avisa desde **0,88**.
+
+- **Salieron dos pares en esa zona:** La Porota con La China (0,893) y
+  Cachila con Pájaro (0,888).
+- **El tono también se mide** (F0, con `librosa.pyin`), para ver que el
+  género cuadre:
+  - las tres mujeres dan 183–201 Hz;
+  - los hombres, 86–151 Hz;
+  - Luquita, 213 Hz: es un pibe de 16 y ya gustó, así que se deja;
+  - **Marito, 309 Hz: voz de mujer o de nene.**
+- **Se rehicieron tres:** Marito, La China y Pájaro.
+  1. A cada una se le cambió la descripción y se probaron 4 semillas (6 para
+     Marito).
+  2. Se eligió la que cumplía el tono de su género y se parecía menos a las
+     otras 18.
+- **Marito necesitó dos vueltas.** Con "bright, gets excited" las cuatro
+  salieron agudas (225–322 Hz). Sin esas palabras, y pidiendo "baritone", salió
+  a 121 Hz.
+- **La lección:** la energía la pone Chatterbox (`exagera`), no la descripción.
+- **Las semillas elegidas** quedaron en el reparto: Marito 1001, La China 1003
+  y Pájaro 1003.
+- **Lo más alto que queda** es El Pescador con El Rengo (0,873): dos viejos de
+  campo con la voz gastada. Se avisa a Santiago y lo decide su oído.
+
+**4. Dudosas.** Cuando a un canto le faltan tomas, va la rechazada que más se
+acerca, como `-duda-1.m4a`, con lo que oyó Whisper a la vista.
+
+- **Don Aparicio:** Whisper oyó "Falta envío" en 8 de 10 tomas. Se come la d,
+  como se habla en el campo. Puede ser un error, o puede ser exactamente el
+  personaje: eso no lo decide un número.
+- **La China:** "Ne voy al mazo".
+
+Se ordenan por letras de diferencia, así que una que repite la frase ("me voy
+al mazo, al mazo") queda afuera.
+
+#### El resultado
+
+- **55 minutos** para los 18 que faltaban; Luquita ya estaba.
+- **529 de 532 tomas pasaron**, y salieron 3 dudosas. Hicieron falta **715
+  intentos**.
+- **Las 19 frases largas**, Whisper las entendió enteras.
+- **Peso en la app:**
+  - una toma por canto: **2,57 MB**;
+  - las dos: **5,05 MB**.
+
+  El plan calculaba 2,7.
+- **Se miró la página con Playwright** (390×844 y 1366×768):
+  - 551 audios, ninguno roto;
+  - las dudosas muestran lo que oyó Whisper;
+  - una toma "borrada" (simulada con un 404) desaparece al recargar;
+  - sin errores y sin scroll de costado.
+
+**Para escuchar:**
+
+```bash
+python3 -I -m http.server 8765 --bind 127.0.0.1 --directory audio-fuente/voces
+```
+
+Y abrir `http://localhost:8765` en el navegador de Windows. **Para descartar
+una toma**, se borra el archivo, o se le dice a Claude cuál.
+
+#### Seguridad, segunda parte
+
+- **`security-review` sobre los 7 archivos nuevos: sin hallazgos.**
+  - `spawnSync` sin shell, y Python con `-I`.
+  - Los `id` validados contra el reparto antes de usarse como carpeta.
+  - ffmpeg con lista de argumentos.
+  - Los modelos fijados por commit, y los `.pt` con `weights_only`.
+  - En la página, todo pasa por `html.escape`, también lo que oyó Whisper,
+    que es texto de un modelo.
+- **`09-web-security` y `17-mobile-security`: no corresponden todavía.** No
+  cambió nada servido, ni del APK. Se corren cuando las voces entren a
+  `public/` y exista `lib/audio.ts`.
+- **Una fuga que se cortó a tiempo.** Una prueba de las funciones de
+  `cantar.py` dejó un `herramientas/voces/__pycache__/*.pyc`, y un `.pyc`
+  lleva adentro la ruta absoluta del archivo, con el usuario de Linux.
+  `.gitignore` ya tapaba `__pycache__/` (línea 105), así que no había riesgo,
+  pero se borró igual. Los scripts corren con `-I`, que no deja esos archivos.
+- **Barrido de datos sensibles** con `/usr/bin/grep` sobre los archivos nuevos:
+  limpio.
+
+### Pendiente
+
+1. **Que Santiago escuche los 19**, rival por rival, y diga qué tomas van.
+   Que preste atención a:
+   - las 3 dudosas;
+   - los pares parecidos: El Pescador ~ El Rengo, Cachila ~ Cacho, Tito ~ El
+     Chicharra;
+   - si las voces nuevas tienen el acento.
+2. Con lo aprobado, la fase 2:
+   - un paso que copie las tomas elegidas a `public/audio/voces/<id>/` y
+     escriba `lib/sonidos.ts`;
+   - `lib/audio.ts`;
+   - `voz?: ClaveVoz` en `Evento`;
+   - los 8 efectos por código;
+   - **decidir si van 1 o 2 tomas por canto** (2,6 MB contra 5,1 MB).
+3. **Guardar las 19 `referencia.wav` en algún lado que no sea sólo esta PC.**
+   Son la voz de cada personaje: si se pierden, Qwen no garantiza volver a
+   sacar la misma, aunque se use la misma semilla. Hoy viven sólo en
+   `audio-fuente/` (ignorado). Opciones:
+   - subirlas al repo como `.m4a` (~2 MB);
+   - un respaldo fuera del repo.
+
+   Que decida Santiago.
+4. La música (fase 4) sigue como estaba planeada.
+
+---
+
+## 2026-10-18 — Irse al mazo siendo mano, de entrada, vale 2
+
+### Qué se pidió
+
+Santiago lo notó jugando. Si **el mano** se va al mazo **de primera, sin que se
+haya cantado nada**, el otro tiene que cobrar **2** y no 1. Es la regla de mesa:
+irse así le saca al pie la chance de cantar el envido, así que cuenta como
+**envido no querido (1) más truco no querido (1)**. En cualquier otro caso
+sigue siendo lo del truco en juego (1 si no se cantó nada). Vale igual para vos
+y para el bot. Pidió expresamente **"SOLO TOCA ESO"**.
+
+### Qué se tocó
+
+| Archivo | Qué |
+|---|---|
+| `lib/motor/partida.ts` | Función privada nueva `puntosPorIrseAlMazo(p, quien)`, al lado de `terminarMano`. El `case "mazo"` de `aplicar` la usa |
+| `lib/motor/partida.test.ts` | 5 tests nuevos al final, con el ayudante `manoDe(mano, semilla)` |
+
+**La condición:** quien se va es `quienEsMano`, están en la primera baza, no
+habló (`!yaHablo`), `truco.nivel === 0` y `!envidoCerrado`.
+
+- `envidoCerrado` se prende con cualquier envido (querido o no) o flor que se
+  haya cantado. En la primera baza no se prende por otra cosa.
+- El mano en la primera baza sólo vuelve a tener turno libre si antes se cantó
+  algo, porque después de tirar carta el turno pasa al pie. Así que esas
+  condiciones son lo mismo que "lo primero que hace el mano es irse".
+
+**Ojo, se le pasa `previo` y no `p`.** `aplicar` marca `yaHablo[quien] = true`
+ANTES del `switch` (el mazo está en `GASTA_EL_TURNO`). Mirando `p`, el mano
+siempre "ya habló" y la regla no se cumplía nunca.
+
+**Se suma una sola vez, por `terminarMano`.** Partirlo en dos `sumar` (+1 de
+envido y +1 de mano) se descartó. Con el marcador en 29, el primero cerraba la
+partida y `terminarMano` la volvía a poner en `mano-terminada`. La mesa dice
+"Me voy al mazo · El rival gana la mano: +2".
+
+### Cómo se probó
+
+- **Tests primero.** Con el motor viejo falló sólo el de "mano de entrada"
+  (`1 !== 2`). Los otros cuatro pasaban, porque cuidan lo que NO tiene que
+  cambiar: pie en primera, mano después de envido, mano después de flor, y la
+  segunda baza (que verifica que en 40 semillas se fue alguna vez el mano y
+  alguna vez el pie).
+- **Saboteado dos veces.**
+  - Sin "nada cantado", fallan los de envido y flor.
+  - Sin "es el mano", falla el del pie.
+- `npm test` **339/339** (5 nuevos) · `tsc` limpio.
+- **En el navegador, con Playwright** (390×844, `next dev`, script en el
+  scratchpad, no en el repo).
+  - Primera mano, vos mano, Mazo de entrada: cartel "Se la llevó él, **0 — 2**".
+  - Segunda mano, vos pie, el bot tira y te vas: **0 — 3**.
+  - Sin errores en la página.
+- `next dev` volvió a reescribir `next-env.d.ts` (`.next/dev/types`). Se le
+  devolvió el contenido del último commit.
+- Seguridad: `security-review` y `09-web-security` **limpios**. Es una función
+  pura: no lee `localStorage` ni la URL, no arma HTML, y el valor depende sólo
+  de lo que se ve en la mesa (no sopla las cartas del rival).
+
+### Después, con permiso: la lección y `reglas.txt`
+
+Al principio no se tocaron por el "SOLO TOCA ESO". Al cerrar, Santiago pidió
+ponerlos al día:
+
+| Archivo | Qué |
+|---|---|
+| `reglas.txt` | 7.4: párrafo nuevo "EXCEPCIÓN DEL MANO". 10.5: una frase, que el "no quiero" del mano de entrada incluye el envido |
+| `lib/lecciones/index.tsx` | Lección 4, "Irse al mazo": la frase de antes ahora dice "1 punto si no se cantó nada", y hay un párrafo nuevo con la excepción |
+
+**La lección explica el porqué sin dar por sabido lo que viene después.** "La
+mano" es la lección 4, y el envido (5) y el truco (7) todavía no se
+enseñaron. Por eso no dice "envido no querido más truco no querido". Dice
+"uno por la mano y otro porque no lo dejaste cantar el envido, que es lo que
+viene en la lección siguiente". Tampoco usa "pie", porque las lecciones nunca
+enseñan esa palabra: dice "el otro". `reglas.txt` sí la usa, porque la tiene
+en el glosario.
+
+- **La tabla de la lección 8 y la de `reglas.txt` 11 no se tocaron.** Son de
+  cantos (quiero / no quiero) y no nombran el mazo.
+- **Se miró en el navegador.** `/aprender/la-mano` a 390×844 y a 1366×768: sin
+  scroll de costado y sin errores.
+- `npm test` 339/339 y `tsc` limpio. Seguridad (`security-review` y
+  `09-web-security`): limpio. Es texto fijo, y no tiene rutas, datos
+  personales ni caracteres invisibles.
+- `next-env.d.ts` se volvió a restaurar después de `next dev`.
+
+### Lo que no se tocó
+
+- **El bot** no decide irse al mazo en ningún lado (`bot.ts` no lo usa). Su
+  estrategia no cambió, y la regla le aplica igual cuando te vas vos.
+
+---
+
+## 2026-10-17/18 — La marca nueva: el escudo celeste y las figuritas
+
+### Resumen, para el que llega
+
+**La marca oficial cambió**, en el ícono de Android, en la ficha de Play, en
+la portada y en la pantalla de carga. El logo deja de ser la carta con el oro
+sobre la madera y pasa a ser **el escudo**: la bandera adentro de un escudo de club
+(nueve franjas, cuatro celestes, el Sol de Mayo en el cantón) con una carta de
+oro adelante. La ficha de Play pasa a ser **seis slides que son figuritas**, con
+cada rival al lado de su departamento pintado en el mapa.
+
+Se eligió entre **26 propuestas en cuatro rondas**. Están todas en
+`app branding/propuestas/` (no sube), con su galería: `index.html`, y
+`ronda-2/`, `ronda-3/` y `ronda-4/`.
+
+**Lo que se tocó en el repo:**
+
+| Archivo | Qué |
+|---|---|
+| `lib/escudo.ts` | NUEVO. **El logo, dibujado UNA vez**, como un árbol de piezas (datos, no JSX ni texto). Sin letras ni filtros |
+| `lib/escudo.test.ts` | NUEVO. Que no tenga filtros ni letras, que los colores sean hex (`sharp` no entiende variables de CSS) y que cada recorte use su id. Saboteado: agarra el filtro y la variable |
+| `components/Marca.tsx` | Pasa el árbol de `lib/escudo.ts` a React. Mantiene la clase `marca` (la de `opacity: .999`) y el id propio por si está dos veces. El prop `idHalo` pasó a llamarse `idRecorte` |
+| `components/PantallaCarga.tsx` | Sólo el prop: `idRecorte="escudo-marca-carga"` |
+| `herramientas/marca/escudo.mjs` | NUEVO. Pasa el mismo árbol a texto SVG, para `sharp` y la ficha |
+| `herramientas/marca/ficha.mjs` | NUEVO. El armado de las slides, el destacado y los logos con letras |
+| `herramientas/generar-icono.mjs` | Dibuja el escudo en vez de la carta. `--tienda` ya no hace el destacado (lleva letras: lo hace `branding.mjs`) |
+| `herramientas/branding.mjs` | Reescrito. Saca las capturas de la app COMPILADA, las comprueba y arma la ficha |
+| `android/app/src/main/res/` | Los 31 PNG del ícono y del splash, horneados de nuevo. Los XML quedaron iguales |
+| `README.md`, `.gitignore` | Al día con lo de arriba (sólo comentarios y la lista de herramientas) |
+
+**Se hizo en dos pasos**, por la regla del CLAUDE.md ("un cambio visual
+grande: primero UNO, la captura, y esperar el permiso"):
+
+1. El ícono de Android y la ficha de Play. Se le mostró a Santiago.
+2. Con su permiso, la portada y la pantalla de carga.
+
+**El escudo en la portada** ocupa el mismo ALTO que las dos cartas de antes,
+con los mismos `clamp`. No cambió nada del diseño de la pantalla, y en las
+cuatro medidas (360×640, 390×844, 1366×768 y 1280×600) **no scrollea**.
+
+Sale un poco apagado arriba: es la viñeta de `.penumbra`, que oscurece los
+bordes de toda la portada, y a las cartas de antes les pasaba lo mismo. Se
+dejó así; está anotado como opción en los pendientes.
+
+**Lo que NO se tocó:** `app/opengraph-image.tsx`, la imagen de cuando se
+comparte el enlace de la web. No se pidió.
+
+### Cómo se llegó, ronda por ronda (lo que se descartó y por qué)
+
+1. **Ronda 1, cinco:** Boliche, Trasnoche (lo de Balatro), Constructivo
+   (Torres García), Tablado (carnaval) y Servilleta. Gustaron **Tablado** (el
+   color, el canto como grito) y **Boliche** (minimalista, se entiende).
+   - Servilleta: "bien, pero no llamaba la atención".
+   - Constructivo: "muy mal", saturado.
+   - La regla que quedó: **en cada slide, el juego y 2 o 3 cosas, no más**, y
+     que enganche de una.
+2. **Ronda 2, diez.** Se eligió mezclar la **12 Celeste** (el escudo: "al ver
+   el logo identificás al instante que es uruguayo") con las **figuritas de
+   rivales de la 15**.
+3. **Ronda 3, cinco variantes de esa mezcla.** Ganó la **20 La figurita**,
+   porque "estén los personajes en las slides". Con un pedido: que se entienda
+   que la app es **para aprender**. El orden quedó: aprendé de cero, después
+   Partida rápida o Gira, después la Gira uno a uno.
+4. **Ronda 4, seis a partir de la 20.** Ganó la **22 Departamento**: el mapa
+   con el departamento de cada rival.
+
+### Cosas que se aprendieron haciendo esto
+
+- **Las slides prometen cosas concretas** ("Tenés flor: 36", "31 a 1"). Con la
+  misma semilla, si cambia el motor puede salir otra mano y la slide quedaría
+  mintiendo. Por eso `branding.mjs` **busca en la pantalla el texto que la
+  slide promete** antes de usar la captura, y si no está, para.
+- **El ícono adaptativo garantiza un círculo de 66 de 108, no de 72.** El
+  comentario viejo decía 72. Con el escudo a 54 de alto, las esquinas tocaban
+  el borde en un launcher redondo (se vio simulando las máscaras); quedó en 48.
+- **`sharp` no carga tipografías de la web.** Por eso el escudo va sin letras,
+  y lo que lleva texto (el destacado y los logos con nombre) lo arma Chromium
+  en `branding.mjs`.
+- **Un solo dibujo para React y para Node.** `lib/escudo.ts` devuelve un árbol
+  de `{el, a, hijos}` con los atributos como los escribe React (`strokeWidth`,
+  `clipPath`). `Marca.tsx` lo pasa a `createElement`, y `marca/escudo.mjs` lo
+  pasa a texto cambiando las mayúsculas por guiones. Node importa el `.ts`
+  directo, como `lib/gira.ts`. Al mudar el dibujo, el ícono de 512 dio una
+  diferencia media de 0,2 sobre 255 contra el de antes: sólo el borde de los
+  rayos ondulados, que ahora tienen 24 puntos por lado y no 40.
+- **Para la captura de "¡Ganaste!" juega una partida entera** un jugador
+  automático sencillo contra Luquita, con la semilla 55: gana 31 a 1 en unos
+  minutos.
+- **Las caras de los rivales se copian como SVG** del medallón de la app
+  (`components/mesa/Cara.tsx`), y se agrandan sin perder nitidez. Como después
+  van adentro de una página, `branding.mjs` rechaza cualquier SVG con scripts,
+  eventos o enlaces.
+- **Los rivales se leen de `lib/gira.ts`**, que Node importa directo. Si un día
+  cambia un nombre, la ficha lo toma sola.
+
+### Estado al cerrar
+
+- `npm test` **334/334** (4 nuevos) · `tsc` limpio.
+- `mirar-carga`, `mirar-app-compilada` y `mirar-web`: **TODO OK**, con la app
+  recién compilada (`npm run build:app`).
+- `next dev` reescribió `next-env.d.ts` (lo de siempre). Se le devolvió el
+  contenido del último commit, así no aparece en el diff.
+- `node herramientas/branding.mjs`: las siete capturas comprobadas, las seis
+  slides y el destacado **dentro de lo que pide Play**.
+- `generar-icono.mjs --tienda`: 33 archivos y el ícono de 512.
+- **Ningún PNG nuevo de `android/` lleva metadatos** (31 revisados chunk por
+  chunk).
+- **El APK no se compiló.** Cambiaron sólo los PNG, con los mismos nombres y el
+  mismo formato.
+
+Seguridad, con las skills:
+
+- **`security-review`: sin hallazgos.** Se agregó una sola defensa: el filtro
+  de SVG de las caras.
+- **`17-mobile-security`: sin hallazgos.** Sólo cambiaron imágenes de
+  recursos. Ni el manifest, ni Capacitor, ni el origen, ni los permisos.
+- **`09-web-security`:** la portada sí se sirve. El SVG se arma con
+  `createElement` desde datos fijos: no hay un sumidero de HTML. Ni la CSP ni
+  nada que lea `localStorage` cambió.
+
+Barrido de datos sensibles: limpio.
+
+**Sin commitear.**
+
+### Pendiente
+
+1. **`app/opengraph-image.tsx`**, la imagen de cuando se comparte el enlace,
+   sigue con las cartas. Se dibuja con el `ImageResponse` de Next, que tiene
+   sus propias limitaciones de SVG: probarlo antes de dar por hecho que el
+   árbol de `lib/escudo.ts` entra tal cual.
+2. **Opcional: sacar el escudo de la viñeta** (`.penumbra`) de la portada, si
+   se lo quiere más blanco. Es un cambio de la portada, no del logo.
+3. **Las capturas de tablet** (7" y 10"): no están hechas en el diseño nuevo.
+   Son opcionales en Play.
+4. **Probar en el teléfono el ícono y la portada nuevos:**
+   `node herramientas/celular-usb.mjs --apk`.
+
+---
+
 ## 2026-10-11 — El resto de los píxeles de la mano: no lo trajo el cambio del 9/10, y se fue poniendo la mano en su propia capa
 
 ### Resumen, para el que llega (léase esto primero)

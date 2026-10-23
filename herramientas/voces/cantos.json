@@ -1,0 +1,19 @@
+{
+  "_leeme": "Los 14 cantos de ideas/sonido.md: la lista está cerrada, salen uno por uno de lib/motor/partida.ts. `textos` son las formas de escribirlo que se prueban, en orden: '¡Truco!' sola sale mal 3 de cada 4 veces y 'Truco.' sale bien siempre (medido el 19/10/2026), así que si ninguna toma de la primera pasa, se prueba la segunda. `espera` es lo que tiene que oír Whisper, sin tildes, mayúsculas, signos ni espacios. `dura` es el mínimo y el máximo en segundos, ya sin el aire de las puntas. `calmo` es para los que no se gritan: el mazo, el no quiero, el son buenas.",
+  "cantos": [
+    { "clave": "envido", "dice": "¡Envido!", "textos": ["¡Envido!", "Envido."], "espera": ["envido"], "dura": [0.3, 1.6] },
+    { "clave": "real-envido", "dice": "¡Real envido!", "textos": ["¡Real envido!", "Real envido."], "espera": ["realenvido"], "dura": [0.5, 2.0] },
+    { "clave": "falta-envido", "dice": "¡Falta envido!", "textos": ["¡Falta envido!", "Falta envido."], "espera": ["faltaenvido"], "dura": [0.5, 2.0] },
+    { "clave": "truco", "dice": "¡Truco!", "textos": ["¡Truco!", "Truco."], "espera": ["truco"], "dura": [0.25, 1.6] },
+    { "clave": "retruco", "dice": "¡Retruco!", "textos": ["¡Retruco!", "Retruco."], "espera": ["retruco"], "dura": [0.3, 1.8] },
+    { "clave": "vale-cuatro", "dice": "¡Vale cuatro!", "textos": ["¡Vale cuatro!", "Vale cuatro."], "espera": ["valecuatro", "vale4"], "dura": [0.5, 2.0] },
+    { "clave": "flor", "dice": "¡Flor!", "textos": ["¡Flor!", "Flor."], "espera": ["flor"], "dura": [0.25, 1.4] },
+    { "clave": "con-flor-envido", "dice": "¡Con flor envido!", "textos": ["¡Con flor envido!", "Con flor envido."], "espera": ["conflorenvido"], "dura": [0.6, 2.4] },
+    { "clave": "contraflor-al-resto", "dice": "¡Contraflor al resto!", "textos": ["¡Contraflor al resto!", "Contraflor al resto."], "espera": ["contrafloralresto"], "dura": [0.7, 2.6] },
+    { "clave": "quiero", "dice": "¡Quiero!", "textos": ["¡Quiero!", "Quiero."], "espera": ["quiero"], "dura": [0.25, 1.6] },
+    { "clave": "no-quiero", "dice": "No quiero", "textos": ["No quiero.", "¡No quiero!"], "espera": ["noquiero"], "dura": [0.4, 1.8], "calmo": true },
+    { "clave": "con-flor-me-achico", "dice": "Con flor me achico", "textos": ["Con flor me achico."], "espera": ["conflormeachico"], "dura": [0.7, 2.6], "calmo": true },
+    { "clave": "mazo", "dice": "Me voy al mazo", "textos": ["Me voy al mazo."], "espera": ["mevoyalmazo"], "dura": [0.5, 2.4], "calmo": true },
+    { "clave": "son-buenas", "dice": "Son buenas", "textos": ["Son buenas."], "espera": ["sonbuenas"], "dura": [0.4, 1.8], "calmo": true }
+  ]
+}

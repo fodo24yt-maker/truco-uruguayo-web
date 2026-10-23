@@ -230,12 +230,18 @@ lib/
   mapa-uruguay.ts       La geometría del mapa. GENERADO: no se edita a mano.
   mapa-colores.ts       El color de cada departamento. Eso sí se elige a mano.
   gira.ts               El desbloqueo en cadena, derivado del progreso
+  escudo.ts             EL LOGO. El único lugar donde está dibujado: lo leen la
+                        portada, el ícono de Android y la ficha de Play
   gira-camino.ts        La geometría del camino punteado, con sus pruebas
   mesa-perspectiva.ts   Dónde y de qué tamaño va cada cosa apoyada en la mesa
 herramientas/
   generar-mapa.mjs      Rehace mapa-uruguay.ts desde datos cartográficos
   generar-escena.mjs    Hornea la madera y el fondo de cada ambiente a WebP
-  generar-icono.mjs     Hornea el ícono de Android. GENERADO: no se edita a mano
+  generar-icono.mjs     Hornea el ícono de Android (y con --tienda, el de Play)
+  marca/                El escudo pasado a texto SVG (escudo.mjs) y el armado
+                        de la ficha de Play (ficha.mjs)
+  branding.mjs          Saca las capturas de la app compilada y arma las slides,
+                        el gráfico destacado y los logos en `app branding/`
   escena/               El dibujo de esas texturas, en código
   mirar-mesa.mjs        Verifica que la mesa no scrollee en siete tamaños, que
                         la barra no tape tu mano y que no haya NI UN FILTRO en

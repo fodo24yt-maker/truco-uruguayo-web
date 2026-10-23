@@ -1,285 +1,329 @@
 /**
- * Las capturas para la ficha de Play Store, en dos tandas y tres aparatos.
+ * La ficha de Play Store: las seis slides, el gráfico destacado y los logos.
  *
- *     npm run dev                        (en otra terminal)
- *     node herramientas/branding.mjs
- *     node herramientas/branding.mjs --solo celular
+ *     npm run build:app && npm run servir:app     (en otra terminal)
+ *     node herramientas/branding.mjs              saca las capturas y arma todo
+ *     node herramientas/branding.mjs --sin-capturas   arma con las capturas que ya hay
+ *     node herramientas/generar-icono.mjs --tienda    el ícono de 512 (el logo vive allá)
  *
- * Deja todo en `app branding/capturas/`, que NO sube a GitHub. El ícono de 512
- * y el gráfico destacado NO salen de acá: los hornea
- * `generar-icono.mjs --tienda`, para que el logo esté dibujado en un solo lugar.
+ * Deja todo en `app branding/`, que NO sube a GitHub:
  *
- * ── Por qué 360x640 y no 390x844, que es el celular de `celular.mjs` ──────
+ *   capturas/limpias/        las pantallas de la app tal cual, y las caras
+ *   capturas/celular/        las seis slides, 1080 x 1920
+ *   ficha-play/              el gráfico destacado (y el ícono, de generar-icono)
+ *   logo/                    el escudo y los logos, en SVG y PNG
  *
- * Porque Play rechaza una captura cuyo lado mayor pase del DOBLE del menor.
- * 390x844 a DPR 3 da 1170x2532, o sea 2,16 veces: rebotada. 360x640 a DPR 3 da
- * 1080x1920, que es 9:16 clavado y la medida con la que están hechas casi todas
- * las fichas de la tienda. Es el mismo tamaño que `celular.mjs` llama
- * `apretado`, o sea el más exigente de los dos: si la app entra ahí, entra.
+ * El diseño y los textos están en `herramientas/marca/ficha.mjs`; el dibujo del
+ * escudo, en `lib/escudo.ts` (el mismo de la portada). Esto sólo saca las
+ * fotos, arma y comprueba.
  *
- * ── Por qué `isMobile` y `hasTouch` ──────────────────────────────────────
+ * ── Por qué contra la app COMPILADA y no contra `next dev` ────────────────
  *
- * Copiado de `celular.mjs`, y por el mismo motivo: sin eso se activan las
- * reglas `@media (hover: hover)` del mapa de la gira y la captura no muestra lo
- * que se ve en un teléfono de verdad.
+ * Porque la ficha es de la app de Android, y la app es el build de
+ * `out-app/`: con la pantalla de carga, los candados y la CSP de producción.
+ * Hasta el 18/10/2026 esto se sacaba contra `next dev`.
  *
- * ── Por qué las compuestas se arman SOBRE LA PROPIA PÁGINA ───────────────
+ * ── Por qué 360 x 640 a DPR 3 ─────────────────────────────────────────────
  *
- * Se abre el sitio, se le reemplaza el `<body>` por el armado de la slide y se
- * fotografía eso. La alternativa era un HTML suelto con los colores y las
- * tipografías copiados a mano, y eso es tener una segunda paleta que se va
- * separando de la primera. Así el titular sale con la `--font-display` de
- * verdad y los `--color-*` de verdad, porque son los que esa página ya cargó.
+ * Play rechaza una captura cuyo lado mayor pase del DOBLE del menor. 390x844 a
+ * DPR 3 da 1170x2532, o sea 2,16 veces: rebotada. 360x640 a DPR 3 da 1080x1920.
+ * `isMobile` y `hasTouch` porque sin eso se activan las reglas `@media (hover:
+ * hover)` del mapa de la Gira y la captura no muestra lo de un teléfono.
  *
- * Las variables de fuente viven en el `<html>` (`app/layout.tsx:124`), no en el
- * `<body>`: por eso se puede vaciar el body entero sin perderlas.
+ * ── Dos trucos que NO cambian la app ──────────────────────────────────────
  *
- * ── Las dos tandas ───────────────────────────────────────────────────────
+ *   - `Math.random` con semilla, en la pestaña que saca la foto: el reparto
+ *     sale siempre igual, y una mano con flor se puede volver a sacar.
+ *   - El `localStorage` cargado antes de abrir: la Gira y el anotador
+ *     desbloqueados y seis rivales ganados. Es lo mismo que consigue quien
+ *     mira el video o gana esas partidas.
  *
- * `limpias/` es la pantalla tal cual, y `compuestas/` es esa misma captura
- * adentro de un aparato dibujado, sobre la madera y con un titular. Se generan
- * las dos porque son decisiones distintas: la limpia es más honesta, la
- * compuesta es la que compite en la tienda. Se elige mirándolas, no acá.
+ * ── Las capturas se COMPRUEBAN ────────────────────────────────────────────
+ *
+ * Las slides dicen cosas concretas: "Tenés flor: 36", "31 a 1", "Bien ahí". Si
+ * mañana cambia el reparto o el motor, la misma semilla puede dar otra mano, y
+ * la slide quedaría mintiendo. Por eso, antes de usar una captura, se busca en
+ * la pantalla el texto que la slide promete; si no está, esto para y lo dice.
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright";
+import sharp from "sharp";
 
-const RAIZ = process.env.SITIO ?? "http://localhost:3000";
+import { C, historia, slide, destacado, logo, escudoSuelto, fuenteEmbebida, pagina, CARAS_NECESARIAS } from "./marca/ficha.mjs";
 
-/* La salida se ancla AL ARCHIVO y no al directorio desde el que se corre.
+const RAIZ = process.env.SITIO ?? "http://127.0.0.1:4173";
 
-   Con una ruta relativa, correr esto parado en `herramientas/` escribía las 48
-   capturas en `herramientas/app branding/`, o sea FUERA de la carpeta que el
-   `.gitignore` protege con `/app branding/`. Hoy no se filtraban igual porque
-   la regla vieja `capturas/` —sin barra inicial, o sea a cualquier nivel— las
-   tapaba de rebote; pero eso es que la protección real no era la que el
-   comentario del `.gitignore` dice que es, y una protección que funciona por
-   casualidad se cae el día que alguien renombre la carpeta.
-
-   `generar-icono.mjs` ya lo hace así para `android/` y para `app branding/`.
-   El patrón se copia, no se reinventa. */
+/* La salida se ancla AL ARCHIVO y no al directorio desde el que se corre: con
+   una ruta relativa, correr esto parado en `herramientas/` escribiría FUERA de
+   lo que protege `/app branding/` en el `.gitignore`. */
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
-const SALIDA = path.join(AQUI, "..", "app branding", "capturas");
+const MARCA = path.join(AQUI, "..", "app branding");
+const LIMPIAS = path.join(MARCA, "capturas", "limpias");
+const SLIDES = path.join(MARCA, "capturas", "celular");
+const FICHA = path.join(MARCA, "ficha-play");
+const LOGO = path.join(MARCA, "logo");
+const CACHE_FUENTES = path.join(MARCA, ".fuentes");
 
-/**
- * Los tres aparatos de la ficha, con el DPR elegido para que el PNG salga con
- * la medida final sin reescalar después. Reescalar una captura de interfaz la
- * ensucia, que es justo lo que este proyecto pasó meses midiendo.
- */
-const APARATOS = {
-  celular: { ancho: 360, alto: 640, dpr: 3, radio: 34, marco: 11 },
-  "tablet-7": { ancho: 600, alto: 960, dpr: 2, radio: 26, marco: 10 },
-  "tablet-10": { ancho: 800, alto: 1280, dpr: 2, radio: 22, marco: 9 },
-};
-
-/**
- * Las ocho slides, en orden. Ocho es el máximo que acepta Play, y el orden
- * importa: en la ficha se ven las dos primeras sin deslizar, así que adelante
- * va jugar y no aprender.
- *
- * `espera` sale de `celular.mjs`: la mesa reparte de a una carta y la gira
- * dibuja los 19 departamentos. La mesa lleva más que allá a propósito, para
- * que la foto caiga con la mano ya repartida y no a mitad del reparto.
- *
- * `accion` son los toques que se dan ANTES de la foto, cuando la pantalla
- * quieta no se muestra sola. Son dos casos y los dos por lo mismo: la pantalla
- * recién estrenada está VACÍA, y una captura de tienda de una pantalla vacía no
- * enseña la función que la slide promete.
- *
- * El mapa de la gira: sin nada elegido reserva
- * la franja de la ficha y la deja vacía —correcto en la app, porque así el
- * mapa no se mueve al elegir— pero en una captura es medio pantallazo negro.
- * Tocando Montevideo aparece la ficha del rival, que es justo lo que la slide
- * promete. Se toca por `aria-label`, que es el agarre que el mapa ya expone
- * (`components/mapa/Territorio.tsx:74`), y no por una clase de estilo.
- *
- * El anotador: recién abierto está 0 a 0, o sea una hoja en blanco. Con unos
- * toques aparecen los palitos de a cinco y el corte de las malas a las buenas,
- * que es lo único que esa pantalla tiene para mostrar.
- *
- * Se toca SIEMPRE por `aria-label` y nunca por una clase de Tailwind: la clase
- * cambia cuando alguien reacomoda el estilo y el agarre se rompe en silencio;
- * el `aria-label` es texto que existe para ser leído y no se toca por gusto.
- */
-const SLIDES = [
-  { nombre: "mesa-montevideo", ruta: "/jugar/mesa?depto=montevideo", espera: 5200,
-    titular: "Jugá al truco uruguayo de verdad" },
-  { nombre: "gira", ruta: "/jugar/gira", espera: 1600,
-    titular: "19 rivales, uno por departamento",
-    accion: { toques: [{ sel: '[aria-label^="Paso 1:"]', veces: 1 }], despues: 900 } },
-  { nombre: "leccion-muestra", ruta: "/aprender/la-muestra", espera: 900,
-    titular: "La muestra y las piezas, que ninguna guía argentina te enseña" },
-  { nombre: "mesa-rocha", ruta: "/jugar/mesa?depto=rocha", espera: 5200,
-    titular: "Cada departamento, su lugar" },
-  { nombre: "aprender", ruta: "/aprender", espera: 700,
-    titular: "8 lecciones, de la baraja a la tabla de puntos" },
-  { nombre: "anotador", ruta: "/anotador", espera: 700,
-    titular: "El anotador a palitos, para cuando jugás con cartas de verdad",
-    /* 8 y 5: pasan las malas —que son los primeros 15— en un lado y no en el
-       otro, así se ve el corte, que es lo que distingue este anotador de una
-       tablita cualquiera. */
-    accion: { toques: [
-      { sel: '[aria-label="Sumarle un punto a Nosotros"]', veces: 8 },
-      { sel: '[aria-label="Sumarle un punto a Ellos"]', veces: 5 },
-    ], despues: 600 } },
-  { nombre: "jugar", ruta: "/jugar", espera: 700,
-    titular: "Elegí contra quién" },
-  { nombre: "portada", ruta: "/", espera: 700,
-    titular: "Gratis, sin registro y sin conexión" },
-];
-
-/** El armado de la slide compuesta, tal como se le inyecta a la página. */
-function slideHTML({ titular, imagen, radio, marco }) {
-  return `
-<div style="position:fixed;inset:0;display:flex;flex-direction:column;
-            align-items:center;justify-content:flex-start;overflow:hidden"
-     class="madera vetas-madera">
-  <!-- El resplandor de arriba: es el mismo recurso con el que la portada
-       despega la marca del fondo. Un degradé, NO un filtro. -->
-  <div style="position:absolute;inset:0;background:
-       radial-gradient(ellipse 90% 42% at 50% 4%, rgba(201,146,46,0.20), transparent 70%)"></div>
-
-  <h2 style="position:relative;margin:0;padding:5.2% 7% 0;text-align:center;
-             font-family:var(--font-display);color:var(--color-crema);
-             font-size:5.6vw;line-height:1.18;
-             text-shadow:0 2px 10px rgba(0,0,0,0.75)">${titular}</h2>
-
-  <!-- La franja dorada corta el titular del aparato. Es el mismo filete que
-       el pie del sitio y la barra de la mesa. -->
-  <div style="position:relative;width:22%;height:3px;margin:3.4% 0 0;
-              background:linear-gradient(90deg,transparent,var(--color-dorado),transparent)"></div>
-
-  <!-- El aparato: un marco oscuro con la captura adentro. -->
-  <div style="position:relative;margin-top:4.6%;flex:1;min-height:0;padding-bottom:5%;
-              display:flex;align-items:flex-start;justify-content:center;width:100%">
-    <div style="height:100%;box-sizing:border-box;padding:${marco}px;border-radius:${radio}px;
-                background:linear-gradient(160deg,#2a2018,#120d09 60%,#241a12);
-                box-shadow:0 ${marco}px ${marco * 3}px rgba(0,0,0,0.6),
-                           inset 0 0 0 1px rgba(242,230,208,0.10)">
-      <img src="${imagen}" alt=""
-           style="display:block;height:100%;width:auto;border-radius:${radio - marco}px"/>
-    </div>
-  </div>
-</div>`;
-}
-
-const soloIndice = process.argv.indexOf("--solo");
-const soloAparato = soloIndice > -1 ? process.argv[soloIndice + 1] : null;
-/* `Object.hasOwn` y NO `!APARATOS[x]`: con el acceso pelado, `--solo
-   constructor` encuentra una función en la cadena de prototipos, pasa la
-   validación y después no hace nada, en silencio. Es el mismo agujero que
-   `lib/progreso.ts` y `lib/sonido.ts` ya taparon, y ahí está escrito que el
-   patrón se copia. Acá no era explotable —el argumento nunca arma una ruta—
-   pero un validador que da verde a lo que no conoce no es un validador. */
-if (soloAparato && !Object.hasOwn(APARATOS, soloAparato)) {
-  console.error(`No conozco el aparato "${soloAparato}". Van: ${Object.keys(APARATOS).join(", ")}`);
+/* Los argumentos: se valida contra una lista cerrada, y uno desconocido para. */
+const BANDERAS = new Set(["--sin-capturas"]);
+const desconocidos = process.argv.slice(2).filter((a) => !BANDERAS.has(a));
+if (desconocidos.length) {
+  console.error(`No conozco ${desconocidos.join(", ")}. Hay: ${[...BANDERAS].join(", ")}`);
   process.exit(1);
 }
+const sinCapturas = process.argv.includes("--sin-capturas");
+
+/* ── Las capturas ───────────────────────────────────────────────────────── */
+
+const GANADOS = ["luki", "la-coca", "el-rulo", "tito", "la-nelly", "marito"];
+
+/** Corre en la página antes que la app. Sólo recibe constantes de este archivo. */
+function preparar({ semilla, conProgreso }) {
+  let a = semilla >>> 0;
+  Math.random = () => {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  try {
+    localStorage.setItem("truco-uy:desbloqueos", JSON.stringify({ version: 1, anotador: true, gira: true }));
+    if (conProgreso) {
+      const rivales = {};
+      conProgreso.forEach((id, i) => {
+        rivales[id] = { ganadas: 1 + (i % 2), jugadas: 2 + (i % 3), mejor: { vos: 30, rival: 12 + i * 2 } };
+      });
+      localStorage.setItem("truco-uy:progreso", JSON.stringify({ version: 1, rivales, leccionesLeidas: [], ayudas: true, ultimoRival: conProgreso.at(-1) }));
+    }
+  } catch {}
+}
+
+/** Juega una partida entera contra Luquita hasta ganarla. Ver la escena "victoria". */
+async function ganarPartida(p) {
+  p.setDefaultTimeout(3000);
+  const boton = (n) => p.getByRole("button", { name: n, exact: true });
+  const hay = async (n) => (await boton(n).count()) > 0 && (await boton(n).first().isVisible().catch(() => false)) && (await boton(n).first().isEnabled().catch(() => false));
+  const tanto = (t) => +((t.match(/TU TANTO:\s*(\d+)/i) || t.match(/TENÉS FLOR:\s*(\d+)/i) || [0, 0])[1]);
+  let truco = false;
+  let envido = false;
+  const t0 = Date.now();
+  while (Date.now() - t0 < 15 * 60 * 1000) {
+    const txt = await p.evaluate(() => document.body.innerText);
+    if (txt.includes("¡Ganaste la partida!")) { await p.waitForTimeout(1200); return; }
+    if (txt.includes("Perdiste la partida")) throw new Error("La partida automática contra Luquita se perdió: probar otra semilla en ESCENAS.");
+    if (await hay("Siguiente mano")) { await boton("Siguiente mano").click().catch(() => {}); truco = envido = false; await p.waitForTimeout(1100); continue; }
+    if (await hay("¡Flor!")) { await boton("¡Flor!").first().click().catch(() => {}); await p.waitForTimeout(900); continue; }
+    if (await hay("Quiero")) {
+      const u = txt.toUpperCase();
+      const esEnvido = /ENVIDO!|FALTA/.test(u.slice(0, 1200)) && !/TRUCO!|RETRUCO!|VALE CUATRO!/.test(u.slice(0, 400));
+      const acepto = esEnvido ? tanto(txt) >= 27 : truco && !/RETRUCO|VALE CUATRO/.test(u.slice(0, 600));
+      await boton(acepto ? "Quiero" : "No quiero").first().click().catch(() => {});
+      await p.waitForTimeout(900);
+      continue;
+    }
+    if (!envido && tanto(txt) >= 27 && (await hay("Envido"))) {
+      await boton("Envido").last().click().catch(() => {});
+      await p.waitForTimeout(400);
+      if (await hay("Envido")) await boton("Envido").first().click().catch(() => {});
+      envido = true;
+      await p.waitForTimeout(1000);
+      continue;
+    }
+    if (!truco && (await hay("Truco"))) { await boton("Truco").click().catch(() => {}); truco = true; await p.waitForTimeout(1000); continue; }
+    const cartas = p.locator('[aria-label^="Tirar el"]');
+    if ((await cartas.count()) > 0) { await cartas.last().click().catch(() => {}); await p.waitForTimeout(1100); continue; }
+    await p.waitForTimeout(400);
+  }
+  throw new Error("La partida automática no terminó en 15 minutos.");
+}
 
 /**
- * Lo que NO se fotografía, y por qué cada uno.
- *
- * · `nextjs-portal` es el aviso de errores de Next, que en desarrollo tapa
- *   media pantalla. Sale de `celular.mjs`.
- *
- * Hasta el 2/10/2026 se escondía también `[data-anuncio]`, el hueco reservado
- * del banner. Ese día los banners se sacaron de la app y la regla se borró,
- * como decía este mismo comentario: las capturas vuelven a mostrar
- * exactamente lo que hay en la app.
+ * Las pantallas. `debe` es el texto que la slide promete y que tiene que estar
+ * en la captura.
  */
-const OCULTAR = `
-  nextjs-portal { display: none !important; }
-`;
+const ESCENAS = [
+  { nombre: "aprender", ruta: "/aprender/", espera: 800, debe: "Ocho lecciones cortas" },
+  { nombre: "ejercicio-resuelto", ruta: "/aprender/jerarquia/", espera: 800, debe: "Bien ahí",
+    pasos: async (p) => {
+      const sec = p.locator("section", { hasText: "Probá vos" }).first();
+      await sec.evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await p.evaluate(() => window.scrollBy(0, -36));
+      await sec.getByRole("button", { name: "El 1 de basto" }).click();
+      await p.waitForTimeout(700);
+    } },
+  { nombre: "jugar", ruta: "/jugar/", espera: 900, debe: "Partida rápida" },
+  { nombre: "gira-historia", ruta: "/jugar/gira/", espera: 1500, progreso: GANADOS, debe: "El Pescador",
+    pasos: async (p) => {
+      await p.click('[aria-label^="Paso 7:"]');
+      await p.waitForTimeout(800);
+      await p.click("[data-ver-historia]");
+      await p.waitForTimeout(700);
+    } },
+  { nombre: "mesa-cerro-largo", ruta: "/jugar/mesa/?depto=cerro-largo", semilla: 13, espera: 5000, debe: "El Turco" },
+  { nombre: "mesa-salto", ruta: "/jugar/mesa/?depto=salto", semilla: 19, espera: 5000, debe: "TENÉS FLOR: 36" },
+  { nombre: "victoria", ruta: "/jugar/mesa/?depto=montevideo", semilla: 55, espera: 4000, debe: "31 — 1",
+    pasos: ganarPartida },
+];
 
-const nav = await chromium.launch();
-let hechas = 0;
-const avisos = [];
+async function capturar(nav) {
+  await mkdir(path.join(LIMPIAS, "caras"), { recursive: true });
+  const contexto = async ({ semilla = 1, progreso = null } = {}) => {
+    const ctx = await nav.newContext({ viewport: { width: 360, height: 640 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 });
+    await ctx.addInitScript(preparar, { semilla, conProgreso: progreso });
+    return ctx;
+  };
+  const sinCarga = async (p) => {
+    try { await p.waitForSelector("[data-pantalla-carga]", { state: "detached", timeout: 8000 }); } catch {}
+  };
 
-for (const [nombreAparato, a] of Object.entries(APARATOS)) {
-  if (soloAparato && nombreAparato !== soloAparato) continue;
-
-  const ctx = await nav.newContext({
-    viewport: { width: a.ancho, height: a.alto },
-    isMobile: true,
-    hasTouch: true,
-    deviceScaleFactor: a.dpr,
-  });
-  const pag = await ctx.newPage();
-
-  const dirLimpias = path.join(SALIDA, "limpias", nombreAparato);
-  const dirCompuestas = path.join(SALIDA, "compuestas", nombreAparato);
-  await mkdir(dirLimpias, { recursive: true });
-  await mkdir(dirCompuestas, { recursive: true });
-
-  console.log(`\n${nombreAparato}  (${a.ancho * a.dpr}x${a.alto * a.dpr})`);
-
-  for (const [i, s] of SLIDES.entries()) {
-    const numero = String(i + 1).padStart(2, "0");
-
-    /* ── 1. La limpia ──────────────────────────────────────────────────── */
-    await pag.goto(`${RAIZ}${s.ruta}`, { waitUntil: "domcontentloaded" });
-    // El aviso de errores de Next tapa media pantalla en desarrollo, y en una
-    // captura de tienda eso es fatal: se publica sin que nadie lo mire.
-    await pag.addStyleTag({ content: OCULTAR });
-    await pag.waitForTimeout(s.espera);
-
-    if (s.accion) {
-      for (const t of s.accion.toques) {
-        for (let n = 0; n < t.veces; n++) {
-          await pag.click(t.sel);
-          await pag.waitForTimeout(90);
-        }
-      }
-      await pag.waitForTimeout(s.accion.despues);
+  for (const e of ESCENAS) {
+    const ctx = await contexto({ semilla: e.semilla ?? 1, progreso: e.progreso ?? null });
+    const p = await ctx.newPage();
+    await p.goto(RAIZ + e.ruta);
+    await sinCarga(p);
+    await p.waitForTimeout(e.espera);
+    if (e.pasos) await e.pasos(p);
+    const texto = await p.evaluate(() => document.body.innerText);
+    if (!texto.toUpperCase().includes(e.debe.toUpperCase())) {
+      throw new Error(`La captura "${e.nombre}" no muestra "${e.debe}", y la slide lo promete. ¿Cambió el juego? Revisar la semilla o el texto.`);
     }
-
-    const limpia = await pag.screenshot();
-    const archivoLimpia = path.join(dirLimpias, `${numero}-${s.nombre}.png`);
-    await writeFile(archivoLimpia, limpia);
-
-    /* Si la pantalla scrollea, la captura muestra sólo la primera pantallada y
-       eso en la tienda se ve como una página cortada. Se avisa, no se falla:
-       en `/aprender` y en las lecciones es correcto que scrollee. */
-    const sobra = await pag.evaluate(() => {
-      const d = document.documentElement;
-      return d.scrollHeight - d.clientHeight;
-    });
-
-    /* ── 2. La compuesta, sobre esta misma página ──────────────────────── */
-    const imagen = `data:image/png;base64,${limpia.toString("base64")}`;
-    await pag.evaluate(
-      ({ html }) => {
-        document.body.className = "";
-        document.body.setAttribute("style", "margin:0;padding:0;overflow:hidden");
-        document.body.innerHTML = html;
-      },
-      { html: slideHTML({ titular: s.titular, imagen, radio: a.radio, marco: a.marco }) },
-    );
-    // Sin esto la foto puede salir con el hueco de la imagen todavía vacío.
-    await pag.waitForFunction(() => [...document.images].every((im) => im.complete));
-    await pag.waitForTimeout(150);
-
-    const archivoCompuesta = path.join(dirCompuestas, `${numero}-${s.nombre}.png`);
-    await pag.screenshot({ path: archivoCompuesta });
-
-    hechas += 2;
-    const nota = sobra > 1 ? `  (scrollea ${sobra}px)` : "";
-    if (sobra > 1) avisos.push(`${nombreAparato}/${numero}-${s.nombre}: scrollea ${sobra}px`);
-    console.log(`  ${numero}-${s.nombre}`.padEnd(26) + `limpia + compuesta${nota}`);
+    await p.screenshot({ path: path.join(LIMPIAS, `${e.nombre}.png`) });
+    console.log(`  ${e.nombre}`.padEnd(24) + `ok (muestra "${e.debe}")`);
+    await ctx.close();
   }
 
+  /* Las caras, como vector: el `<svg>` que dibuja `components/mesa/Cara.tsx`
+     en el medallón, copiado tal cual. Se agranda sin perder nitidez. */
+  const ctx = await contexto();
+  const p = await ctx.newPage();
+  for (const d of CARAS_NECESARIAS) {
+    await p.goto(`${RAIZ}/jugar/mesa/?depto=${d}`);
+    await sinCarga(p);
+    await p.waitForTimeout(1500);
+    const svg = await p.locator("span.overflow-hidden.rounded-full svg").first().evaluate((s) => {
+      const c = s.cloneNode(true);
+      c.removeAttribute("class");
+      c.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      return c.outerHTML;
+    });
+    /* La cara se mete después adentro de las slides. Viene de nuestro build,
+       pero si `SITIO` apuntara a otro lado podría traer un script: se rechaza
+       cualquier cosa que no sea dibujo. */
+    if (!svg.startsWith("<svg") || /<script|<foreignObject|\son[a-z]+\s*=|javascript:|href\s*=\s*["']?(?!#)/i.test(svg)) {
+      throw new Error(`La cara de ${d} trae algo que no es dibujo (script, evento o enlace). No se usa.`);
+    }
+    await writeFile(path.join(LIMPIAS, "caras", `${d}.svg`), svg);
+  }
+  console.log(`  caras`.padEnd(24) + `ok (${CARAS_NECESARIAS.length})`);
   await ctx.close();
 }
 
-await nav.close();
+/* ── El armado ──────────────────────────────────────────────────────────── */
 
-console.log(`\n${hechas} capturas en "${SALIDA}"`);
-if (avisos.length) {
-  console.log("\nPantallas que scrollean (la captura muestra sólo lo de arriba):");
-  for (const a of avisos) console.log(`  · ${a}`);
-  console.log("En aprender y en las lecciones eso es normal: son texto.");
+const pag = { actual: null };
+
+/** Saca la foto de un HTML a la medida exacta, sin metadatos y, salvo que se pida, sin alfa. */
+async function foto(html, { ancho, alto, salida, alfa = false }) {
+  const p = pag.actual;
+  await p.setViewportSize({ width: ancho, height: alto });
+  await p.setContent(html, { waitUntil: "load", timeout: 90000 });
+  await p.evaluate(async () => {
+    await document.fonts.ready;
+    await Promise.all([...document.images].map((im) => (im.complete ? 0 : new Promise((r) => (im.onload = im.onerror = r)))));
+  });
+  const rotas = await p.evaluate(() => [...document.fonts].filter((f) => f.status === "error").map((f) => f.family));
+  if (rotas.length) throw new Error(`No cargaron las tipografías ${[...new Set(rotas)].join(", ")} en ${path.basename(salida)}. ¿Hay internet?`);
+  await p.waitForTimeout(120);
+  const buf = await p.screenshot({ omitBackground: alfa, clip: { x: 0, y: 0, width: ancho, height: alto } });
+  /* Play rechaza el alfa en las capturas y en el destacado. sharp, además, no
+     copia metadatos: el PNG sale sin un solo `tEXt`. */
+  const img = sharp(buf);
+  await (alfa ? img.png({ compressionLevel: 9 }) : img.flatten({ background: "#000" }).removeAlpha().png({ compressionLevel: 9 })).toFile(salida);
+}
+
+const uri = async (ruta) => `data:image/png;base64,${(await readFile(ruta)).toString("base64")}`;
+
+async function armar() {
+  const cap = {};
+  for (const e of ESCENAS) cap[e.nombre] = await uri(path.join(LIMPIAS, `${e.nombre}.png`));
+  const caras = {};
+  for (const d of CARAS_NECESARIAS) caras[d] = await readFile(path.join(LIMPIAS, "caras", `${d}.svg`), "utf8");
+
+  await mkdir(SLIDES, { recursive: true });
+  const h = historia(cap);
+  for (const [i, s] of h.entries()) {
+    const archivo = `${String(i + 1).padStart(2, "0")}-${s.nombre}.png`;
+    await foto(slide(s, i + 1, caras), { ancho: 1080, alto: 1920, salida: path.join(SLIDES, archivo) });
+    console.log(`  capturas/celular/${archivo}`);
+  }
+
+  await mkdir(FICHA, { recursive: true });
+  await foto(destacado(caras), { ancho: 1024, alto: 500, salida: path.join(FICHA, "grafico-destacado-1024x500.png") });
+  console.log("  ficha-play/grafico-destacado-1024x500.png");
+
+  /* Los logos: el SVG lleva las tipografías adentro, así se ve igual en
+     cualquier compu. El PNG, de 2000 px de ancho y con fondo transparente. */
+  await mkdir(LOGO, { recursive: true });
+  const estilo = `<style>${await fuenteEmbebida("Big Shoulders Display", 900, CACHE_FUENTES)}${await fuenteEmbebida("Big Shoulders Display", 800, CACHE_FUENTES)}</style>`;
+  const logos = [
+    ["escudo", escudoSuelto(), 440, 510],
+    ["logo", logo({ estilo }), 1000, 720],
+    ["logo-horizontal", logo({ horizontal: true, estilo }), 1500, 560],
+    ["logo-horizontal-sobre-oscuro", logo({ horizontal: true, estilo, tinta: C.blanco, segunda: C.celeste }), 1500, 560],
+  ];
+  for (const [nombre, svg, w, hh] of logos) {
+    await writeFile(path.join(LOGO, `${nombre}.svg`), svg);
+    const ancho = 2000;
+    const alto = Math.round((ancho * hh) / w);
+    await foto(pagina({ ancho, alto, fondo: "transparent", cuerpo: svg.replace("<svg ", `<svg width="${ancho}" height="${alto}" `) }), { ancho, alto, salida: path.join(LOGO, `${nombre}.png`), alfa: true });
+    console.log(`  logo/${nombre}.svg + .png`);
+  }
+}
+
+/* ── La comprobación de Play ────────────────────────────────────────────── */
+
+async function comprobar() {
+  const revisar = async (archivo, ancho, alto, { alfa = false, proporcion = true } = {}) => {
+    const m = await sharp(archivo).metadata();
+    const problemas = [];
+    if (m.width !== ancho || m.height !== alto) problemas.push(`mide ${m.width}x${m.height}`);
+    if (!alfa && m.hasAlpha) problemas.push("tiene canal alfa");
+    if (proporcion && Math.max(m.width, m.height) > 2 * Math.min(m.width, m.height)) problemas.push("el lado mayor pasa del doble del menor");
+    return problemas.length ? [`${path.relative(MARCA, archivo)}: ${problemas.join(", ")}`] : [];
+  };
+  const mal = [];
+  const { readdir } = await import("node:fs/promises");
+  for (const f of (await readdir(SLIDES)).filter((x) => x.endsWith(".png"))) mal.push(...(await revisar(path.join(SLIDES, f), 1080, 1920)));
+  mal.push(...(await revisar(path.join(FICHA, "grafico-destacado-1024x500.png"), 1024, 500, { proporcion: false })));
+  try {
+    mal.push(...(await revisar(path.join(FICHA, "icono-512.png"), 512, 512, { alfa: true })));
+  } catch {
+    console.log("\n  Falta el ícono: node herramientas/generar-icono.mjs --tienda");
+  }
+  if (mal.length) {
+    console.error("\nFUERA DE LO QUE PIDE PLAY:\n  " + mal.join("\n  "));
+    process.exitCode = 1;
+  } else {
+    console.log("\nTodo dentro de lo que pide Play (medidas, proporción y alfa).");
+  }
+}
+
+/* ── A trabajar ─────────────────────────────────────────────────────────── */
+
+const nav = await chromium.launch();
+try {
+  if (!sinCapturas) {
+    console.log(`Capturas contra ${RAIZ}`);
+    await capturar(nav);
+  }
+  console.log("\nArmando");
+  pag.actual = await nav.newPage();
+  await armar();
+  await comprobar();
+} finally {
+  await nav.close();
 }
 console.log("\nNada de esto sube a GitHub: 'app branding/' está en el .gitignore.");

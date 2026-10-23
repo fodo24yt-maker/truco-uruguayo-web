@@ -6,6 +6,7 @@ import { PieLegales } from "@/components/PieLegales";
 import { BotonAtrasAndroid } from "@/components/BotonAtrasAndroid";
 import { Anuncios } from "@/components/Anuncios";
 import { DialogoDesbloqueo } from "@/components/DialogoDesbloqueo";
+import { Musica } from "@/components/Musica";
 import { PantallaCarga } from "@/components/PantallaCarga";
 import { NOMBRE_SITIO, URL_SITIO } from "@/lib/sitio";
 import "./globals.css";
@@ -172,6 +173,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             segundo no se abre nunca. */}
         <Anuncios />
         <DialogoDesbloqueo />
+
+        {/* La música de fondo (desde el 21/10/2026). No dibuja nada. Va acá
+            porque este layout no se vuelve a cargar al navegar: la música
+            sigue de una pantalla a otra sin cortarse. Arranca con el primer
+            toque; cómo suena está en `lib/audio.ts`. */}
+        <Musica />
 
         {/* La pantalla de carga, SÓLO en la app. `NEXT_PUBLIC_DESTINO` se fija
             al compilar: en el HTML de la app viene puesta desde el primer

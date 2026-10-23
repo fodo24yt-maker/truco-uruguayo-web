@@ -33,3 +33,8 @@
 # hasta el año que viene.
 /escenas/*
   Cache-Control: public, max-age=604800
+
+# La música (y después las voces y los efectos), por lo mismo: una semana y sin
+# "immutable", porque un tema se puede volver a preparar con el mismo nombre.
+/audio/*
+  Cache-Control: public, max-age=604800

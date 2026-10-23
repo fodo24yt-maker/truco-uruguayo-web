@@ -348,7 +348,7 @@ function PantallaDeLaApp() {
       data-avance-js={barraConJs ? "true" : undefined}
       className="pantalla-carga fixed inset-0 z-[70] flex flex-col items-center justify-center bg-noche px-6"
     >
-      <Marca alto="clamp(6.5rem, 21vh, 10.5rem)" idHalo="halo-marca-carga" />
+      <Marca alto="clamp(6.5rem, 21vh, 10.5rem)" idRecorte="escudo-marca-carga" />
       <p className="mt-[clamp(0.5rem,2vh,1rem)] font-[family-name:var(--font-display)] text-[clamp(1.6rem,4.6vh,2.25rem)] leading-none text-dorado">
         Truco Uruguayo
       </p>

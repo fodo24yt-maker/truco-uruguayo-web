@@ -602,6 +602,13 @@ export function crearGestor({ reloj, enAprender }: Dependencias) {
       else carga.video.cancelarReintento();
     },
     pidePrivacidad: () => pidePrivacidad,
+    /**
+     * Si hay un anuncio tapando la pantalla ahora mismo. Lo mira la música
+     * (`lib/audio.ts`, desde el 21/10/2026): con un anuncio delante se calla,
+     * porque el anuncio trae su propio sonido. Cambia siempre junto con un
+     * aviso a los suscriptos.
+     */
+    anuncioEnPantalla: (): boolean => enPantalla !== null,
     async abrirPrivacidad(): Promise<void> {
       if (!motor) return;
       try {

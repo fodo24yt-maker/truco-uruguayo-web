@@ -569,7 +569,8 @@ export function aplicar(previo: Partida, accion: Accion, quien: Jugador): Partid
 
     case "mazo": {
       p.eventos.push({ quien, texto: "Me voy al mazo" });
-      return terminarMano(p, otro(quien), puntosTruco(p.truco.nivel, p.truco.querido));
+      // Con `previo`: arriba ya se marcó que este jugador habló.
+      return terminarMano(p, otro(quien), puntosPorIrseAlMazo(previo, quien));
     }
   }
 }
@@ -843,6 +844,26 @@ export function ganadorDeLaMano(p: Partida): Jugador | null {
   }
 
   return null;
+}
+
+/**
+ * Lo que cobra el otro cuando `quien` se va al mazo. Se le pasa el estado de
+ * ANTES de irse.
+ *
+ * Por lo general es lo del truco en juego (reglas.txt 7.4): 1 si no se cantó
+ * nada. Pero si el MANO se va de entrada —primera baza, sin tirar carta y sin
+ * que nadie haya cantado nada— son 2, porque le saca al pie la chance de
+ * cantar el envido: se cobra como envido no querido más truco no querido.
+ * Si ya se cantó algo, o se va el pie (el mano ya pudo envidar y no quiso), es
+ * lo de siempre. Lo pidió Santiago jugando, el 18/10/2026.
+ *
+ * `envidoCerrado` se prende con cualquier envido o flor que se haya cantado,
+ * y en la primera baza no se prende por otra cosa.
+ */
+function puntosPorIrseAlMazo(p: Partida, quien: Jugador): number {
+  const manoDeEntrada = quien === p.quienEsMano && p.bazas.length === 1 && !p.yaHablo[quien];
+  const nadaCantado = p.truco.nivel === 0 && !p.envidoCerrado;
+  return manoDeEntrada && nadaCantado ? 2 : puntosTruco(p.truco.nivel, p.truco.querido);
 }
 
 function terminarMano(p: Partida, ganador: Jugador, puntos: number): Partida {

@@ -337,6 +337,12 @@ En el truco no gana la carta con el número más alto: manda una jerarquía prop
     juego en ese momento (1 si no se cantó nada, 2 si había truco querido,
     etc.). Lo que ya se cobró por flor o envido no se devuelve.
 
+    EXCEPCIÓN DEL MANO: si el MANO se va al mazo de entrada (en la primera
+    baza, antes de tirar su carta y sin que nadie haya cantado nada), el
+    rival cobra 2: uno como envido no querido, porque le sacó la chance de
+    cantarlo, y otro como truco no querido. Si ya se cantó algo (envido, flor
+    o truco), o si el que se va es el pie, vale lo de arriba.
+
 
 ================================================================================
  8. LA FLOR
@@ -585,7 +591,8 @@ El truco es la apuesta por la mano: apostás a que tu equipo se lleva 2 de las
        aceptar el anterior.
 
 10.5 IRSE AL MAZO
-     Ver 7.4. Equivale a un "no quiero" sobre lo que esté en juego.
+     Ver 7.4. Equivale a un "no quiero" sobre lo que esté en juego. Si el mano
+     se va de entrada y sin cantos, eso incluye el envido: son 2 puntos.
 
 
 ================================================================================

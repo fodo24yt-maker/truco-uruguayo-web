@@ -21,6 +21,7 @@ import {
   BARRAS,
   type Barra,
   CANALES,
+  EVENTO_SONIDO,
   PASO,
   SONIDO_POR_DEFECTO,
   type Sonido,
@@ -28,6 +29,7 @@ import {
   guardarSonido,
   guardarVolumen,
   leerSonido,
+  sonidoDelAviso,
   volumenReal,
 } from "./sonido.ts";
 
@@ -275,4 +277,52 @@ test("los valores por defecto caen en el paso de la barra", () => {
       `${barra} arranca en ${SONIDO_POR_DEFECTO[barra]}, que no es múltiplo de ${PASO}`,
     );
   }
+});
+
+// ── El aviso a quien reproduce (21/10/2026) ──────────────────────────────
+
+/** Un navegador de mentira que además despacha eventos, como `window`. */
+function montarNavegadorConEventos(guardaBien = true) {
+  const objetivo = new EventTarget();
+  const avisos: Event[] = [];
+  objetivo.addEventListener(EVENTO_SONIDO, (e) => avisos.push(e));
+  (globalThis as Record<string, unknown>).window = {
+    localStorage: {
+      getItem: () => null,
+      setItem: () => {
+        if (!guardaBien) throw new Error("modo privado");
+      },
+      removeItem: () => {},
+    },
+    dispatchEvent: (e: Event) => objetivo.dispatchEvent(e),
+  };
+  return avisos;
+}
+
+test("guardar avisa, y el aviso trae los ajustes nuevos", () => {
+  const avisos = montarNavegadorConEventos();
+  guardarVolumen("musica", 45);
+  assert.equal(avisos.length, 1);
+  assert.equal(sonidoDelAviso(avisos[0]).musica, 45);
+  desmontarNavegador();
+});
+
+test("si no se puede guardar (modo privado), avisa igual: el cambio vale para la sesión", () => {
+  const avisos = montarNavegadorConEventos(false);
+  guardarVolumen("musica", 10);
+  assert.equal(avisos.length, 1, "sin poder guardar, no avisó");
+  // Releer localStorage daría el de fábrica; el aviso tiene que traer el 10.
+  assert.equal(sonidoDelAviso(avisos[0]).musica, 10);
+  desmontarNavegador();
+});
+
+test("un aviso con basura adentro no pasa: se sanea como lo guardado", () => {
+  desmontarNavegador();
+  const trucho = new CustomEvent(EVENTO_SONIDO, { detail: { musica: 999, voces: "fuerte", general: 50 } });
+  const s = sonidoDelAviso(trucho);
+  assert.equal(s.musica, SONIDO_POR_DEFECTO.musica);
+  assert.equal(s.voces, SONIDO_POR_DEFECTO.voces);
+  assert.equal(s.general, 50, "lo que sí estaba bien se perdió");
+  // Y uno sin nada adentro cae en lo guardado (acá, sin window: los de fábrica).
+  assert.deepEqual(sonidoDelAviso(new Event(EVENTO_SONIDO)), SONIDO_POR_DEFECTO);
 });

@@ -387,3 +387,84 @@ test("el envido querido se cuenta con las tres cartas aunque ya se haya tirado u
         : "rival";
   assert.equal(p.puntos[ganador], 2);
 });
+
+// ─── Irse al mazo siendo mano, de entrada: 2 puntos (18/10/2026) ────────────
+
+/** Una mano nueva, con el marcador en cero, donde el mano es `mano`. */
+function manoDe(mano: Jugador, semilla: number): Partida {
+  const p = nuevaPartida(azarFijo(semilla)); // en la primera mano, vos sos mano
+  if (mano === "vos") return p;
+  return siguienteMano({ ...p, fase: "mano-terminada" }, azarFijo(semilla + 1));
+}
+
+test("el mano que se va al mazo de entrada le da 2 al pie: envido y truco no queridos", () => {
+  for (const mano of ["vos", "rival"] as Jugador[]) {
+    const pie: Jugador = mano === "vos" ? "rival" : "vos";
+    const p = manoDe(mano, 31);
+    assert.equal(p.quienEsMano, mano);
+
+    const fin = aplicar(p, { tipo: "mazo" }, mano);
+    assert.equal(fin.fase, "mano-terminada");
+    assert.equal(fin.ganadorMano, pie);
+    assert.equal(fin.puntos[pie], 2, `${mano} mano se fue de entrada`);
+    assert.equal(fin.puntos[mano], 0);
+  }
+});
+
+test("el pie que se va en la primera, sin cantos, da 1: el mano ya pudo envidar", () => {
+  for (const mano of ["vos", "rival"] as Jugador[]) {
+    const pie: Jugador = mano === "vos" ? "rival" : "vos";
+    let p = manoDe(mano, 31);
+    p = aplicar(p, { tipo: "jugar", carta: p.cartas[mano][0] }, mano);
+    assert.equal(p.turno, pie);
+
+    p = aplicar(p, { tipo: "mazo" }, pie);
+    assert.equal(p.puntos[mano], 1);
+    assert.equal(p.puntos[pie], 0);
+  }
+});
+
+test("si el mano ya cantó envido, irse al mazo vuelve a valer 1", () => {
+  let p = manoDe("vos", 1);
+  for (let i = 2; p.flor.vos.tiene; i++) p = manoDe("vos", i);
+
+  p = aplicar(p, { tipo: "envido", canto: "envido" }, "vos");
+  p = aplicar(p, { tipo: "no-quiero" }, "rival"); // el mano cobra 1
+  assert.equal(p.turno, "vos");
+
+  p = aplicar(p, { tipo: "mazo" }, "vos");
+  assert.deepEqual(p.puntos, { vos: 1, rival: 1 });
+});
+
+test("si el mano ya cantó su flor, irse al mazo vuelve a valer 1", () => {
+  let p = manoDe("vos", 1);
+  for (let i = 2; i < 2000 && !(p.flor.vos.tiene && !p.flor.rival.tiene); i++) {
+    p = manoDe("vos", i);
+  }
+  assert.ok(p.flor.vos.tiene && !p.flor.rival.tiene, "no apareció una flor sola del mano");
+
+  p = aplicar(p, { tipo: "flor" }, "vos"); // nadie se la discute: cobra 3
+  assert.equal(p.turno, "vos");
+
+  p = aplicar(p, { tipo: "mazo" }, "vos");
+  assert.deepEqual(p.puntos, { vos: 3, rival: 1 });
+});
+
+test("en la segunda baza el mazo sin cantos vale 1, sea mano o pie el que se va", () => {
+  const seFue = { mano: 0, pie: 0 };
+  for (let semilla = 1; semilla <= 40; semilla++) {
+    let p = manoDe(semilla % 2 ? "vos" : "rival", semilla);
+    p = aplicar(p, { tipo: "jugar", carta: p.cartas[p.turno][0] }, p.turno);
+    p = aplicar(p, { tipo: "jugar", carta: p.cartas[p.turno][0] }, p.turno);
+    assert.equal(p.bazas.length, 2);
+
+    const quien = p.turno;
+    const otroJugador: Jugador = quien === "vos" ? "rival" : "vos";
+    seFue[quien === p.quienEsMano ? "mano" : "pie"]++;
+    p = aplicar(p, { tipo: "mazo" }, quien);
+    assert.equal(p.puntos[otroJugador], 1, `semilla ${semilla}`);
+    assert.equal(p.puntos[quien], 0);
+  }
+  // Que el caso que importa —el MANO yéndose en la segunda— se haya probado
+  assert.ok(seFue.mano > 0 && seFue.pie > 0, JSON.stringify(seFue));
+});

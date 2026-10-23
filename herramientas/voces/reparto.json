@@ -1,0 +1,145 @@
+{
+  "_leeme": "Las 19 voces, en el orden de la gira. `id` es el de lib/motor/personalidades.ts y NO se cambia. `voz` es la descripción que se le da a Qwen3-TTS VoiceDesign para inventar la voz (en inglés: la sigue mejor así); `es` es lo mismo en castellano, para la página de escucha. `exagera` es cuánto grita en Chatterbox (0 = parejo, 1 = desatado). La referencia (la frase larga con la que se clona todo) se inventa UNA vez y se guarda: si se rehace, el personaje cambia de voz. `como` (opcional) es cómo dice la frase larga; si falta, 'Speaking naturally, conversational.'. OJO, aprendido el 21/10/2026: el carácter va en la edad y el timbre, NO en el volumen. Describir a La Pocha 'callada' como 'voz baja y suave' dio una voz que susurra, y en una mesa de truco todos cantan fuerte. Y aprendido el mismo día: pedir que hable 'fuerte' le sube el tono a todas (La Pocha dio 233-271 Hz y sonó aguda y robótica); para una voz con cuerpo se pide 'grave y firme', no 'fuerte'.",
+  "referencia": "Yo hace años que juego al truco en este boliche. Mirá, te digo una cosa: el que canta sin tener, tarde o temprano lo paga. Así que pensalo bien antes de abrir la boca.",
+  "voces": [
+    {
+      "id": "luki",
+      "nombre": "Luquita",
+      "es": "Varón de 16 años, liceal de Montevideo. Voz liviana, todavía no del todo grave. Entusiasta, un poco nervioso, no sabe mentir.",
+      "voz": "Male, 16 years old, a high-school student from Montevideo, Uruguay. Light, youthful voice that has not fully deepened yet. Speaks Rioplatense Spanish with a Montevideo accent, pronouncing 'll' and 'y' as 'sh'. Enthusiastic, a little nervous, honest.",
+      "exagera": 0.75
+    },
+    {
+      "id": "la-coca",
+      "nombre": "La Porota",
+      "es": "Mujer de unos 55, feriante de Las Piedras. Voz fuerte, un poco ronca, acostumbrada a pregonar. Alegre y atrevida.",
+      "voz": "Female, about 55 years old, a street-market vendor from Las Piedras, Canelones, Uruguay. Strong, slightly raspy, warm voice used to calling out to customers. Rioplatense Uruguayan Spanish accent, pronouncing 'll' and 'y' as 'sh'. Cheerful and cheeky.",
+      "exagera": 0.8
+    },
+    {
+      "id": "el-rulo",
+      "nombre": "El Gallego",
+      "es": "Varón de unos 40, de Ciudad del Plata. Voz media, suave, tranquila. Previsible, un poco cauto: el vale cuatro lo asusta.",
+      "voz": "Male, about 40 years old, from Ciudad del Plata, San José, Uruguay. Medium-pitched, soft and calm voice, a bit cautious and easily intimidated. Rioplatense Uruguayan Spanish accent, pronouncing 'll' and 'y' as 'sh'.",
+      "exagera": 0.45
+    },
+    {
+      "id": "tito",
+      "nombre": "Tito",
+      "es": "Varón de unos 50, de Sarandí Grande. Voz de pueblo, pareja, sin sorpresas: siempre dice todo igual.",
+      "voz": "Male, about 50 years old, from Sarandí Grande, a small town in Florida, Uruguay. Plain, steady, slightly nasal small-town voice that always says things the same way. Rural Rioplatense Uruguayan Spanish accent.",
+      "exagera": 0.5
+    },
+    {
+      "id": "la-nelly",
+      "nombre": "La Pocha",
+      "es": "Mujer de unos 68, de Minas. Voz de señora mayor, GRAVE y un poco ronca, firme, de pecho; habla poco y sin apuro, pero se la oye en toda la mesa. Picardía seca.",
+      "voz": "Female, about 68 years old, from Minas, Lavalleja, Uruguay. A deep, low-pitched, slightly husky older woman's voice from the chest, firm and natural, never shrill or high; she speaks little and unhurriedly, but the whole table hears her. Dry, sly humor. Rioplatense Uruguayan Spanish accent, pronouncing 'll' and 'y' as 'sh'.",
+      "como": "Speaking firmly in a low, relaxed register, natural and warm, at a card table; not shouting, not whispering.",
+      "semilla": 2006,
+      "exagera": 0.6
+    },
+    {
+      "id": "marito",
+      "nombre": "Marito",
+      "es": "Varón de unos 25, de Piriápolis, de temporada. Voz de hombre joven, media-grave, suelta y rápida; el entusiasmo se lo pone el canto, no el tono.",
+      "voz": "Male, about 25 years old, a seasonal worker from Piriápolis, Maldonado, Uruguay. Medium-low adult male baritone voice, casual and relaxed beach-town style, speaks fast. Rioplatense Uruguayan Spanish accent, pronouncing 'll' and 'y' as 'sh'.",
+      "semilla": 1001,
+      "exagera": 0.8
+    },
+    {
+      "id": "el-pescador",
+      "nombre": "El Pescador",
+      "es": "Varón de unos 55, pescador de La Paloma. Voz curtida, ronca de mar, lenta y paciente.",
+      "voz": "Male, about 55 years old, a fisherman from La Paloma, Rocha, Uruguay. Weathered, husky voice roughened by sea air; slow and patient. Coastal Rioplatense Uruguayan Spanish accent.",
+      "exagera": 0.5
+    },
+    {
+      "id": "don-aparicio",
+      "nombre": "Don Aparicio",
+      "es": "Varón de unos 72, hombre de campo de Treinta y Tres. Voz grave, algo áspera, lenta. No apura nada.",
+      "voz": "Male, about 72 years old, a countryman from Treinta y Tres, Uruguay. Deep, slightly gravelly, slow and calm voice. Rural Rioplatense Uruguayan Spanish accent. Never hurries; every word is deliberate.",
+      "exagera": 0.5
+    },
+    {
+      "id": "cachila",
+      "nombre": "Cachila",
+      "es": "Varón de unos 45, de Sarandí del Yí. Voz seca y precisa, de los que hacen cuentas; habla cortito.",
+      "voz": "Male, about 45 years old, from Sarandí del Yí, Durazno, Uruguay. Dry, crisp, precise voice of someone who is always counting; short sentences, a slightly higher pitch. Rioplatense Uruguayan Spanish accent.",
+      "exagera": 0.55
+    },
+    {
+      "id": "el-trinitario",
+      "nombre": "El Rengo",
+      "es": "Varón de unos 60, de Trinidad. Voz cálida y gastada, de boliche de pueblo; conversador.",
+      "voz": "Male, about 60 years old, from Trinidad, Flores, Uruguay. Warm, worn, gravelly voice of a small-town bar regular; sociable and chatty. Rioplatense Uruguayan Spanish accent.",
+      "exagera": 0.6
+    },
+    {
+      "id": "la-rosa",
+      "nombre": "La China",
+      "es": "Mujer de unos 40, de Mercedes. Contralto fuerte y segura, que se planta en la mesa y se hace oír; tranquila por dentro, con picardía: te deja creer que vas ganando.",
+      "voz": "Female, about 40 years old, from Mercedes, Soriano, Uruguay. A strong, confident, resonant alto voice that projects across a card table; relaxed and sure of herself, with a teasing edge. Rioplatense Uruguayan Spanish accent, pronouncing 'll' and 'y' as 'sh'.",
+      "como": "Speaking up loudly and clearly over a noisy card table, full voice, confident, never soft or whispery.",
+      "semilla": 2001,
+      "exagera": 0.65
+    },
+    {
+      "id": "el-tucho",
+      "nombre": "El Tucho",
+      "es": "Varón de unos 55, de Carmelo. Voz grave y redonda, de buen conversador; seguro y un poco canchero.",
+      "voz": "Male, about 55 years old, from Carmelo, Colonia, Uruguay. Deep, round, smooth voice of a good storyteller; self-assured and a little smug. Rioplatense Uruguayan Spanish accent.",
+      "exagera": 0.55
+    },
+    {
+      "id": "el-fray",
+      "nombre": "Cacho",
+      "es": "Varón de unos 45, de Fray Bentos. Voz baja y medida, de pocas palabras; sabe esperar.",
+      "voz": "Male, about 45 years old, from Fray Bentos, Río Negro, Uruguay. Low, measured, quiet voice of few words; patient and careful. Rioplatense Uruguayan Spanish accent.",
+      "exagera": 0.45
+    },
+    {
+      "id": "beto",
+      "nombre": "Beto",
+      "es": "Varón de unos 45, de bar de Paysandú. Voz de pecho, plena, tranquila y segura.",
+      "voz": "Male, about 45 years old, a regular at a bar in Paysandú, Uruguay. Full, chesty baritone voice, relaxed and confident. Rioplatense Uruguayan Spanish accent, pronouncing 'll' and 'y' as 'sh'.",
+      "exagera": 0.6
+    },
+    {
+      "id": "don-ramon",
+      "nombre": "Don Ramón",
+      "es": "Varón de unos 70, citricultor de Salto. Voz mayor, algo ronca, amable pero exacta.",
+      "voz": "Male, about 70 years old, a citrus grower from Salto, Uruguay. Older, slightly hoarse voice, kind but exact, a little slower. Rioplatense Uruguayan Spanish accent from the north-west.",
+      "exagera": 0.5
+    },
+    {
+      "id": "el-piedra",
+      "nombre": "Pájaro",
+      "es": "Varón de unos 35, de Bella Unión. Voz finita y algo nasal, con el arrastre del norte; escurridizo y burlón.",
+      "voz": "Male, about 35 years old, from Bella Unión, Artigas, in the far north of Uruguay. Thin, reedy, slightly nasal voice with a lazy northern drawl, sly and amused. Northern rural Uruguayan Spanish accent.",
+      "semilla": 1003,
+      "exagera": 0.65
+    },
+    {
+      "id": "joao",
+      "nombre": "El Chicharra",
+      "es": "Varón de unos 35, de Rivera. Habla español con acento brasileño marcado (portuñol), cantadito, burlón.",
+      "voz": "Male, about 35 years old, from Rivera, on the border between Uruguay and Brazil. Speaks Spanish with a noticeable Brazilian Portuguese accent (portuñol), sing-song intonation, playful and teasing.",
+      "exagera": 0.7
+    },
+    {
+      "id": "peralta",
+      "nombre": "El Gaucho Peralta",
+      "es": "Varón de unos 65, gaucho de Tacuarembó. Voz muy grave y áspera, de campo; lenta y con autoridad.",
+      "voz": "Male, about 65 years old, a gaucho from Tacuarembó, Uruguay. Very deep, rough, weathered country voice; slow and authoritative. Northern rural Uruguayan Spanish accent.",
+      "exagera": 0.55
+    },
+    {
+      "id": "el-melo",
+      "nombre": "El Turco",
+      "es": "Varón de unos 50, de Melo. Voz baja, seca y pareja; casi sin emoción, una calma que asusta. Suena igual cuando miente.",
+      "voz": "Male, about 50 years old, from Melo, Uruguay. Low, dry, steady voice; flat and controlled, almost no emotion, a slightly menacing calm. Rioplatense Uruguayan Spanish accent. Sounds exactly the same whether bluffing or not.",
+      "exagera": 0.35
+    }
+  ]
+}

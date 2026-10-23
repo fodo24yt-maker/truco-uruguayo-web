@@ -1,14 +1,16 @@
 /**
  * Cuánto suena cada cosa, guardado en el navegador de quien juega.
  *
- * ── QUÉ ES ESTO HOY, Y QUÉ NO ────────────────────────────────────────────
+ * ── QUÉ ES ESTO, Y QUÉ NO ────────────────────────────────────────────────
  *
- * **Todavía no suena nada.** Acá no hay ni un `Audio`, ni un `AudioContext`,
- * ni un archivo que reproducir: hay cuatro números y un interruptor, que se
- * guardan y se vuelven a leer. El catálogo de lo que va a sonar —266 voces,
- * 9 músicas y 17 efectos— está escrito en `ideas/sonido.md`, sin grabar.
+ * Acá no suena nada: hay cuatro números y un interruptor, que se guardan y se
+ * vuelven a leer. El que hace sonar es `lib/audio.ts`, que desde el 21/10/2026
+ * pone la música de fondo (las voces y los efectos vienen después) y lee de
+ * acá cuánto. Cuando una barra cambia, este archivo avisa con el evento
+ * `EVENTO_SONIDO` (con los ajustes nuevos adentro, ver `sonidoDelAviso`) y el
+ * reproductor se acomoda en el momento.
  *
- * Se escribe antes que el motor a propósito. Los volúmenes son una preferencia
+ * Se escribió antes que el motor a propósito. Los volúmenes son una preferencia
  * de la persona: el día que se borren porque hubo que mover dónde vivían, se
  * borran para todos los que ya jugaron. Elegir la clave y el formato ahora, con
  * el archivo vacío, no le cuesta nada a nadie.
@@ -36,6 +38,9 @@
 
 const CLAVE = "truco-uy:sonido";
 const VERSION = 1;
+
+/** Lo que se dispara en `window` cada vez que se guardan los ajustes. */
+export const EVENTO_SONIDO = "truco-uy:sonido";
 
 /**
  * Las tres cosas que suenan, cada una con su barra.
@@ -84,12 +89,22 @@ export interface Sonido {
  * información y tienen que ganarle a todo, los efectos acompañan, y la música
  * es fondo. Arrancar con los cuatro iguales obliga a cada persona a hacer a
  * mano la mezcla que ya sabemos que queremos.
+ *
+ * **La música arranca en 30, no en 60** (21/10/2026). Santiago la escuchó y
+ * pidió "que se escuche poquito". Los temas ya vienen todos a -23 LUFS
+ * (`herramientas/publicar-musica.mjs`), y la barra es lineal en amplitud
+ * (`volumenReal` va directo a una ganancia): 30 son unos 10 dB menos, o sea
+ * que de fábrica la música queda unos 14 dB debajo de las voces. Quien la
+ * quiera más fuerte la sube; el máximo sigue siendo un nivel de fondo sensato.
+ *
+ * Bajar este número no le cambia nada a quien ya movió la barra: lo guardado
+ * manda, y el valor de fábrica sólo vale para quien nunca la tocó.
  */
 export const SONIDO_POR_DEFECTO: Sonido = {
   version: VERSION,
   silencio: false,
   general: 100,
-  musica: 60,
+  musica: 30,
   voces: 100,
   efectos: 80,
 };
@@ -136,7 +151,7 @@ export function leerSonido(): Sonido {
   }
 }
 
-/** Guarda los ajustes. Si el navegador no deja, se ignora en silencio. */
+/** Guarda los ajustes y avisa. Si el navegador no deja guardar, se ignora en silencio. */
 export function guardarSonido(sonido: Sonido): void {
   if (typeof window === "undefined") return;
   try {
@@ -144,6 +159,25 @@ export function guardarSonido(sonido: Sonido): void {
   } catch {
     // Que no se pueda guardar un volumen no puede romper nada
   }
+  /* El aviso sale aunque no se haya podido guardar (modo privado): lo que se
+     eligió vale igual para lo que queda de la sesión. Por eso lleva el valor
+     adentro, ya saneado, y no obliga a releer `localStorage`, que en ese caso
+     devolvería lo de antes. `dispatchEvent` puede faltar en el navegador de
+     mentira de los tests. */
+  if (typeof window.dispatchEvent === "function") {
+    window.dispatchEvent(new CustomEvent(EVENTO_SONIDO, { detail: sanear(sonido) }));
+  }
+}
+
+/**
+ * Los ajustes que trae un aviso de `EVENTO_SONIDO`, o los guardados si el aviso
+ * no trae nada usable. Pasa por `sanear` igual: un evento en `window` lo puede
+ * disparar cualquiera que corra en la página, y el criterio de este archivo es
+ * que nada entra sin validar.
+ */
+export function sonidoDelAviso(e: Event): Sonido {
+  const detalle = (e as CustomEvent<unknown>).detail;
+  return detalle === undefined || detalle === null ? leerSonido() : sanear(detalle);
 }
 
 /**

@@ -364,7 +364,16 @@ function LaMano() {
       <p>
         Si te tocaron tres cartas malas, podés tirarlas y renunciar a la mano:
         eso es irse al mazo. El rival cobra lo que estuviera en juego en ese
-        momento. Lo que ya cobraste por envido o flor no se devuelve.
+        momento, que es <strong>1 punto</strong> si no se cantó nada. Lo que
+        ya cobraste por envido o flor no se devuelve.
+      </p>
+      <p>
+        Hay una excepción, y es del mano. <strong>Si sos mano y te vas de
+        entrada</strong>, antes de tirar tu carta y sin que nadie haya cantado
+        nada, <strong>el rival cobra 2</strong>: uno por la mano y otro porque
+        no lo dejaste cantar el envido, que es lo que viene en la lección
+        siguiente. Si ya se cantó algo, o si el que se va es el otro, vale lo de
+        siempre.
       </p>
 
       <Ejercicio

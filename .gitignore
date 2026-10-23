@@ -249,12 +249,13 @@ _*.mjs
 # fotos de WhatsApp. Mismo criterio que DISENO-NIVEL/: no se suben.
 /Bugs a arreglar/
 
-# Material de la ficha de Play Store: el ícono a 512, el gráfico destacado y las
-# capturas de las ocho slides, en tres tamaños de aparato y en dos tandas.
+# Material de la ficha de Play Store: el ícono a 512, el gráfico destacado, las
+# seis slides y los logos. También las propuestas de marca que se descartaron,
+# con capturas y borradores.
 #
 # NO SUBE, y no es por secreto sino por las dos razones de siempre. Son PNG
-# pesados (la tanda entera pasa los 30 MB) y son SALIDA: los rehace entero
-# `herramientas/branding.mjs`, que sí sube. Es el mismo reparto que ya tiene el
+# pesados (las propuestas pasan los 100 MB) y son SALIDA: lo oficial lo rehacen
+# `herramientas/branding.mjs` y `generar-icono.mjs --tienda`, que sí suben. Es el mismo reparto que ya tiene el
 # dibujo de la mesa —`herramientas/escena/` es el código y sube, lo horneado de
 # 2800px no existe más— y el mismo que tiene el ícono de Android.
 #

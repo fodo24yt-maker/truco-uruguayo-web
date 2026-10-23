@@ -307,21 +307,16 @@ export function MenuAjustes() {
 
               {/* ── EL SONIDO ──────────────────────────────────────────────
                   Hasta el 10/9/2026 acá había un botón apagado que decía
-                  "Próximamente". Ahora las barras andan de verdad y lo que
-                  mueven se guarda, pero SIGUE SIN SONAR NADA: no hay un solo
-                  archivo de audio en el proyecto. El catálogo de lo que falta
-                  grabar —266 voces, 9 músicas y 17 efectos— está en
-                  `ideas/sonido.md`.
+                  "Próximamente". Desde entonces las barras andan y lo que
+                  mueven se guarda, y desde el 21/10/2026 SUENA LA MÚSICA
+                  (`lib/audio.ts`): mover la barra de Música o la general la
+                  cambia en el momento. Las voces y los efectos todavía no
+                  están en el juego: las voces están hechas, pero Santiago las
+                  está escuchando una por una antes de que entren.
 
-                  Se hace en este orden a propósito. Un volumen es una
-                  preferencia de la persona, y el día que haya que mudarla de
-                  lugar se le borra a todo el que ya jugó. Elegir dónde vive
-                  ahora, con la carpeta de audio vacía, no le cuesta nada a
-                  nadie.
-
-                  Y POR ESO SE DICE EN PANTALLA QUE TODAVÍA NO SUENA. Sin esa
-                  línea, mover una barra y no escuchar nada no se lee como "no
-                  hay audios": se lee como que está roto. */}
+                  Y POR ESO SE DICE EN PANTALLA QUÉ SUENA Y QUÉ NO. Sin esa
+                  línea, mover la barra de Voces y no escuchar nada no se lee
+                  como "todavía no están": se lee como que está roto. */}
               <section aria-labelledby="titulo-sonido" className="mt-5 border-t-2 border-crema/10 pt-4">
                 <h3
                   id="titulo-sonido"
@@ -330,8 +325,8 @@ export function MenuAjustes() {
                   Sonido
                 </h3>
                 <p className="mt-0.5 text-sm leading-snug text-crema/55">
-                  Todavía no hay nada grabado. Lo que elijas acá queda guardado para
-                  cuando lo haya.
+                  Por ahora suena la música; las voces y los efectos vienen después.
+                  Lo que elijas acá queda guardado.
                 </p>
 
                 {/* El interruptor general existe ADEMÁS del maestro porque bajar
