@@ -39,6 +39,7 @@ const PANTALLAS = [
   "/jugar/mesa",
   "/legales/privacidad",
   "/legales/terminos",
+  "/legales/creditos",
 ];
 
 /** Los destinos que el volver puede devolver: pantallas de verdad. */
@@ -68,6 +69,7 @@ test("cada pantalla vuelve a la que la contiene", () => {
 test("las legales vuelven al inicio, no a /legales, que no existe", () => {
   assert.equal(volverDesde("/legales/privacidad"), "/");
   assert.equal(volverDesde("/legales/terminos"), "/");
+  assert.equal(volverDesde("/legales/creditos"), "/");
 });
 
 test("la mesa vuelve a donde la abriste", () => {

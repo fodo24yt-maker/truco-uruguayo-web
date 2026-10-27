@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { PanelPapel } from "@/components/PanelPapel";
+import { CORREO_CONTACTO, DESARROLLADOR } from "@/lib/sitio";
 
 export const metadata: Metadata = {
   title: "Términos de uso",
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/legales/terminos" },
 };
 
-const ULTIMA_ACTUALIZACION = "2 de octubre de 2026";
+const ULTIMA_ACTUALIZACION = "27 de octubre de 2026";
 
 export default function Terminos() {
   return (
@@ -32,9 +33,17 @@ export default function Terminos() {
 
           <h2>Qué es esto</h2>
           <p>
-            Un sitio gratuito para aprender a jugar al truco uruguayo y
-            practicar contra un bot. Es un proyecto personal, hecho porque no
-            existía algo así.
+            Truco Uruguayo es una app de Android y un sitio, gratuitos, para
+            aprender a jugar al truco uruguayo y practicar contra un bot. Es un
+            proyecto personal
+            {DESARROLLADOR ? (
+              <>
+                {" "}de <strong>{DESARROLLADOR}</strong>, desarrollador
+                independiente de Uruguay
+              </>
+            ) : null}
+            , hecho porque no existía algo así. Usarlo es aceptar estos
+            términos.
           </p>
 
           <h2>Es gratis y va a seguir siéndolo</h2>
@@ -42,7 +51,8 @@ export default function Terminos() {
             Aprender y jugar acá no cuesta nada, no requiere cuenta y no tiene
             versión paga. <strong>No hay apuestas con dinero</strong>, ni fichas
             que se compren, ni compras dentro del juego. Nada de lo que pasa en
-            esta web tiene valor monetario.
+            el juego tiene valor monetario: los tantos que se apuestan son los
+            puntos de la partida y nada más.
           </p>
           <p>
             En la app de Android, <strong>el anotador y la Gira nacional se
@@ -54,15 +64,16 @@ export default function Terminos() {
 
           <h2>Sin garantías</h2>
           <p>
-            El sitio se ofrece &ldquo;tal cual está&rdquo;. Se hace lo posible
+            La app y el sitio se ofrecen &ldquo;tal cual están&rdquo;. Se hace lo posible
             para que las reglas sean correctas —están documentadas y verificadas
             con pruebas automáticas—, pero{" "}
             <strong>puede haber errores</strong>. Si vas a jugar por algo que te
-            importa, la palabra final es la de tu mesa, no la de esta web.
+            importa, la palabra final es la de tu mesa, no la de esta app.
           </p>
           <p>
-            Tampoco se garantiza que el sitio esté siempre disponible ni libre
-            de fallas. Es un proyecto personal, no un servicio contratado.
+            Tampoco se garantiza que la app o el sitio estén siempre disponibles
+            ni libres de fallas. Es un proyecto personal, no un servicio
+            contratado.
           </p>
 
           <h2>Las reglas del truco no son de nadie</h2>
@@ -103,10 +114,10 @@ export default function Terminos() {
           <h2>Publicidad</h2>
           <p>
             <strong>La web no tiene publicidad.</strong> La app de Android sí:
-            anuncios de Google AdMob, de pantalla completa antes de empezar una
-            partida (como mucho uno cada tres minutos, nunca en medio de una
-            partida ni en Aprender) y videos que vos elegís mirar para
-            desbloquear algo. No hay banners. Qué datos usan esos anuncios está
+            anuncios de Google AdMob, de pantalla completa al terminar una
+            partida (como mucho uno cada tres minutos; nunca al empezar a jugar,
+            ni en medio de una partida, ni en Aprender) y videos que vos elegís
+            mirar para desbloquear algo. No hay banners. Qué datos usan esos anuncios está
             en la{" "}
             <Link
               href="/legales/privacidad"
@@ -134,6 +145,26 @@ export default function Terminos() {
           <p>
             Estos términos se rigen por las leyes de la República Oriental del
             Uruguay.
+          </p>
+
+          <h2>Contacto</h2>
+          <p>
+            {CORREO_CONTACTO ? (
+              <>
+                Escribí a <a href={`mailto:${CORREO_CONTACTO}`}>{CORREO_CONTACTO}</a>, o abrí
+                un issue en{" "}
+              </>
+            ) : (
+              <>Abrí un issue en </>
+            )}
+            <a
+              href="https://github.com/fodo24yt-maker/truco-uruguayo-web/issues"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              el repositorio del proyecto
+            </a>
+            .
           </p>
         </article>
       </PanelPapel>

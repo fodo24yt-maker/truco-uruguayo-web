@@ -17,6 +17,28 @@ export const URL_SITIO = (
 
 export const NOMBRE_SITIO = "Truco Uruguayo";
 
+/** El identificador de la app de Android en Play. No cambia nunca. */
+export const ID_APP_ANDROID = "uy.trucouruguayo.app";
+
+/**
+ * Quién publica la app: el "nombre del desarrollador" de la ficha de Play, el
+ * que aparece abajo del nombre de la app. La política de privacidad tiene que
+ * nombrar al MISMO responsable que la ficha.
+ *
+ * `null` mientras no esté elegido (27/10/2026): las legales no lo muestran.
+ * Completarlo es un paso obligatorio antes de publicar, y está en la lista de
+ * `ideas/publicar-play.md`.
+ */
+export const DESARROLLADOR: string | null = null;
+
+/**
+ * El correo de contacto: el mismo "correo electrónico del desarrollador" de la
+ * ficha de Play, que es público. Lo piden Play (en la ficha) y la política de
+ * privacidad (un contacto de verdad: un issue de GitHub es público y pide
+ * cuenta). `null` mientras no esté; mismo paso obligatorio que el de arriba.
+ */
+export const CORREO_CONTACTO: string | null = null;
+
 export const DESCRIPCION_SITIO =
   "Aprendé a jugar al truco uruguayo desde cero —la muestra, las piezas, el envido y la flor— y practicá contra un bot. Gratis, sin registro y sin publicidad.";
 

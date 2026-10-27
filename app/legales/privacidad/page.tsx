@@ -2,17 +2,28 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { PanelPapel } from "@/components/PanelPapel";
+import { CORREO_CONTACTO, DESARROLLADOR, ID_APP_ANDROID, NOMBRE_SITIO } from "@/lib/sitio";
 
 export const metadata: Metadata = {
   title: "Política de privacidad",
   description:
-    "Qué datos recoge Truco Uruguayo: en la web, ninguno. En la app de Android, los anuncios de Google AdMob usan el identificador de publicidad y datos del aparato. Sin cuentas ni analítica.",
+    "Qué datos recoge Truco Uruguayo: en la web, ninguno. En la app de Android, los anuncios de Google AdMob recogen el identificador de publicidad, la ubicación aproximada, la actividad con los anuncios y diagnósticos, y se los envían a Google. Sin cuentas ni analítica.",
   alternates: { canonical: "/legales/privacidad" },
 };
 
 // Se actualiza cada vez que una función nueva toque datos del usuario.
-const ULTIMA_ACTUALIZACION = "2 de octubre de 2026";
+const ULTIMA_ACTUALIZACION = "27 de octubre de 2026";
 
+const enlace = "text-bordo underline underline-offset-2";
+
+/**
+ * La política de la app de Android Y de la web: es la URL que va en la ficha
+ * de Play, y la misma página viaja adentro de la app (Ajustes → Privacidad).
+ *
+ * Lo que dice de AdMob tiene que coincidir con el formulario "Seguridad de los
+ * datos" de Play Console, categoría por categoría: si uno cambia, cambia el
+ * otro. Las respuestas del formulario están en `ideas/publicar-play.md`.
+ */
 export default function Privacidad() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:py-12">
@@ -33,9 +44,9 @@ export default function Privacidad() {
 
           <h2>La versión corta</h2>
           <p>
-            <strong>Nosotros no recogemos ningún dato tuyo.</strong> No hay
-            registro, no hay cuentas, no hay analítica. No sabemos quién entró,
-            ni cuántos entraron, ni desde dónde.
+            <strong>A nosotros no nos llega ningún dato tuyo.</strong> No hay
+            registro, no hay cuentas, no hay analítica, y no hay ningún servidor
+            nuestro al que el juego le mande nada.
           </p>
           <p>
             <strong>En la web no hay publicidad</strong>, ni cookies, ni
@@ -43,10 +54,13 @@ export default function Privacidad() {
           </p>
           <p>
             <strong>En la app de Android sí hay anuncios, de Google AdMob</strong>,
-            y AdMob recoge algunos datos del teléfono para poder mostrarlos. Esos
-            datos los recoge Google directamente: a nosotros no nos llega
-            ninguno. Qué recoge y cómo apagar la publicidad personalizada está
-            más abajo, en <em>Publicidad</em>.
+            y para mostrarlos <strong>la app recoge algunos datos del teléfono
+            y se los envía a Google</strong>: el identificador de publicidad, la
+            ubicación aproximada, cómo interactuás con los anuncios y
+            diagnósticos. Lo hace el kit de anuncios de Google que va adentro de
+            la app, no la parte del juego, y nada de eso pasa por nosotros. El
+            detalle, y cómo apagar la publicidad personalizada, está más abajo,
+            en <em>Publicidad</em>.
           </p>
           <p>
             Lo que el juego guarda —<strong>tu progreso en la gira</strong>,{" "}
@@ -54,14 +68,24 @@ export default function Privacidad() {
             <strong>cómo jugás</strong>, <strong>el volumen</strong>,{" "}
             <strong>lo que desbloqueaste</strong> y{" "}
             <strong>los ejercicios que acertaste</strong>— se guarda{" "}
-            <em>en tu propio dispositivo</em> y nunca nos llega. Está explicado
-            más abajo.
+            <em>en tu propio dispositivo</em> y nunca nos llega.
           </p>
+
+          <h2>Quién es responsable</h2>
           <p>
-            No es una promesa de buena voluntad: es una consecuencia técnica. El
-            juego son archivos estáticos y corre entero adentro de tu teléfono o
-            de tu navegador. No hay ningún servidor nuestro al que mandarle
-            nada.
+            Esta política es de <strong>{NOMBRE_SITIO}</strong>: la app de
+            Android (<span className="whitespace-nowrap">{ID_APP_ANDROID}</span>) y este sitio. Es un proyecto
+            personal{" "}
+            {DESARROLLADOR ? (
+              <>
+                de <strong>{DESARROLLADOR}</strong>, desarrollador independiente
+                de Uruguay, que es el responsable de esta política y el que
+                figura como desarrollador en Google Play.
+              </>
+            ) : (
+              <>de un desarrollador independiente de Uruguay, que es el responsable de esta política.</>
+            )}{" "}
+            Cómo escribirle está al final, en <em>Contacto</em>.
           </p>
 
           <h2>Qué NO hacemos</h2>
@@ -82,17 +106,18 @@ export default function Privacidad() {
               entraste.
             </li>
             <li>
-              No vendemos ni compartimos información tuya, porque no la
-              tenemos. Lo que recoge AdMob en la app lo recoge Google, bajo su
-              propia política.
+              No vendemos información tuya, porque no la tenemos. Lo único que
+              sale de tu teléfono es lo que recogen los anuncios de AdMob en la
+              app, y va a Google, bajo su propia política.
             </li>
           </ul>
 
           <h2>Lo que se guarda en tu dispositivo</h2>
           <p>
-            <strong>Tu progreso en la gira</strong>: contra qué rivales jugaste,
-            a cuáles les ganaste y con qué marcador, más dos preferencias (si
-            las ayudas están prendidas y contra quién jugaste la última vez).
+            <strong>Tu progreso</strong>: contra qué rivales jugaste, a cuáles
+            les ganaste y con qué marcador, qué lecciones marcaste como leídas,
+            y dos preferencias (si las ayudas están prendidas y contra quién
+            jugaste la última vez).
           </p>
           <p>
             <strong>La cuenta del anotador</strong>: dos números, los puntos de
@@ -103,11 +128,12 @@ export default function Privacidad() {
           <p>
             <strong>Cómo jugás</strong>: los rivales de las últimas estrellas te
             van armando una ficha para jugarte mejor, y se acuerdan de las tres
-            últimas partidas. Son <em>números contados</em>, no jugadas
-            guardadas: cuántas veces cantaste, cuántas te achicaste, cuántas
-            veces cantaste sin tener. Nada de las cartas que te tocaron, porque
-            el rival no te mira las cartas nunca: sólo lo que hiciste sobre la
-            mesa, que es lo que vería cualquiera sentado ahí.
+            últimas partidas: contra quién fue, cuándo, si ganaste, y{" "}
+            <em>números contados</em>, no jugadas guardadas: cuántas veces
+            cantaste, cuántas te achicaste, cuántas veces cantaste sin tener.
+            Nada de las cartas que te tocaron, porque el rival no te mira las
+            cartas nunca: sólo lo que hiciste sobre la mesa, que es lo que
+            vería cualquiera sentado ahí.
           </p>
           <p>
             <strong>El volumen</strong>: si está silenciado y dónde dejaste las
@@ -124,18 +150,17 @@ export default function Privacidad() {
             todos.
           </p>
           <p>
-            Eso se guarda en el almacenamiento local de tu navegador
-            (<em>localStorage</em>) y{" "}
+            Eso se guarda en el almacenamiento local de tu navegador o de la
+            app (<em>localStorage</em>) y{" "}
             <strong>se queda en tu dispositivo</strong>: no viaja a ningún lado
-            porque no hay ningún lado adonde viajar —no hay servidor—. Lo podés
-            borrar limpiando los datos del sitio desde tu navegador, o
-            desinstalando la app.
+            porque no hay ningún lado adonde viajar —no hay servidor—.
           </p>
           <p>
             En la app de Android, la copia de seguridad de Android puede
-            incluirlo, para que la gira no se pierda al cambiar de teléfono. Es
-            progreso de un juego, unos números y cuántas veces mentiste en el
-            envido: no hay un dato personal adentro.
+            incluirlo, para que la gira no se pierda al cambiar de teléfono. Esa
+            copia la hace Google en tu cuenta, no nosotros. Es progreso de un
+            juego, unos números y cuántas veces mentiste en el envido: no hay un
+            dato personal adentro.
           </p>
 
           <h2>Publicidad</h2>
@@ -153,9 +178,10 @@ export default function Privacidad() {
           </p>
           <ul>
             <li>
-              <strong>Un anuncio de pantalla completa</strong> justo antes de
-              empezar una partida, como mucho uno cada tres minutos. Nunca en
-              medio de una partida y nunca en Aprender.
+              <strong>Un anuncio de pantalla completa</strong> al terminar una
+              partida, cuando dejás el cartel del resultado y antes de lo que
+              sigue, como mucho uno cada tres minutos. Nunca al empezar a jugar,
+              nunca en medio de una partida y nunca en Aprender.
             </li>
             <li>
               <strong>Un video que vos elegís mirar</strong> para desbloquear el
@@ -163,14 +189,42 @@ export default function Privacidad() {
             </li>
           </ul>
           <p>
-            Para mostrarlos, <strong>AdMob recoge</strong>: el identificador de
-            publicidad del teléfono, la dirección IP (de la que se deduce una
-            ubicación aproximada), datos del aparato (modelo, versión de
-            Android, idioma) y cómo interactuás con los anuncios (si se
-            mostraron, si los tocaste). Los usa para mostrar anuncios,
-            medirlos y prevenir fraude. Los anuncios los pide el sistema de
-            Android, no la parte del juego: el juego no ve ninguno de esos
-            datos.
+            Para mostrarlos, el kit de anuncios de Google que va adentro de la
+            app (el SDK de Google Mobile Ads) <strong>recoge estos datos y se
+            los envía a Google</strong>:
+          </p>
+          <ul>
+            <li>
+              <strong>Ubicación aproximada</strong>, deducida de la dirección IP
+              del teléfono. No la ubicación exacta: la app no pide permiso de
+              ubicación.
+            </li>
+            <li>
+              <strong>Identificadores del dispositivo</strong>: el identificador
+              de publicidad de Android y el identificador del conjunto de apps
+              (<em>App set ID</em>).
+            </li>
+            <li>
+              <strong>Actividad en la app</strong>: cómo interactuás con los
+              anuncios, por ejemplo si un anuncio se mostró o lo tocaste.
+            </li>
+            <li>
+              <strong>Información y rendimiento de la app</strong>: registros de
+              fallas y diagnósticos del kit de anuncios (por ejemplo, cuánto
+              tardó en cargar un anuncio), y datos del aparato como el modelo,
+              la versión de Android y el idioma.
+            </li>
+          </ul>
+          <p>
+            Google los usa para <strong>mostrar los anuncios</strong> (y, si lo
+            permitiste, elegirlos según tus intereses),{" "}
+            <strong>medirlos</strong> y <strong>prevenir el fraude y el
+            abuso</strong>. La parte del juego no ve ninguno de esos datos, y a
+            nosotros no nos llega ninguno.
+          </p>
+          <p>
+            Los anuncios se piden con un tope de contenido &ldquo;apto con guía
+            de los padres&rdquo;, para que no aparezca nada para adultos.
           </p>
           <p>
             <strong>Si estás en Europa, el Reino Unido o Suiza</strong>, antes
@@ -188,7 +242,7 @@ export default function Privacidad() {
             Cómo usa Google estos datos:{" "}
             <a
               href="https://policies.google.com/technologies/partner-sites"
-              className="text-bordo underline underline-offset-2"
+              className={enlace}
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -197,13 +251,61 @@ export default function Privacidad() {
             y{" "}
             <a
               href="https://policies.google.com/privacy"
-              className="text-bordo underline underline-offset-2"
+              className={enlace}
               target="_blank"
               rel="noopener noreferrer"
             >
               la política de privacidad de Google
             </a>
             .
+          </p>
+
+          <h2>La web</h2>
+          <p>
+            El sitio lo sirve <strong>Cloudflare</strong>. Como cualquier
+            servidor web, recibe la dirección IP de quien entra para poder
+            mandarle las páginas, puede guardar registros técnicos por un
+            tiempo corto, y le muestra al dueño del sitio cuántos pedidos hubo
+            en total, sin decir quién es quién. Nosotros no usamos nada de eso
+            para identificar a nadie.
+          </p>
+          <p>
+            La app de Android no pasa por Cloudflare: el juego viene entero
+            adentro de la app, y lo único que sale a internet son los anuncios.
+          </p>
+
+          <h2>Seguridad</h2>
+          <p>
+            Como no recibimos datos personales, no hay ninguna base de datos
+            nuestra que se pueda filtrar. Lo que guarda el juego queda en el
+            almacenamiento privado de la app, al que otras apps no pueden
+            entrar. Lo que el kit de anuncios le manda a Google viaja{" "}
+            <strong>cifrado</strong> (HTTPS), y la app no permite conexiones
+            sin cifrar.
+          </p>
+
+          <h2>Cuánto se guarda y cómo se borra</h2>
+          <p>
+            <strong>Lo que guarda el juego</strong> se queda en tu dispositivo
+            hasta que lo borres: en la app, desde Ajustes de Android → Apps →
+            Truco Uruguayo → Almacenamiento → <em>Borrar datos</em>, o
+            desinstalándola; en la
+            web, limpiando los datos del sitio en tu navegador.
+          </p>
+          <p>
+            <strong>Lo que recoge AdMob</strong> lo guarda Google el tiempo que
+            dice su{" "}
+            <a
+              href="https://policies.google.com/technologies/retention"
+              className={enlace}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              política de conservación de datos
+            </a>
+            . Desde el teléfono podés borrar el identificador de publicidad (ver{" "}
+            <em>Publicidad</em>, arriba), y a partir de ahí lo que se recoja ya
+            no queda atado al anterior.
           </p>
 
           <h2>Enlaces a otros sitios</h2>
@@ -215,14 +317,15 @@ export default function Privacidad() {
 
           <h2>Menores de edad</h2>
           <p>
-            El truco no es un juego de azar por dinero y este sitio no tiene
-            apuestas, ni fichas que se compren, ni nada que se le parezca.
-            Nosotros no recogemos datos de nadie, tampoco de menores.
+            El truco no es un juego de azar por dinero y la app no tiene
+            apuestas, ni fichas que se compren, ni nada que se le parezca: los
+            &ldquo;tantos&rdquo; que se apuestan son los puntos del juego y no
+            valen nada fuera de él. Nosotros no recogemos datos de nadie,
+            tampoco de menores.
           </p>
           <p>
-            La app <strong>no está dirigida a menores de 13 años</strong>. Los
-            anuncios se piden con un tope de contenido "apto con guía de los
-            padres", para que no aparezca nada para adultos.
+            La app <strong>no está dirigida a menores de 13 años</strong>, y
+            los anuncios se piden con el tope de contenido de arriba.
           </p>
 
           <h2>Tus derechos</h2>
@@ -243,23 +346,43 @@ export default function Privacidad() {
           <h2>Cambios</h2>
           <p>
             Esta política se actualiza cada vez que se agregue algo que afecte
-            tus datos, con la fecha de arriba cambiada. El historial completo
-            de cambios está público en el repositorio del proyecto.
+            tus datos, con la fecha de arriba cambiada, y siempre antes de que
+            llegue a la app. El historial completo de cambios está público en
+            el repositorio del proyecto.
           </p>
 
           <h2>Contacto</h2>
-          <p>
-            Para cualquier consulta sobre privacidad, abrí un issue en{" "}
-            <a
-              href="https://github.com/fodo24yt-maker/truco-uruguayo-web/issues"
-              className="text-bordo underline underline-offset-2"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              el repositorio del proyecto
-            </a>
-            .
-          </p>
+          {CORREO_CONTACTO ? (
+            <p>
+              Para cualquier consulta sobre privacidad, escribí a{" "}
+              <a href={`mailto:${CORREO_CONTACTO}`} className={enlace}>
+                {CORREO_CONTACTO}
+              </a>
+              . También podés abrir un issue en{" "}
+              <a
+                href="https://github.com/fodo24yt-maker/truco-uruguayo-web/issues"
+                className={enlace}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                el repositorio del proyecto
+              </a>
+              , pero ojo: lo que escribas ahí lo ve cualquiera.
+            </p>
+          ) : (
+            <p>
+              Para cualquier consulta sobre privacidad, abrí un issue en{" "}
+              <a
+                href="https://github.com/fodo24yt-maker/truco-uruguayo-web/issues"
+                className={enlace}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                el repositorio del proyecto
+              </a>
+              .
+            </p>
+          )}
         </article>
       </PanelPapel>
     </div>

@@ -48,7 +48,7 @@ export type Seccion = "aprender" | "jugar" | "anotador";
  * prototipos y devolver algo que nadie escribió acá.
  *
  * Ojo con `/legales/*`: NO se resuelve cortando la ruta por la última barra.
- * `/legales` no existe como página, así que el padre de las dos legales es el
+ * `/legales` no existe como página, así que el padre de las legales es el
  * inicio y no una pantalla en blanco.
  */
 const PADRE = new Map<string, string>([
@@ -58,6 +58,7 @@ const PADRE = new Map<string, string>([
   ["/jugar/gira", "/jugar"],
   ["/legales/privacidad", "/"],
   ["/legales/terminos", "/"],
+  ["/legales/creditos", "/"],
 ]);
 
 /** La ruta sin la barra del final. `/` se queda como `/`. */

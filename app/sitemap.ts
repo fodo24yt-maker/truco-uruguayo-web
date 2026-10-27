@@ -34,5 +34,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: urlDe("/anotador"), lastModified: hoy, changeFrequency: "monthly", priority: 0.6 },
     { url: urlDe("/legales/privacidad"), lastModified: hoy, priority: 0.2 },
     { url: urlDe("/legales/terminos"), lastModified: hoy, priority: 0.2 },
+    { url: urlDe("/legales/creditos"), lastModified: hoy, priority: 0.1 },
   ];
 }

@@ -439,6 +439,12 @@ export function MenuAjustes() {
                 <Link href="/legales/terminos" className="hover:text-crema">
                   Términos
                 </Link>
+                <span aria-hidden="true" className="text-crema/20">
+                  ·
+                </span>
+                <Link href="/legales/creditos" className="hover:text-crema">
+                  Créditos
+                </Link>
               </nav>
             </div>
           </div>

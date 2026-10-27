@@ -48,6 +48,12 @@ export function PieLegales() {
         <Link href="/legales/terminos" className="hover:text-crema">
           Términos
         </Link>
+        <span aria-hidden="true" className="text-crema/25">
+          ·
+        </span>
+        <Link href="/legales/creditos" className="hover:text-crema">
+          Créditos
+        </Link>
       </nav>
     </footer>
   );
