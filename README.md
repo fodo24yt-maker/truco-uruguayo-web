@@ -525,6 +525,10 @@ cuadro en que existe la escena ya tenga sus imágenes listas.
 
 ### Lo que hay que completar a mano
 
+La versión completa y en orden, con todas las respuestas de Play Console, está
+en [`ideas/publicar-play.md`](ideas/publicar-play.md). Esto es el resumen de lo
+que toca a los anuncios.
+
 **En AdMob** (`admob.google.com`):
 
 1. Agregar la app, vincularla a Play cuando esté publicada → **App ID**. ✔ hecho.
@@ -549,8 +553,8 @@ cuadro en que existe la escena ya tenga sus imágenes listas.
 
 1. **Contenido de la app → Anuncios**: "Sí, mi app contiene anuncios".
 2. **Contenido de la app → ID de publicidad**: declarar que se usa, para
-   *publicidad o marketing*. Hace falta porque el SDK agrega el permiso
-   `AD_ID`.
+   *publicidad o marketing*, *estadísticas* y *prevención de fraude* (lo que
+   hace AdMob con él). Hace falta porque el SDK agrega el permiso `AD_ID`.
 3. **Seguridad de los datos**: declarar lo que recoge el SDK de AdMob —verificar
    contra la guía oficial de Google, que es la que manda:
    `developers.google.com/admob/android/privacy/play-data-disclosure`—.
@@ -569,10 +573,17 @@ cuadro en que existe la escena ya tenga sus imágenes listas.
 
 ## Legales
 
-- [Política de privacidad](app/legales/privacidad/page.tsx) — nosotros no
-  recogemos ningún dato; en la app de Android, los anuncios de AdMob sí (está
-  explicado ahí, con nombre y apellido).
+- [Política de privacidad](app/legales/privacidad/page.tsx) — a nosotros no
+  nos llega ningún dato; en la app de Android, el SDK de AdMob recoge algunos y
+  se los envía a Google (está explicado ahí, categoría por categoría, igual que
+  en el formulario de Play).
 - [Términos de uso](app/legales/terminos/page.tsx)
+- [Créditos y licencias](app/legales/creditos/page.tsx) — tipografías,
+  software de código abierto, el mapa y la música.
+
+El nombre del desarrollador y el correo de contacto salen de `lib/sitio.ts`
+(`DESARROLLADOR`, `CORREO_CONTACTO`). Hoy están vacíos y las legales no los
+muestran: **se completan antes de publicar en Play**.
 
 Las dos se actualizan **antes** de agregar cualquier función que toque datos
 del usuario.
