@@ -28,6 +28,10 @@ android {
 // no deja armar un release con IDs equivocados. Todo eso vive ahí.
 apply from: 'admob.gradle'
 
+// La clave de subida de Play para el release, y el chequeo que no deja armar
+// uno sin ella. También vive aparte.
+apply from: 'firma.gradle'
+
 repositories {
     flatDir{
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'

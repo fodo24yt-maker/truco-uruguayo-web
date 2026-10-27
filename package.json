@@ -8,6 +8,7 @@
     "build": "next build",
     "build:app": "DESTINO=app next build && rm -rf out-app && mv out out-app",
     "servir:app": "python3 -m http.server --directory out-app 4173",
+    "build:aab": "npm run build:app && npx cap sync android && cd android && ./gradlew bundleRelease",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "node --test lib/*.test.ts lib/motor/*.test.ts"

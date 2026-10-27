@@ -1,0 +1,91 @@
+/*
+ * La firma del release, en un solo lugar (desde el 27/10/2026).
+ *
+ *   · DEBUG   → la clave de depuración de siempre, la que Android arma solo.
+ *               Sirve para instalar a mano, no para Play.
+ *   · RELEASE → la CLAVE DE SUBIDA de Play, que se lee de `android/key.properties`.
+ *               Ese archivo NO sube a GitHub (está en el .gitignore de la raíz,
+ *               igual que `*.jks`); la plantilla es `android/key.properties.ejemplo`.
+ *
+ * Con Play App Signing —obligatorio para las apps nuevas— la clave que firma
+ * lo que llega a los teléfonos la guarda Google. Ésta es sólo la de SUBIDA:
+ * si se pierde, se pide un reinicio desde Play Console y no se pierde la app.
+ * Igual se guarda en dos lugares: el reinicio tarda días y mientras tanto no
+ * se puede publicar nada. Cómo crearla está en `ideas/publicar-play.md`.
+ *
+ * El build de release FALLA si falta el archivo, si falta una línea o si el
+ * `.jks` no está donde dice. Es la misma idea que el chequeo de `admob.gradle`:
+ * mejor un error claro acá que un AAB sin firmar que Play rebota. El CI y
+ * `herramientas/celular-usb.mjs` hacen sólo `assembleDebug` y no se enteran.
+ *
+ * Para probar el chequeo sin tocar el archivo de verdad:
+ *     ./gradlew preReleaseBuild -Pfirma.archivo=/ruta/a/otro.properties
+ */
+
+def archivoFirma = rootProject.file(findProperty('firma.archivo') ?: 'key.properties')
+def propiedadesFirma = new Properties()
+if (archivoFirma.exists()) {
+    archivoFirma.withInputStream { propiedadesFirma.load(it) }
+}
+def leerFirma = { String clave -> (propiedadesFirma.getProperty(clave) ?: '').trim() }
+
+def problemasFirma = []
+if (!archivoFirma.exists()) {
+    problemasFirma << "  · no existe ${archivoFirma}"
+} else {
+    ['storeFile', 'storePassword', 'keyAlias', 'keyPassword'].each { clave ->
+        def v = leerFirma(clave)
+        if (v.isEmpty() || v.startsWith('REEMPLAZAR')) {
+            problemasFirma << "  · ${clave}: falta"
+        }
+    }
+}
+// `storeFile` es relativo a `android/`, como el propio key.properties
+def almacen = leerFirma('storeFile') ? rootProject.file(leerFirma('storeFile')) : null
+if (problemasFirma.isEmpty() && !almacen.exists()) {
+    problemasFirma << "  · storeFile: no existe ${almacen}"
+}
+def firmaLista = problemasFirma.isEmpty()
+
+android {
+    signingConfigs {
+        release {
+            if (firmaLista) {
+                storeFile almacen
+                storePassword leerFirma('storePassword')
+                keyAlias leerFirma('keyAlias')
+                keyPassword leerFirma('keyPassword')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            // Sin la clave no se asigna nada: el chequeo de abajo frena antes.
+            if (firmaLista) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+}
+
+// ── El chequeo del release ──
+def mensajeFirma = """
+No se arma un release sin la clave de subida de Play.
+
+${problemasFirma.join('\n')}
+
+Qué hacer: copiá `android/key.properties.ejemplo` a `android/key.properties`
+(ese nombre está en el .gitignore y no sube) y completalo con la clave que
+creaste con `keytool`. Los pasos están en `ideas/publicar-play.md`.
+Archivo leído: ${archivoFirma}
+""".stripIndent()
+
+tasks.configureEach { tarea ->
+    if (tarea.name == 'preReleaseBuild') {
+        tarea.doFirst {
+            if (!firmaLista) {
+                throw new GradleException(mensajeFirma)
+            }
+        }
+    }
+}

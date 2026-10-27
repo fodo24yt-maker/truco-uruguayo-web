@@ -1,0 +1,19 @@
+# Plantilla de la clave de SUBIDA de Google Play.
+#
+# Copiala a `android/key.properties` (ese nombre NO sube a GitHub) y
+# completala con lo que pusiste al crear la clave con `keytool` (los pasos
+# están en `ideas/publicar-play.md`).
+#
+#   · storeFile: dónde está el .jks, RELATIVO A `android/`. Lo más simple es
+#     dejarlo en `android/` mismo: `*.jks` está en el .gitignore y no sube.
+#     También sirve una ruta absoluta, fuera del repositorio.
+#   · storePassword / keyPassword: las dos contraseñas. Si al crearla pusiste
+#     una sola, va la misma en las dos.
+#   · keyAlias: el nombre que le diste con `-alias`.
+#
+# Lo usa sólo el build de release. Si falta algo, el release no compila: es a
+# propósito (ver `android/app/firma.gradle`).
+storeFile=REEMPLAZAR_upload-keystore.jks
+storePassword=REEMPLAZAR
+keyAlias=REEMPLAZAR
+keyPassword=REEMPLAZAR

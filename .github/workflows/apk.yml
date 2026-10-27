@@ -5,19 +5,19 @@
 # entre 2 y 4 GB. Esto lo hace GitHub gratis en repos públicos, y el APK queda
 # para bajar en la pestaña Actions de cada corrida.
 #
-# ── Por qué NO se firma todavía, y es a propósito ────────────────────────────
+# ── Por qué NO se firma acá, y es a propósito ────────────────────────────────
 # Un APK de depuración se firma solo con una clave de mentira que Android genera
-# y sirve perfecto para instalarlo a mano y probarlo. La clave de verdad —la que
-# hace falta para subir a Play Store— es un archivo que, si se pierde, no se
-# puede volver a generar: pierde la app para siempre. Meterla como secreto de un
-# repo público es superficie que hoy no hace falta. Se agrega el día que se vaya
-# a publicar, y ese día se agrega también el `bundleRelease`.
+# y sirve perfecto para instalarlo a mano y probarlo. El AAB para Play Store se
+# firma con la clave de SUBIDA (`android/app/firma.gradle`) y se arma en casa
+# con `npm run build:aab` (decidido el 27/10/2026): meter esa clave como secreto
+# de un repo público es superficie que no hace falta para subir una versión de
+# vez en cuando.
 #
 # ── Los anuncios ─────────────────────────────────────────────────────────────
 # Este APK es de debug y lleva SIEMPRE los IDs de prueba de AdMob, que están en
-# `android/app/admob.gradle`. El día del `bundleRelease` va a hacer falta
-# `android/admob.properties` con los de verdad —ese archivo NO está en el repo—;
-# sin él el release no compila, y es a propósito.
+# `android/app/admob.gradle`. El release necesita `android/admob.properties`
+# con los de verdad —ese archivo NO está en el repo—; sin él no compila, y es a
+# propósito.
 name: APK
 
 on:

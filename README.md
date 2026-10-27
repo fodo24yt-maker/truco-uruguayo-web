@@ -133,15 +133,25 @@ un test que no la deja volver a darse vuelta sin que nadie se entere.
 
 ## Qué falta
 
-Para publicar en Play Store:
+Para publicar en Play Store, **todo paso a paso en
+[`ideas/publicar-play.md`](ideas/publicar-play.md)**: qué pide Google, la ficha
+con sus textos, qué contestar en cada formulario de Play Console y el orden.
+En corto:
 
-- La **cuenta de desarrollador** (25 USD, una sola vez) y la ficha de la tienda.
-- La **clave de firma** (keystore). Hoy el APK se firma con la clave de
-  depuración, que sirve para instalarlo a mano y no para publicarlo. La de
-  verdad no se puede perder ni rotar: si se pierde, se pierde la app.
+- La **cuenta de desarrollador** (25 USD, una sola vez), con el **nombre de
+  desarrollador** y el **correo** públicos, que después van en `lib/sitio.ts`
+  (`DESARROLLADOR`, `CORREO_CONTACTO`) para que la política de privacidad los
+  muestre. Hoy están vacíos.
+- La **clave de subida** (keystore). El build de release ya la lee de
+  `android/key.properties` (`android/app/firma.gradle`) y no compila sin ella;
+  falta crearla con `keytool`. Con Play App Signing la clave que firma la app
+  la guarda Google: ésta es sólo la de subida, y si se pierde se pide un
+  reinicio en Play Console. Igual, dos copias.
+- La **prueba cerrada**: las cuentas personales nuevas necesitan 12 testers
+  durante 14 días seguidos antes de poder publicar.
 - **Los anuncios** ya están hechos y andan con los de prueba de Google; falta
-  la parte de las consolas (Play y AdMob). La lista exacta está en
-  *Publicidad*, más abajo.
+  la parte de las consolas (Play y AdMob) y el `app-ads.txt`. La lista exacta
+  está en *Publicidad*, más abajo.
 
 Del juego:
 
@@ -206,6 +216,15 @@ un JDK y un SDK de Android instalados:
     node herramientas/celular-usb.mjs             vista previa EN VIVO en el celular
     node herramientas/celular-usb.mjs --apk       compila, instala y abre la app
     node herramientas/celular-usb.mjs --compilar  sólo deja el .apk
+
+Para Play Store no va un APK sino un **AAB** firmado con la clave de subida.
+Se arma en casa, con `android/admob.properties` y `android/key.properties` en
+su lugar (ninguno de los dos sube a GitHub):
+
+    npm run build:aab        deja android/app/build/outputs/bundle/release/app-release.aab
+
+Cada AAB que se sube tiene que llevar un `versionCode` más alto que el anterior
+(`android/app/build.gradle`).
 
 El `appId` es `uy.trucouruguayo.app`, minSdk 24 y targetSdk 36. **El `appId` y el
 origen de la app (`https://localhost`, en `capacitor.config.ts`) no se tocan
