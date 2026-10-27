@@ -1,9 +1,10 @@
 /**
  * El punto de entrada único, con un gestor de anuncios de mentira.
  *
- * Lo que se prueba es el portero: candados, doble toque, que el anuncio que
- * falla no trabe a nadie, que la revancha reparta en el lugar y que volver de
- * un anuncio lleve a la pantalla correcta.
+ * Lo que se prueba es el portero: candados, doble toque, que entrar a jugar
+ * nunca lleve anuncio (sólo dejar el cartel de una partida terminada), que la
+ * revancha reparta en el lugar y que volver de un anuncio lleve a la pantalla
+ * correcta.
  */
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -22,11 +23,14 @@ function armar(op: { app?: boolean; anotador?: boolean; gira?: boolean; anuncio?
   const desbloqueados: Desbloqueable[] = [];
   let soltarAnuncio: () => void = () => {};
   let resultadoVideo: ResultadoVideo = "ganado";
-  const llamadas = { anuncios: 0, enCurso: [] as boolean[], prepararVideo: 0 };
+  const llamadas = { anuncios: 0, entradas: 0, enCurso: [] as boolean[], prepararVideo: 0 };
 
   const p = crearPortero({
     gestor: {
       alEntrarAPartida: () => {
+        llamadas.entradas++;
+      },
+      alDejarPartidaTerminada: () => {
         llamadas.anuncios++;
         if (!op.anuncio) return null;
         return new Promise<void>((r) => {
@@ -77,6 +81,7 @@ test("en la web todo pasa directo: sin candados, sin anuncios", () => {
   assert.equal(x.p.pedirPartidaDesdeEnlace({ modo: "rapida" }), true);
   assert.equal(x.p.leerDialogo(), null);
   assert.equal(x.llamadas.anuncios, 0);
+  assert.equal(x.llamadas.entradas, 0);
 });
 
 test("Gira bloqueada: abre el diálogo y no entra", () => {
@@ -108,10 +113,11 @@ test("anotador bloqueado: diálogo; desbloqueado: pasa", () => {
   assert.equal(y.p.pedirAnotadorDesdeEnlace(), true);
 });
 
-test("ir al mapa de la Gira no consulta anuncios", () => {
+test("ir al mapa de la Gira no consulta anuncios, ni cuenta como entrar a jugar", () => {
   const x = armar({ gira: false, anuncio: true });
   assert.equal(x.p.pedirPartidaDesdeEnlace({ modo: "gira" }), true);
   assert.equal(x.llamadas.anuncios, 0);
+  assert.equal(x.llamadas.entradas, 0);
 });
 
 test("doble toque rápido: una sola entrada", () => {
@@ -122,49 +128,97 @@ test("doble toque rápido: una sola entrada", () => {
   assert.equal(x.p.pedirPartidaDesdeEnlace({ modo: "rapida" }), true);
 });
 
-test("con anuncio: el enlace no navega; navega el portero cuando se cierra, una vez", async () => {
-  const x = armar({ anuncio: true });
-  assert.equal(x.p.pedirPartidaDesdeEnlace({ modo: "rapida" }), false);
-  assert.deepEqual(x.navegaciones, []);
-  // tocar de nuevo mientras está el anuncio no hace nada
-  x.avanzar(5000);
-  assert.equal(x.p.pedirPartidaDesdeEnlace({ modo: "rapida" }), false);
-  x.soltarAnuncio();
-  await vaciar();
-  assert.deepEqual(x.navegaciones, ["/jugar/mesa"]);
+test("entrar a jugar desde un enlace NUNCA lleva anuncio, aunque toque", () => {
+  const x = armar({ gira: false, anuncio: true });
+  assert.equal(x.p.pedirPartidaDesdeEnlace({ modo: "rapida" }), true, "el enlace navega solo");
+  x.avanzar(1000);
+  assert.equal(x.p.pedirPartidaDesdeEnlace({ modo: "gira", depto: "cerro-largo" }), true);
+  assert.equal(x.llamadas.anuncios, 0);
+  assert.equal(x.llamadas.entradas, 2, "pero el gestor se entera de que se entró");
 });
 
-test("la revancha reparte en el lugar después del anuncio, sin navegar", async () => {
+test("cambiar de rival a mitad de partida tampoco lleva anuncio: reparte en el acto", () => {
   const x = armar({ anuncio: true });
   x.irA("/jugar/mesa");
   let repartidas = 0;
   x.p.pedirPartida({ modo: "rapida" }, () => repartidas++);
+  assert.equal(repartidas, 1);
+  assert.equal(x.llamadas.anuncios, 0);
+  assert.equal(x.llamadas.entradas, 1);
+});
+
+test("un botón que pide la mesa de un departamento navega ahí", () => {
+  const x = armar({ gira: false });
+  x.irA("/jugar/gira");
+  x.p.pedirPartida({ modo: "gira", depto: "cerro-largo" });
+  assert.deepEqual(x.navegaciones, ["/jugar/mesa?depto=cerro-largo"]);
+});
+
+test("la revancha: con anuncio, reparte en el lugar cuando se cierra, una vez, sin navegar", async () => {
+  const x = armar({ anuncio: true });
+  x.irA("/jugar/mesa");
+  let repartidas = 0;
+  x.p.pedirRevancha({ modo: "rapida" }, () => repartidas++);
   assert.equal(repartidas, 0, "no reparte con el anuncio en pantalla");
+  assert.equal(x.llamadas.entradas, 0, "todavía no se entró");
+  // tocar de nuevo mientras está el anuncio no hace nada
+  x.avanzar(5000);
+  x.p.pedirRevancha({ modo: "rapida" }, () => repartidas++);
+  assert.equal(x.llamadas.anuncios, 1, "un solo anuncio");
   x.soltarAnuncio();
   await vaciar();
   assert.equal(repartidas, 1);
+  assert.equal(x.llamadas.entradas, 1);
   assert.deepEqual(x.navegaciones, []);
+});
+
+test("la revancha sin anuncio reparte en el acto", () => {
+  const x = armar({ gira: false });
+  x.irA("/jugar/mesa");
+  let repartidas = 0;
+  x.p.pedirRevancha({ modo: "gira", depto: "rocha" }, () => repartidas++);
+  assert.equal(repartidas, 1);
+  assert.equal(x.llamadas.anuncios, 1, "se consultó");
+  assert.equal(x.llamadas.entradas, 1);
 });
 
 test("si al cerrarse el anuncio ya se está en otra pantalla, no arrastra a nadie", async () => {
   const x = armar({ anuncio: true });
   x.irA("/jugar/mesa");
   let repartidas = 0;
-  x.p.pedirPartida({ modo: "rapida" }, () => repartidas++);
+  x.p.pedirRevancha({ modo: "rapida" }, () => repartidas++);
   x.irA("/jugar");
   x.soltarAnuncio();
   await vaciar();
   assert.equal(repartidas, 0);
+  assert.equal(x.llamadas.entradas, 0);
   assert.deepEqual(x.navegaciones, []);
 });
 
-test("la parada del mapa lleva a la mesa de ese departamento", async () => {
-  const x = armar({ gira: false, anuncio: true });
-  x.irA("/jugar/gira");
-  x.p.pedirPartidaDesdeEnlace({ modo: "gira", depto: "cerro-largo" });
+test("dejar el cartel de fin (volver al mapa, cambiar de rival): anuncio y después lo que se pidió", async () => {
+  const x = armar({ anuncio: true });
+  x.irA("/jugar/mesa");
+  let siguio = 0;
+  x.p.dejarPartidaTerminada(() => siguio++);
+  assert.equal(siguio, 0, "con el anuncio en pantalla, nada");
+  x.avanzar(5000);
+  x.p.dejarPartidaTerminada(() => siguio++);
   x.soltarAnuncio();
   await vaciar();
-  assert.deepEqual(x.navegaciones, ["/jugar/mesa?depto=cerro-largo"]);
+  assert.equal(siguio, 1, "una sola vez");
+  assert.equal(x.llamadas.anuncios, 1);
+  assert.equal(x.llamadas.entradas, 0, "dejar el cartel no es entrar a una partida");
+});
+
+test("dejar el cartel de fin sin anuncio sigue en el acto, y en la web ni pregunta", () => {
+  const x = armar();
+  let siguio = 0;
+  x.p.dejarPartidaTerminada(() => siguio++);
+  assert.equal(siguio, 1);
+  const y = armar({ app: false, anuncio: true });
+  y.p.dejarPartidaTerminada(() => siguio++);
+  assert.equal(siguio, 2);
+  assert.equal(y.llamadas.anuncios, 0);
 });
 
 test("video completo: desbloquea y lleva a lo que se pidió", async () => {

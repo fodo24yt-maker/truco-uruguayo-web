@@ -91,16 +91,29 @@ async function armar(opciones: { aprendiendo?: boolean; cargaFalla?: boolean } =
   return { reloj, motor, g };
 }
 
-/** Entra a una partida y dice si hubo anuncio. Si lo hubo, lo cierra. */
-async function entrar(x: Awaited<ReturnType<typeof armar>>): Promise<boolean> {
-  const espera = x.g.alEntrarAPartida();
+type Armado = Awaited<ReturnType<typeof armar>>;
+
+/** La primera partida de la sesión: se entra, y entrar nunca lleva anuncio. */
+async function primera(x: Armado): Promise<void> {
+  x.g.alEntrarAPartida();
   await vaciar();
-  if (espera === null) return false;
-  x.motor.emitir({ tipo: "mostrado", formato: "intersticial" });
-  x.motor.emitir({ tipo: "cerrado", formato: "intersticial" });
-  await espera;
+}
+
+/**
+ * Deja el cartel de la partida terminada y entra a la siguiente, como "Otra
+ * contra X". Dice si hubo anuncio en el medio; si lo hubo, lo cierra.
+ */
+async function otra(x: Armado): Promise<boolean> {
+  const espera = x.g.alDejarPartidaTerminada();
   await vaciar();
-  return true;
+  if (espera !== null) {
+    x.motor.emitir({ tipo: "mostrado", formato: "intersticial" });
+    x.motor.emitir({ tipo: "cerrado", formato: "intersticial" });
+    await espera;
+  }
+  x.g.alEntrarAPartida();
+  await vaciar();
+  return espera !== null;
 }
 
 // ───────────────────────── La regla pura ─────────────────────────
@@ -146,52 +159,64 @@ test("regla: si el reloj va para atrás, no sale nada", () => {
 
 test("partida de 2 minutos y otra: NO; partida de 7 y otra: SÍ", async () => {
   const x = await armar();
-  assert.equal(await entrar(x), false, "la primera nunca");
+  await primera(x);
   x.reloj.avanzar(2 * MIN);
-  assert.equal(await entrar(x), false, "a los 2 minutos de abrir, no");
+  assert.equal(await otra(x), false, "a los 2 minutos de abrir, no");
   x.reloj.avanzar(5 * MIN);
-  assert.equal(await entrar(x), true, "a los 7, sí");
+  assert.equal(await otra(x), true, "a los 7, sí");
   x.reloj.avanzar(2 * MIN);
-  assert.equal(await entrar(x), false, "2 minutos después del anuncio, no");
+  assert.equal(await otra(x), false, "2 minutos después del anuncio, no");
   x.reloj.avanzar(7 * MIN);
-  assert.equal(await entrar(x), true, "7 minutos después del anuncio, sí");
+  assert.equal(await otra(x), true, "7 minutos después del anuncio, sí");
 });
 
-test("la primera partida no lleva anuncio aunque hayan pasado 10 minutos en Aprender", async () => {
+test("entrar a jugar NUNCA muestra anuncio, ni la primera vez ni las otras (27/10/2026)", async () => {
   const x = await armar();
   x.reloj.avanzar(10 * MIN);
-  assert.equal(await entrar(x), false);
+  x.g.alEntrarAPartida(); // p. ej., Partida rápida desde el menú
+  x.reloj.avanzar(10 * MIN);
+  x.g.alEntrarAPartida(); // p. ej., el "Jugar" de una parada de la Gira
+  x.reloj.avanzar(10 * MIN);
+  x.g.alEntrarAPartida(); // p. ej., cambiar de rival a mitad de una partida
+  await vaciar();
+  assert.deepEqual(x.motor.mostrados, []);
+});
+
+test("sin una partida jugada en la sesión, dejar el cartel no muestra nada", async () => {
+  const x = await armar();
+  x.reloj.avanzar(10 * MIN);
+  assert.equal(x.g.alDejarPartidaTerminada(), null);
 });
 
 test("el intersticial se precarga al abrir la app, y NO al entrar a la primera partida", async () => {
   const x = await armar();
   assert.deepEqual(x.motor.cargas, ["intersticial"], "al arrancar, en la pantalla de carga");
-  await entrar(x);
+  await primera(x);
   assert.deepEqual(x.motor.cargas, ["intersticial"], "entrar a jugar no carga nada");
 });
 
 test("si no carga (sin fill, sin internet), se pasa directo", async () => {
   const x = await armar({ cargaFalla: true });
-  await entrar(x);
+  await primera(x);
   x.reloj.avanzar(10 * MIN);
-  assert.equal(x.g.alEntrarAPartida(), null);
+  assert.equal(x.g.alDejarPartidaTerminada(), null);
 });
 
 test("si mostrar rechaza, el usuario pasa en el acto", async () => {
   const x = await armar();
-  await entrar(x);
+  await primera(x);
   x.reloj.avanzar(7 * MIN);
   x.motor.mostrarFalla = true;
-  const espera = x.g.alEntrarAPartida();
+  const espera = x.g.alDejarPartidaTerminada();
   assert.notEqual(espera, null);
   await espera; // si no resolviera, el test se colgaría
 });
 
 test("si el anuncio nunca aparece, a los 3 segundos se pasa igual", async () => {
   const x = await armar();
-  await entrar(x);
+  await primera(x);
   x.reloj.avanzar(7 * MIN);
-  const espera = x.g.alEntrarAPartida();
+  const espera = x.g.alDejarPartidaTerminada();
   let paso = false;
   void espera!.then(() => {
     paso = true;
@@ -205,9 +230,9 @@ test("si el anuncio nunca aparece, a los 3 segundos se pasa igual", async () => 
 
 test("al volver a la app sin aviso de cierre, se da por cerrado", async () => {
   const x = await armar();
-  await entrar(x);
+  await primera(x);
   x.reloj.avanzar(7 * MIN);
-  const espera = x.g.alEntrarAPartida();
+  const espera = x.g.alDejarPartidaTerminada();
   x.motor.emitir({ tipo: "mostrado", formato: "intersticial" });
   x.motor.emitir({ tipo: "volvio" });
   x.reloj.avanzar(1500);
@@ -216,35 +241,35 @@ test("al volver a la app sin aviso de cierre, se da por cerrado", async () => {
 
 test("con una partida en curso no sale nada, aunque toque", async () => {
   const x = await armar();
-  await entrar(x);
+  await primera(x);
   x.reloj.avanzar(7 * MIN);
   x.g.marcarPartidaEnCurso(true);
-  assert.equal(x.g.alEntrarAPartida(), null);
+  assert.equal(x.g.alDejarPartidaTerminada(), null);
   x.g.marcarPartidaEnCurso(false);
-  assert.notEqual(x.g.alEntrarAPartida(), null);
+  assert.notEqual(x.g.alDejarPartidaTerminada(), null);
 });
 
 test("en Aprender no sale nada, nunca", async () => {
   const x = await armar({ aprendiendo: true });
-  await entrar(x);
+  await primera(x);
   x.reloj.avanzar(30 * MIN);
-  assert.equal(x.g.alEntrarAPartida(), null);
+  assert.equal(x.g.alDejarPartidaTerminada(), null);
   assert.equal(await x.g.verVideo(() => {}), "no-disponible");
 });
 
 test("no se precarga el mismo formato mientras está en pantalla (el plugin lo borraría)", async () => {
   const x = await armar();
-  await entrar(x);
+  await primera(x);
   x.reloj.avanzar(7 * MIN);
   const antes = x.motor.cargas.length;
-  const espera = x.g.alEntrarAPartida();
+  const espera = x.g.alDejarPartidaTerminada();
   x.motor.emitir({ tipo: "mostrado", formato: "intersticial" });
   await vaciar();
   assert.equal(x.motor.cargas.length, antes, "con el anuncio en pantalla, no carga otro");
   x.motor.emitir({ tipo: "cerrado", formato: "intersticial" });
   await espera;
   await vaciar();
-  assert.equal(x.motor.cargas.length, antes, "al cerrarse se entra a la mesa: espera la ventana");
+  assert.equal(x.motor.cargas.length, antes, "al cerrarse se entra a la mesa (o al mapa): espera la ventana");
   x.reloj.avanzar(SEGUNDOS_SIN_CARGAR_AL_ENTRAR * 1000);
   await vaciar();
   assert.equal(x.motor.cargas.length, antes + 1, "cumplida la ventana, sí");
@@ -252,24 +277,27 @@ test("no se precarga el mismo formato mientras está en pantalla (el plugin lo b
 
 test("sin internet un rato: al volver la conexión, la próxima partida ya lleva anuncio", async () => {
   const x = await armar({ cargaFalla: true }); // la carga del arranque falla
-  await entrar(x); // primera
+  await primera(x);
   for (let i = 0; i < 6; i++) {
     x.reloj.avanzar(10 * MIN); // los reintentos fallan
-    assert.equal(await entrar(x), false, "sin internet se juega igual");
+    assert.equal(await otra(x), false, "sin internet se juega igual");
   }
   x.motor.cargaFalla = false;
   x.reloj.avanzar(5 * MIN); // el próximo reintento carga
   await vaciar();
-  assert.equal(await entrar(x), true);
+  assert.equal(await otra(x), true);
 });
 
 test("un anuncio cargado hace más de 55 minutos no se muestra: se recarga", async () => {
   const x = await armar();
-  await entrar(x);
+  await primera(x);
   x.reloj.avanzar(60 * MIN);
-  assert.equal(x.g.alEntrarAPartida(), null);
-  await vaciar();
-  assert.equal(x.motor.cargas.filter((f) => f === "intersticial").length, 1, "no al entrar");
+  assert.equal(await otra(x), false);
+  assert.equal(
+    x.motor.cargas.filter((f) => f === "intersticial").length,
+    1,
+    "ni al dejar el cartel ni al entrar: caería encima del reparto",
+  );
   x.reloj.avanzar(SEGUNDOS_SIN_CARGAR_AL_ENTRAR * 1000);
   await vaciar();
   assert.equal(x.motor.cargas.filter((f) => f === "intersticial").length, 2, "pasada la ventana");
@@ -279,7 +307,7 @@ test("un anuncio cargado hace más de 55 minutos no se muestra: se recarga", asy
 
 test("al entrar a una partida no se carga nada hasta que se cumple la ventana", async () => {
   const x = await armar();
-  await entrar(x);
+  await primera(x);
   x.g.quererVideo(true); // p. ej., la mesa de la Gira refresca los candados al montarse
   await vaciar();
   assert.equal(x.motor.cargas.includes("video"), false, "adentro de la ventana, nada");
@@ -295,7 +323,7 @@ test("un reintento que cae adentro de la ventana espera a que se cumpla", async 
   const x = await armar({ cargaFalla: true }); // falla al arrancar: reintento a los 30 s
   x.motor.cargaFalla = false;
   x.reloj.avanzar(25_000);
-  await entrar(x); // la ventana va de los 25 s a los 33 s
+  await primera(x); // la ventana va de los 25 s a los 33 s
   x.reloj.avanzar(6_000); // a los 31 s le tocaba el reintento
   await vaciar();
   assert.equal(x.motor.cargas.length, 1, "el reintento no cae al entrar");
@@ -306,14 +334,15 @@ test("un reintento que cae adentro de la ventana espera a que se cumpla", async 
 
 test("después de un anuncio, la ventana cuenta desde que se cierra y no desde el toque", async () => {
   const x = await armar();
-  await entrar(x);
+  await primera(x);
   x.reloj.avanzar((MINUTOS_ENTRE_ANUNCIOS + 1) * MIN);
   const antes = x.motor.cargas.length;
-  const espera = x.g.alEntrarAPartida();
+  const espera = x.g.alDejarPartidaTerminada();
   x.motor.emitir({ tipo: "mostrado", formato: "intersticial" });
   x.reloj.avanzar(20_000); // un anuncio de 20 s: más largo que la ventana
   x.motor.emitir({ tipo: "cerrado", formato: "intersticial" });
   await espera;
+  x.g.alEntrarAPartida(); // la revancha, ahora que se cerró
   await vaciar();
   assert.equal(x.motor.cargas.length, antes, "al entrar a la mesa después del anuncio, nada");
   x.reloj.avanzar(SEGUNDOS_SIN_CARGAR_AL_ENTRAR * 1000);
@@ -323,7 +352,7 @@ test("después de un anuncio, la ventana cuenta desde que se cierra y no desde e
 
 test("el video que la persona pidió (abrió el diálogo) no espera la ventana", async () => {
   const x = await armar();
-  await entrar(x);
+  await primera(x);
   x.g.quererVideo(true);
   x.g.prepararVideo();
   await vaciar();
@@ -415,27 +444,27 @@ test("si el video falla al mostrarse, no disponible", async () => {
 
 test("después de un video, la ventana sin intersticial", async () => {
   const x = await conVideo();
-  await entrar(x); // primera partida
+  await primera(x);
   x.reloj.avanzar(1 * MIN);
   const r = x.g.verVideo(() => {});
   x.motor.emitir({ tipo: "mostrado", formato: "video" });
   x.motor.emitir({ tipo: "recompensa" });
   x.motor.emitir({ tipo: "cerrado", formato: "video" });
   assert.equal(await r, "ganado");
-  assert.equal(await entrar(x), false, "desbloquear y entrar enseguida: nada");
+  assert.equal(await otra(x), false, "desbloquear y terminar otra enseguida: nada");
   x.reloj.avanzar(MINUTOS_ENTRE_ANUNCIOS * MIN);
-  assert.equal(await entrar(x), false, "pasado el tope común, todavía rige la del video");
+  assert.equal(await otra(x), false, "pasado el tope común, todavía rige la del video");
   x.reloj.avanzar((MINUTOS_SIN_INTERSTICIAL_TRAS_VIDEO - MINUTOS_ENTRE_ANUNCIOS) * MIN + 1000);
-  assert.equal(await entrar(x), true, "pasada la ventana del video, sí");
+  assert.equal(await otra(x), true, "pasada la ventana del video, sí");
 });
 
 test("con un anuncio en pantalla no se puede pedir otro (doble toque)", async () => {
   const x = await armar();
-  await entrar(x);
+  await primera(x);
   x.reloj.avanzar(7 * MIN);
-  const primero = x.g.alEntrarAPartida();
+  const primero = x.g.alDejarPartidaTerminada();
   assert.notEqual(primero, null);
-  assert.equal(x.g.alEntrarAPartida(), null, "no abre un segundo anuncio");
+  assert.equal(x.g.alDejarPartidaTerminada(), null, "no abre un segundo anuncio");
   assert.equal(x.motor.mostrados.length, 1);
 });
 
@@ -443,9 +472,9 @@ test("sin red de anuncios (la web), nunca hay nada", () => {
   const reloj = relojFalso();
   const g = crearGestor({ reloj, enAprender: () => false });
   reloj.avanzar(60 * MIN);
-  assert.equal(g.alEntrarAPartida(), null);
+  g.alEntrarAPartida();
   reloj.avanzar(60 * MIN);
-  assert.equal(g.alEntrarAPartida(), null);
+  assert.equal(g.alDejarPartidaTerminada(), null);
   assert.equal(g.estadoVideo(), "no-disponible");
 });
 
@@ -542,12 +571,12 @@ test("cargas quietas: pedida ANTES de que termine el arranque, espera también l
 
 test("anuncioEnPantalla: sí mientras se ve, no antes ni después, y avisa en cada cambio (la música lo escucha)", async () => {
   const x = await armar();
-  await entrar(x);
+  await primera(x);
   x.reloj.avanzar(7 * MIN);
   const vistos: boolean[] = [];
   const quitar = x.g.suscribir(() => vistos.push(x.g.anuncioEnPantalla()));
   assert.equal(x.g.anuncioEnPantalla(), false);
-  const espera = x.g.alEntrarAPartida();
+  const espera = x.g.alDejarPartidaTerminada();
   await vaciar();
   x.motor.emitir({ tipo: "mostrado", formato: "intersticial" });
   await vaciar();

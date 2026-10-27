@@ -100,25 +100,66 @@ const ruta = (pag) => new URL(pag.url()).pathname.replace(/\/$/, "") || "/";
 
 /**
  * Toca "Partida rápida" en /jugar y dice qué pasó: "anuncio" o "directo".
- * Si hubo anuncio, verifica que NO se haya entrado por debajo, lo cierra y
- * verifica que al cerrarse se llegue a la mesa.
+ * Desde el 27/10/2026 tiene que ser SIEMPRE "directo": entrar a jugar no
+ * lleva anuncio. Si hubiera uno, lo cierra igual para poder seguir.
  */
-async function partidaRapida(pag, cerrar = true) {
+async function partidaRapida(pag) {
   const antes = await cuantos(pag, "mostrado:intersticial");
   await pag.locator('a[href^="/jugar/mesa"]').first().click();
   await pag.waitForTimeout(300);
   const hubo = (await cuantos(pag, "mostrado:intersticial")) > antes;
-  if (!hubo) {
-    await pag.waitForURL(/\/jugar\/mesa/);
-    return "directo";
-  }
-  if (ruta(pag) !== "/jugar") falla(`con el anuncio en pantalla ya se había entrado a ${ruta(pag)}`);
-  if (cerrar) {
-    await pag.locator('[data-simulado="Cerrar anuncio"]').click();
-    await pag.waitForURL(/\/jugar\/mesa/);
-  }
-  return "anuncio";
+  if (hubo) await pag.locator('[data-simulado="Cerrar anuncio"]').click();
+  await pag.waitForURL(/\/jugar\/mesa/);
+  return hubo ? "anuncio" : "directo";
 }
+
+const cartelDeFin = (pag) => pag.locator("button", { hasText: /^Otra contra/i });
+
+/**
+ * Juega la partida hasta el final yéndose al mazo, que es lo más corto: unos
+ * dos minutos del reloj de mentira (se midió el 27/10/2026: 1,8). Contesta
+ * "No quiero" a lo que le canten (o "Me achico", si los dos tienen flor) y
+ * pasa los carteles de cada mano.
+ */
+async function terminarPartida(pag) {
+  for (let i = 0; i < 800; i++) {
+    if (await cartelDeFin(pag).count()) return;
+    const siguiente = pag.getByRole("button", { name: /^Siguiente mano$/i });
+    const noQuiero = pag.getByRole("button", { name: /^(No quiero|Me achico)$/i });
+    const mazo = pag.locator("button:not([disabled])", { hasText: /^Mazo$/ });
+    if (await siguiente.count()) await siguiente.click().catch(() => {});
+    else if (await noQuiero.count()) await noQuiero.first().click().catch(() => {});
+    else if (await mazo.count()) await mazo.first().click().catch(() => {});
+    await pag.clock.fastForward(400);
+    await pag.waitForTimeout(30);
+  }
+  throw new Error("la partida no terminó en 800 pasos");
+}
+
+/**
+ * Toca un botón del cartel de fin de partida y dice qué pasó: "anuncio" o
+ * "directo". Si hubo anuncio, verifica que el cartel siga ahí abajo —que no
+ * se haya repartido ni navegado por debajo— y lo cierra.
+ */
+async function dejarCartel(pag, boton) {
+  const antes = await cuantos(pag, "mostrado:intersticial");
+  await pag.locator("button", { hasText: boton }).first().click();
+  await pag.waitForTimeout(300);
+  const hubo = (await cuantos(pag, "mostrado:intersticial")) > antes;
+  if (hubo) {
+    if (!(await pag.locator("button", { hasText: boton }).count()))
+      falla(`con el anuncio en pantalla ya se había seguido por debajo de "${boton}"`);
+    await pag.locator('[data-simulado="Cerrar anuncio"]').click();
+  }
+  await pag.waitForTimeout(300);
+  // La traba de 1 s contra el doble toque: con el reloj quieto no se vence sola
+  await pag.clock.fastForward(2000);
+  return hubo ? "anuncio" : "directo";
+}
+
+/** Los minutos del reloj de la página (el del gestor) desde `desde`. */
+const minutosDesde = async (pag, desde) => ((await pag.evaluate(() => performance.now())) - desde) / MIN;
+const ahora = (pag) => pag.evaluate(() => performance.now());
 
 /** De la mesa al menú de jugar, por el enlace de la propia mesa (sin recargar). */
 async function salirDeLaMesa(pag) {
@@ -240,7 +281,7 @@ if (FOTOS) {
 
 // ═══════════════════════════════ LAS REGLAS ═════════════════════════════════
 if (VENTANA <= TOPE) throw new Error("la ventana del video tiene que ser más larga que el tope común");
-console.log(`el tope de ${TOPE} minutos y la primera partida:`);
+console.log("entrar a jugar nunca lleva anuncio (27/10/2026):");
 {
   const { ctx, pag } = await telefono();
   await pag.clock.install();
@@ -251,44 +292,102 @@ console.log(`el tope de ${TOPE} minutos y la primera partida:`);
     : falla("la primera partida llevó anuncio");
   await salirDeLaMesa(pag);
 
-  const casi = TOPE - 1;
-  await esperar(pag, casi * MIN);
-  (await partidaRapida(pag)) === "directo"
-    ? bien(`una partida de ${casi} minutos y otra: sin anuncio`)
-    : falla(`a los ${casi} minutos salió un anuncio`);
-  await salirDeLaMesa(pag);
-
-  await esperar(pag, 2 * MIN);
-  (await partidaRapida(pag)) === "anuncio"
-    ? bien(`a los ${casi + 2} minutos: anuncio, y al cerrarlo se llega a la mesa`)
-    : falla(`a los ${casi + 2} minutos no salió el anuncio`);
-  await salirDeLaMesa(pag);
-
-  await esperar(pag, casi * MIN);
-  (await partidaRapida(pag)) === "directo"
-    ? bien(`${casi} minutos después de un anuncio: sin anuncio`)
-    : falla(`salió otro anuncio a los ${casi} minutos del anterior`);
-
-  // Cambiar de rival a mitad de partida, con el tope cumplido: anuncio ENTRE las dos
   await esperar(pag, (TOPE + 1) * MIN);
-  const antes = await cuantos(pag, "mostrado:intersticial");
+  (await partidaRapida(pag)) === "directo"
+    ? bien(`entrar con el tope de ${TOPE} minutos cumplido: sin anuncio`)
+    : falla("entrar desde el menú llevó anuncio");
+
+  // Cambiar de rival a mitad de partida, con el tope cumplido: tampoco
+  await esperar(pag, (TOPE + 1) * MIN);
+  const antes = await cuantos(pag, "mostrar:intersticial");
   await pag.locator('[aria-label*="Tocá para cambiar de rival"]').click();
   await pag.locator("li > button").nth(2).click();
   await pag.waitForTimeout(300);
-  (await cuantos(pag, "mostrado:intersticial")) === antes + 1
-    ? bien("cambiar de rival a mitad de partida: el anuncio sale entre las dos")
-    : falla("cambiar de rival a mitad de partida no pasó por el tope");
-  await pag.locator('[data-simulado="Cerrar anuncio"]').click();
+  (await cuantos(pag, "mostrar:intersticial")) === antes
+    ? bien("cambiar de rival a mitad de partida: sin anuncio")
+    : falla("cambiar de rival a mitad de partida llevó anuncio");
 
   // Y con "Volver" en el selector, no pasa nada
-  await esperar(pag, (TOPE + 1) * MIN);
-  const antes2 = await cuantos(pag, "mostrar:intersticial");
+  await esperar(pag, 2000);
   await pag.locator('[aria-label*="Tocá para cambiar de rival"]').click();
   await pag.getByRole("button", { name: "Volver" }).click();
   await pag.waitForTimeout(300);
-  (await cuantos(pag, "mostrar:intersticial")) === antes2
+  (await cuantos(pag, "mostrar:intersticial")) === antes
     ? bien("abrir el selector y volver: ni anuncio ni partida nueva")
     : falla("el selector disparó un anuncio sin elegir rival");
+  await ctx.close();
+}
+
+console.log(`\nel cartel de fin de partida y el tope de ${TOPE} minutos:`);
+{
+  const { ctx, pag } = await telefono();
+  await pag.clock.install();
+  await abrir(pag, "/jugar");
+  const abierta = await ahora(pag);
+  await partidaRapida(pag);
+
+  await terminarPartida(pag);
+  if ((await minutosDesde(pag, abierta)) >= TOPE) falla("la primera partida tardó más que el tope: no se puede probar el 'no'");
+  else
+    (await dejarCartel(pag, /^Otra contra/i)) === "directo"
+      ? bien(`una partida de menos de ${TOPE} minutos y otra: sin anuncio`)
+      : falla(`salió un anuncio antes de los ${TOPE} minutos`);
+
+  await terminarPartida(pag); // ya van más de TOPE desde que se abrió
+  if ((await dejarCartel(pag, /^Otra contra/i)) !== "anuncio") falla("pasado el tope, 'Otra contra…' no llevó anuncio");
+  else {
+    await pag.waitForTimeout(300);
+    (await cartelDeFin(pag).count()) === 0
+      ? bien("pasado el tope: anuncio al dejar el cartel, y al cerrarlo se reparte la nueva")
+      : falla("después del anuncio no se repartió la partida nueva");
+  }
+  const tras = await ahora(pag);
+
+  await terminarPartida(pag);
+  if ((await minutosDesde(pag, tras)) >= TOPE) falla("la partida tardó más que el tope: no se puede probar el 'no'");
+  else
+    (await dejarCartel(pag, /^Cambiar de rival$/i)) === "directo"
+      ? bien(`menos de ${TOPE} minutos después de un anuncio: sin anuncio`)
+      : falla(`salió otro anuncio antes de ${TOPE} minutos del anterior`);
+  await pag.getByRole("button", { name: "Volver" }).click(); // del selector, al cartel
+
+  await esperar(pag, TOPE * MIN);
+  (await dejarCartel(pag, /^Cambiar de rival$/i)) === "anuncio"
+    ? bien("'Cambiar de rival' con el tope cumplido: el anuncio sale ANTES del selector")
+    : falla("'Cambiar de rival' con el tope cumplido no llevó anuncio");
+  (await pag.locator("text=¿Contra quién jugás?").count())
+    ? bien("al cerrarlo se abre el selector")
+    : falla("después del anuncio no apareció el selector de rival");
+  const antes = await cuantos(pag, "mostrar:intersticial");
+  await pag.locator("li > button").nth(2).click();
+  await pag.waitForTimeout(300);
+  (await cuantos(pag, "mostrar:intersticial")) === antes
+    ? bien("elegir el rival después ya no lleva otro")
+    : falla("elegir rival después del anuncio llevó otro");
+  await ctx.close();
+}
+
+console.log("\nla Gira: 'Volver al mapa' también deja el cartel:");
+{
+  const { ctx, pag } = await telefono({
+    guardado: { "truco-uy:desbloqueos": { version: 1, anotador: false, gira: true } },
+  });
+  await pag.clock.install();
+  await abrir(pag, "/jugar/gira");
+  // La ficha de la parada se abre tocando el departamento en el mapa
+  await pag.locator('[role="button"][aria-label^="Paso 1:"]').click();
+  await pag.locator('a[href^="/jugar/mesa"][href*="depto="]').first().click();
+  await pag.waitForURL(/\/jugar\/mesa/);
+  bien("entrar desde el mapa: directo, sin anuncio");
+  await esperar(pag, (TOPE + 1) * MIN);
+  await terminarPartida(pag);
+  (await dejarCartel(pag, /^Volver al mapa$/i)) === "anuncio"
+    ? bien("'Volver al mapa' con el tope cumplido: anuncio")
+    : falla("'Volver al mapa' con el tope cumplido no llevó anuncio");
+  await pag.waitForURL(/\/jugar\/gira/, { timeout: 5000 }).then(
+    () => bien("y al cerrarlo se llega al mapa"),
+    () => falla("después del anuncio no se volvió al mapa"),
+  );
   await ctx.close();
 }
 
@@ -350,18 +449,24 @@ console.log(`\nel video, el anotador y los ${VENTANA} minutos:`);
   // La flecha "Jugar" del propio mapa (la de la barra está escondida en el mapa)
   await pag.locator('a[href="/jugar/"]:visible, a[href="/jugar"]:visible').first().click();
   await pag.waitForURL(/\/jugar\/?$/);
+  const video = await ahora(pag);
+  await partidaRapida(pag);
   // Pasado el tope común pero adentro de la ventana del video: no sale
   await esperar(pag, TOPE * MIN);
-  (await partidaRapida(pag)) === "directo"
-    ? bien(`${TOPE} minutos después del video: sin intersticial (rige la de ${VENTANA})`)
-    : falla(`salió un intersticial dentro de los ${VENTANA} minutos del video`);
-  await salirDeLaMesa(pag);
+  await terminarPartida(pag);
+  if ((await minutosDesde(pag, video)) >= VENTANA) falla("la partida tardó demasiado: no se puede probar la ventana del video");
+  else
+    (await dejarCartel(pag, /^Otra contra/i)) === "directo"
+      ? bien(`más de ${TOPE} minutos después del video: sin intersticial (rige la de ${VENTANA})`)
+      : falla(`salió un intersticial dentro de los ${VENTANA} minutos del video`);
   await esperar(pag, (VENTANA - TOPE) * MIN);
-  (await partidaRapida(pag)) === "anuncio"
+  await terminarPartida(pag);
+  (await dejarCartel(pag, /^Otra contra/i)) === "anuncio"
     ? bien(`pasados los ${VENTANA}: vuelve el intersticial`)
     : falla(`pasados los ${VENTANA} minutos no volvió el intersticial`);
   await ctx.close();
 }
+
 
 console.log("\nsi el anuncio falla, se pasa:");
 for (const control of [{ carga: "falla" }, { mostrar: "falla" }, { mostrar: "nunca" }]) {
@@ -369,16 +474,14 @@ for (const control of [{ carga: "falla" }, { mostrar: "falla" }, { mostrar: "nun
   await pag.clock.install();
   await abrir(pag, "/jugar");
   await partidaRapida(pag);
-  await salirDeLaMesa(pag);
   await esperar(pag, (TOPE + 1) * MIN);
-  await pag.locator('a[href^="/jugar/mesa"]').first().click();
+  await terminarPartida(pag);
+  await cartelDeFin(pag).click();
   if (control.mostrar === "nunca") await esperar(pag, 3500);
-  try {
-    await pag.waitForURL(/\/jugar\/mesa/, { timeout: 5000 });
-    bien(`${JSON.stringify(control)}: entra igual`);
-  } catch {
-    falla(`${JSON.stringify(control)}: el usuario quedó trabado`);
-  }
+  await pag.waitForTimeout(500);
+  (await cartelDeFin(pag).count()) === 0
+    ? bien(`${JSON.stringify(control)}: se reparte la nueva igual`)
+    : falla(`${JSON.stringify(control)}: el usuario quedó trabado en el cartel`);
   await ctx.close();
 }
 
@@ -427,11 +530,11 @@ console.log("\ndoble toque, y Aprender:");
   await pag.clock.install();
   await abrir(pag, "/jugar");
   await partidaRapida(pag);
-  await salirDeLaMesa(pag);
   await esperar(pag, (TOPE + 1) * MIN);
-  const enlace = pag.locator('a[href^="/jugar/mesa"]').first();
-  await enlace.click();
-  await enlace.click({ force: true }).catch(() => {});
+  await terminarPartida(pag);
+  const boton = cartelDeFin(pag);
+  await boton.click();
+  await boton.click({ force: true }).catch(() => {});
   await pag.waitForTimeout(300);
   (await cuantos(pag, "mostrar:intersticial")) === 1
     ? bien("dos toques seguidos: un solo anuncio")

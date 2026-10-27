@@ -3,9 +3,13 @@
  *
  * Qué hay, y qué no (decidido el 2/10/2026):
  *
- *  - **Intersticial** (pantalla completa, unos 5 s, saltable): sólo al ENTRAR a
- *    una partida. Nunca en medio de una, nunca en Aprender, nunca al abrir ni
- *    al salir de la app.
+ *  - **Intersticial** (pantalla completa, unos 5 s, saltable): sólo al DEJAR
+ *    el cartel de una partida terminada, entre ésa y lo que siga (otra
+ *    partida, otro rival, el mapa). Nunca al entrar a jugar, nunca en medio
+ *    de una partida, nunca en Aprender, nunca al abrir ni al salir de la app.
+ *    Hasta el 27/10/2026 salía al ENTRAR a una partida: la política de Google
+ *    Play prohíbe los anuncios "al comienzo de un nivel", y su ejemplo de lo
+ *    permitido es "después de la pantalla de puntaje", que es justo esto.
  *  - **Video con recompensa** (unos 30 s, lo elige el usuario): desbloquea para
  *    siempre el anotador o la Gira. La recompensa se da SÓLO en el evento de
  *    recompensa ganada, nunca al cerrar.
@@ -27,12 +31,12 @@
  * desde el último anuncio que SE MOSTRÓ (de cualquier tipo).
  *
  * El reloj arranca al abrir la app: el primero puede salir recién a los 3
- * minutos (y nunca en la primera partida). Era 6 hasta el 2/10/2026; Santiago
- * lo probó en el teléfono y seis minutos era demasiado.
+ * minutos (y nunca antes de la primera partida). Era 6 hasta el 2/10/2026;
+ * Santiago lo probó en el teléfono y seis minutos era demasiado.
  *
  * Se cuenta desde el último que se mostró, no desde el último que se intentó.
  * Por eso no hace falta castigar al que juega sin internet: cuando vuelve a
- * tener conexión, la próxima partida ya lleva su anuncio.
+ * tener conexión, la próxima partida que termine ya lleva su anuncio.
  */
 export const MINUTOS_ENTRE_ANUNCIOS = 3;
 
@@ -176,11 +180,13 @@ export interface Tiempos {
 const MIN = 60_000;
 
 /**
- * ¿Toca un intersticial al entrar a esta partida? Sólo las reglas de tiempo;
- * que haya un anuncio cargado y que el momento sea válido lo mira el gestor.
+ * ¿Toca un intersticial al dejar esta partida terminada? Sólo las reglas de
+ * tiempo; que haya un anuncio cargado y que el momento sea válido lo mira el
+ * gestor.
  */
 export function tocaIntersticial(t: Tiempos, ahora: number): boolean {
-  // La primera partida de cada sesión nunca lleva anuncio.
+  // Sin una partida jugada en esta sesión, nada: la primera arranca siempre
+  // limpia, y no hay "después de una partida" sin partida.
   if (!t.huboPrimeraPartida) return false;
   // Desde que se abrió la app o desde el último anuncio, lo que sea más nuevo.
   // Si el reloj diera negativo, la resta da menos que el tope: no sale nada.
@@ -440,33 +446,40 @@ export function crearGestor({ reloj, enAprender }: Dependencias) {
   // ── Lo que pide el resto de la app ──
 
   /**
-   * Se llama al entrar a una partida. Devuelve `null` si no va anuncio (el
-   * usuario sigue en el acto) o una promesa que se cumple cuando puede
-   * seguir. NUNCA rechaza: si algo falla, se pasa.
+   * Se llama al entrar a una partida. NUNCA muestra nada (desde el
+   * 27/10/2026): sólo anota que se entró y arranca la ventana sin cargas. Si
+   * el anuncio cargado se venció, se pide otro, que espera a que se cumpla.
    */
-  function alEntrarAPartida(): Promise<void> | null {
-    const ahora = reloj.ahora();
+  function alEntrarAPartida(): void {
+    t.huboPrimeraPartida = true;
+    marcarEntrada();
+    if (vencido("intersticial")) {
+      carga.intersticial.estado = "vacio";
+      cargar("intersticial");
+    }
+  }
+
+  /**
+   * Se llama al dejar el cartel de una partida TERMINADA, toque el botón que
+   * toque: el ÚNICO lugar donde puede salir un intersticial. Devuelve `null`
+   * si no va anuncio (el usuario sigue en el acto) o una promesa que se
+   * cumple cuando puede seguir. NUNCA rechaza: si algo falla, se pasa.
+   *
+   * Si no va anuncio no hace nada más, tampoco recargar uno vencido: lo que
+   * sigue suele ser entrar a otra partida, y una carga que arranque acá
+   * caería justo encima del reparto. Ésa la pide `alEntrarAPartida`.
+   */
+  function alDejarPartidaTerminada(): Promise<void> | null {
     const corresponde =
       motor !== null &&
       puedePedir &&
       !partidaEnCurso &&
       enPantalla === null &&
       !enAprender() &&
-      tocaIntersticial(t, ahora) &&
+      tocaIntersticial(t, reloj.ahora()) &&
       carga.intersticial.estado === "listo" &&
       !vencido("intersticial");
-
-    t.huboPrimeraPartida = true;
-    if (!corresponde || !motor) {
-      // Se entra ya: la ventana sin cargas arranca ahora. Si el anuncio
-      // cargado se venció, se pide otro, que espera a que se cumpla.
-      marcarEntrada();
-      if (vencido("intersticial")) {
-        carga.intersticial.estado = "vacio";
-        cargar("intersticial");
-      }
-      return null;
-    }
+    if (!corresponde || !motor) return null;
 
     const m = motor;
     return new Promise<void>((resolver) => {
@@ -477,8 +490,9 @@ export function crearGestor({ reloj, enAprender }: Dependencias) {
           if (flujoIntersticial !== flujo) return;
           flujoIntersticial = null;
           cancelarVigia();
-          // Se entra ahora, después del anuncio: la ventana cuenta desde acá,
-          // y la carga del siguiente (que pide `terminarEnPantalla`) espera.
+          // Después del anuncio se entra a otra partida (o se vuelve al
+          // mapa): la ventana cuenta desde acá, y la carga del siguiente (que
+          // pide `terminarEnPantalla`) espera.
           marcarEntrada();
           resolver();
         },
@@ -587,6 +601,7 @@ export function crearGestor({ reloj, enAprender }: Dependencias) {
       return iniciar();
     },
     alEntrarAPartida,
+    alDejarPartidaTerminada,
     verVideo,
     prepararVideo,
     estadoVideo,

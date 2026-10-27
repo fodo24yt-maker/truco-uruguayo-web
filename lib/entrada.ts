@@ -6,7 +6,10 @@
  *
  *  1. si es un doble toque (se ignora);
  *  2. si está bloqueado (se abre el diálogo para desbloquearlo);
- *  3. si toca un intersticial (lo decide `lib/anuncios.ts`);
+ *  3. si viene del cartel de una partida TERMINADA (`pedirRevancha`,
+ *     `dejarPartidaTerminada`), si toca un intersticial (lo decide
+ *     `lib/anuncios.ts`). Entrar desde un menú o desde el mapa no lleva
+ *     anuncio nunca (desde el 27/10/2026, ver `lib/anuncios.ts`);
  *  4. y recién ahí se entra.
  *
  * Ningún otro archivo navega a `/jugar/mesa`, a `/jugar/gira` desde afuera de
@@ -64,7 +67,12 @@ export interface Dialogo {
 export interface DependenciasPortero {
   gestor: Pick<
     Gestor,
-    "alEntrarAPartida" | "verVideo" | "prepararVideo" | "quererVideo" | "marcarPartidaEnCurso"
+    | "alEntrarAPartida"
+    | "alDejarPartidaTerminada"
+    | "verVideo"
+    | "prepararVideo"
+    | "quererVideo"
+    | "marcarPartidaEnCurso"
   >;
   esApp: () => boolean;
   ahora: () => number;
@@ -118,11 +126,38 @@ export function crearPortero(dep: DependenciasPortero) {
   }
 
   /**
+   * El intersticial, si toca: sólo se llama al dejar el cartel de una partida
+   * terminada. `seguir` corre cuando se cierra, o en el acto si no hay.
+   */
+  function conAnuncioSiToca(seguir: () => void): void {
+    const espera = dep.esApp() ? dep.gestor.alDejarPartidaTerminada() : null;
+    if (espera === null) {
+      seguir();
+      return;
+    }
+    esperando = true;
+    const ruta = dep.rutaActual();
+    void espera.then(() => {
+      esperando = false;
+      trabar();
+      // Si mientras tanto se cambió de pantalla, no se arrastra a nadie.
+      if (dep.rutaActual() !== ruta) return;
+      seguir();
+    });
+  }
+
+  /**
    * El corazón. `entrar` existe para la revancha: reparte en el lugar en vez
    * de navegar. `desdeEnlace` es para los `<Link>`: si se puede pasar en el
-   * acto devuelve `true` y el enlace navega solo.
+   * acto devuelve `true` y el enlace navega solo. `trasPartida` es para el
+   * cartel de fin: sólo ahí puede ir un anuncio antes de entrar.
    */
-  function tramitar(pedido: Pedido, entrar: (() => void) | undefined, desdeEnlace: boolean): boolean {
+  function tramitar(
+    pedido: Pedido,
+    entrar: (() => void) | undefined,
+    desdeEnlace: boolean,
+    trasPartida: boolean,
+  ): boolean {
     if (trabado()) return false;
     refrescar();
 
@@ -133,7 +168,10 @@ export function crearPortero(dep: DependenciasPortero) {
     trabar();
 
     const href = hrefDe(pedido);
+    // En la web no hay anuncios. E ir al mapa no es entrar a una partida.
+    const esPartida = dep.esApp() && !(pedido.modo === "gira" && pedido.depto === undefined);
     const seguirYa = (): boolean => {
+      if (esPartida) dep.gestor.alEntrarAPartida();
       if (entrar) {
         entrar();
         return false;
@@ -143,24 +181,9 @@ export function crearPortero(dep: DependenciasPortero) {
       return false;
     };
 
-    // En la web no hay anuncios. E ir al mapa no es entrar a una partida.
-    if (!dep.esApp()) return seguirYa();
-    if (pedido.modo === "gira" && pedido.depto === undefined) return seguirYa();
-
-    const espera = dep.gestor.alEntrarAPartida();
-    if (espera === null) return seguirYa();
-
-    // Hay anuncio: el enlace NO navega, navega esto cuando se cierre.
-    esperando = true;
-    const ruta = dep.rutaActual();
-    void espera.then(() => {
-      esperando = false;
-      trabar();
-      // Si mientras tanto se cambió de pantalla, no se arrastra a nadie.
-      if (dep.rutaActual() !== ruta) return;
-      if (entrar) entrar();
-      else navegar(href);
-    });
+    if (!trasPartida) return seguirYa();
+    // Hay que esperar al anuncio, si va: el enlace NO navega, navega esto.
+    conAnuncioSiToca(() => void seguirYa());
     return false;
   }
 
@@ -170,14 +193,34 @@ export function crearPortero(dep: DependenciasPortero) {
       navegar = fn;
     },
 
-    /** Para botones y revanchas. Navega o llama a `entrar`. */
+    /** Para botones y menús. Navega o llama a `entrar`. Nunca lleva anuncio. */
     pedirPartida(pedido: Pedido, entrar?: () => void): void {
-      tramitar(pedido, entrar, false);
+      tramitar(pedido, entrar, false, false);
     },
 
-    /** Para los `<Link>`: `true` = navegá vos. */
+    /** Para los `<Link>`: `true` = navegá vos. Nunca lleva anuncio. */
     pedirPartidaDesdeEnlace(pedido: Pedido): boolean {
-      return tramitar(pedido, undefined, true);
+      return tramitar(pedido, undefined, true, false);
+    },
+
+    /**
+     * "Otra contra X", en el cartel de una partida terminada: si toca, el
+     * intersticial va ANTES de repartir la nueva.
+     */
+    pedirRevancha(pedido: Pedido, entrar: () => void): void {
+      tramitar(pedido, entrar, false, true);
+    },
+
+    /**
+     * Los otros botones del cartel de una partida terminada ("Cambiar de
+     * rival", "Volver al mapa"): si toca, el intersticial; después, `seguir`.
+     * No es entrar a una partida: si después se entra, eso pasa por
+     * `pedirPartida` como siempre.
+     */
+    dejarPartidaTerminada(seguir: () => void): void {
+      if (trabado()) return;
+      trabar();
+      conAnuncioSiToca(seguir);
     },
 
     /** Para los `<Link>` del anotador: `true` = navegá vos. */

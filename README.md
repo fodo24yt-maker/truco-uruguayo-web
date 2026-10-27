@@ -381,10 +381,16 @@ los anuncios ni siquiera viaja en el build de la web (`NEXT_PUBLIC_DESTINO`, ver
 
 - **Sin banners.** Se sacaron todos: en un juego de cartas molestan y casi no
   pagan. Tampoco hay anuncios al abrir ni al salir de la app.
-- **Intersticial** (pantalla completa, unos 5 s, saltable): sólo al ENTRAR a
-  una partida —Partida rápida, el "Jugar" de cada parada de la Gira, la
-  revancha y el cambio de rival—. Nunca en medio de una partida, nunca en
-  Aprender. Con tope: ver las perillas.
+- **Intersticial** (pantalla completa, unos 5 s, saltable): sólo al DEJAR el
+  cartel de una partida terminada —"Otra contra…", "Cambiar de rival" o
+  "Volver al mapa"—, antes de lo que siga. Nunca al entrar a jugar (desde el
+  menú, el mapa o cambiando de rival a mitad de partida), nunca en medio de
+  una partida, nunca en Aprender. Con tope: ver las perillas.
+
+  Hasta el 27/10/2026 salía al ENTRAR a una partida. Se movió por la política
+  de anuncios de Google Play, que prohíbe los intersticiales "al comienzo de
+  un nivel" y da como ejemplo de lo permitido "después de la pantalla de
+  puntaje".
 - **Video con recompensa** (unos 30 s, lo elige el usuario): desbloquea PARA
   SIEMPRE el anotador, o la Gira nacional (que también se abre acertando los
   doce ejercicios de Aprender). La recompensa se da sólo en el evento de
@@ -398,7 +404,7 @@ app.
 | Archivo | Qué hace |
 |---|---|
 | `lib/anuncios.ts` | **El gestor**: todas las reglas de tiempo y las perillas, arriba del archivo |
-| `lib/entrada.ts` | **El único punto de entrada**: `pedirPartida` y `pedirAnotador`. Candado → anuncio → entrar |
+| `lib/entrada.ts` | **El único punto de entrada**: `pedirPartida` y `pedirAnotador` (candado → entrar), y para el cartel de fin `pedirRevancha` y `dejarPartidaTerminada` (anuncio, si toca → seguir) |
 | `lib/anuncios-admob.ts` | El único archivo que conoce el plugin de AdMob, y el consentimiento (UMP) |
 | `lib/desbloqueos.ts`, `lib/aprendido.ts` | Lo desbloqueado y los ejercicios acertados, en `localStorage`, validados como `progreso.ts` |
 | `components/EntradaJuego.tsx` | Los enlaces de jugar y del anotador, que preguntan al portero antes de navegar |
@@ -426,9 +432,9 @@ mesa o al anotador que no pase por `lib/entrada.ts`.
 | `CLASIFICACION_MAXIMA` | `ParentalGuidance` | Tope de contenido de los anuncios |
 | `DIRIGIDA_A_MENORES` | `false` | La app no está dirigida a menores de 13 |
 
-Además: **la primera partida de cada sesión nunca lleva anuncio**, y el reloj
-arranca al abrir la app. Los tiempos viven en memoria: al cerrar la app se
-reinician.
+Además: **la primera partida de cada sesión arranca siempre limpia** (entrar
+nunca lleva anuncio), y el reloj del tope arranca al abrir la app. Los tiempos
+viven en memoria: al cerrar la app se reinician.
 
 **El intersticial se carga al abrir la app**, durante la pantalla de carga, y
 no al entrar a la primera partida (desde el 3/10/2026; ver abajo *La pantalla
@@ -451,10 +457,12 @@ Ojo: `./gradlew build` arma también el release, así que en una máquina sin
 ### Cómo se prueba
 
 - `npm test`: las reglas con un reloj de mentira (`lib/anuncios.test.ts`), el
-  portero, los desbloqueos y el guardián de las entradas.
+  portero, los desbloqueos y el guardián de las entradas (que también vigila
+  que el anuncio se pida sólo desde el cartel de fin).
 - `DESTINO=app npx next dev -p 3100` y `node herramientas/mirar-anuncios.mjs`:
   recorre cada regla en un navegador, con una red de anuncios de mentira y el
-  reloj adelantado (`--fotos` saca las capturas). Lo de mentira existe sólo en
+  reloj adelantado (`--fotos` saca las capturas). Para llegar al cartel de fin
+  juega partidas enteras yéndose al mazo (unos 2 minutos de reloj cada una). Lo de mentira existe sólo en
   `next dev`: no viaja en ningún build.
 - En el teléfono: `node herramientas/celular-usb.mjs --apk`, con los anuncios
   de prueba de Google. **Nunca tocar los anuncios reales propios**: es baneo

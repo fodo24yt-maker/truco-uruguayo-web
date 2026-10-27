@@ -23,9 +23,10 @@ export const metadata: Metadata = {
  * faltaba en uno chico.
  *
  * Las dos puertas son `EntradaPartida` y no un `<Link>` pelado: pasan por
- * `lib/entrada.ts`, que es el único que decide si se entra, si antes va un
- * anuncio o si la Gira está cerrada (en la app, hasta terminar Aprender o
- * mirar un video). Partida rápida está libre siempre.
+ * `lib/entrada.ts`, que es el único que decide si se entra o si la Gira está
+ * cerrada (en la app, hasta terminar Aprender o mirar un video). Partida
+ * rápida está libre siempre. Entrar no lleva anuncio: el intersticial sale
+ * sólo al dejar el cartel de fin de una partida (desde el 27/10/2026).
  */
 export default function ElegirModo() {
   return (

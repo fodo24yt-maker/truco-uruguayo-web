@@ -1791,17 +1791,18 @@ function Mesa() {
           onSeguir={() => {
             if (p.fase === "partida-terminada") {
               /* PARTIDA NUEVA: entra por la puerta de todos (`lib/entrada.ts`),
-                 que decide si antes va un anuncio. Y TODO lo que reparte va
-                 adentro de la función que se llama después: si
-                 `anotada.current = null` corriera antes del anuncio, con la
-                 partida terminada todavía en pantalla, el efecto que anota
-                 los resultados la volvería a anotar.
+                 que decide si antes va un anuncio —acá sí puede ir: es dejar
+                 el cartel de una partida terminada, el único lugar donde sale
+                 uno—. Y TODO lo que reparte va adentro de la función que se
+                 llama después: si `anotada.current = null` corriera antes del
+                 anuncio, con la partida terminada todavía en pantalla, el
+                 efecto que anota los resultados la volvería a anotar.
 
                  El rival se olvida de ésta y arranca con lo que el legajo
                  diga. Una mano más de la MISMA partida, no: ahí lo que te vio
                  hacer sigue valiendo, que es todo el asunto. */
               const deptoActual = parametros.get("depto");
-              portero.pedirPartida(
+              portero.pedirRevancha(
                 esHistoria && deptoActual ? { modo: "gira", depto: deptoActual } : { modo: "rapida" },
                 () => {
                   anotada.current = null;
@@ -1814,7 +1815,11 @@ function Mesa() {
               repartirNueva(siguienteMano(p));
             }
           }}
-          onCambiarRival={() => setEligiendo(true)}
+          /* Los otros dos botones del cartel de fin también lo dejan: si
+             toca, el anuncio sale acá, ANTES de abrir el selector o de volver
+             al mapa. Elegir rival después ya no lleva nada. */
+          onCambiarRival={() => portero.dejarPartidaTerminada(() => setEligiendo(true))}
+          onVolverAlMapa={() => portero.dejarPartidaTerminada(() => router.push("/jugar/gira"))}
         />
       )}
 
@@ -1831,11 +1836,11 @@ function Mesa() {
                (desde el medallón). La que quedaba a medias se da por
                terminada acá, al elegir —no al abrir el selector: con "Volver"
                la partida sigue y no pasa nada—, y la nueva entra por la
-               puerta de todos. Si toca un anuncio, sale ENTRE las dos.
-               Decisión de Santiago, 2/10/2026. */
+               puerta de todos. Decisión de Santiago, 2/10/2026. Desde el
+               27/10/2026 entrar no lleva anuncio: si venías del cartel de
+               fin, el que tocaba ya salió al apretar "Cambiar de rival". */
             portero.marcarPartidaEnCurso(false);
-            // La escena del rival nuevo se empieza a bajar YA, al tocar: si
-            // sale un anuncio, para cuando se cierra ya está.
+            // La escena del rival nuevo se empieza a bajar YA, al tocar.
             void precargarDepartamento(nuevo.departamento);
             const pedido = Symbol(nuevo.id);
             ultimoPedido.current = pedido;
@@ -2150,6 +2155,7 @@ function Cartel({
   premio,
   onSeguir,
   onCambiarRival,
+  onVolverAlMapa,
 }: {
   partida: Partida;
   rival: Personalidad;
@@ -2165,6 +2171,7 @@ function Cartel({
   premio: ClaveObjeto | null;
   onSeguir: () => void;
   onCambiarRival: () => void;
+  onVolverAlMapa: () => void;
 }) {
   const terminada = partida.fase === "partida-terminada";
   const ganador = terminada ? partida.ganadorPartida : partida.ganadorMano;
@@ -2230,12 +2237,12 @@ function Cartel({
 
         {terminada &&
           (desdeLaGira ? (
-            <Link
-              href="/jugar/gira"
-              className="mt-2 block w-full rounded border border-tinta/25 py-2.5 text-center font-[family-name:var(--font-ui)] text-sm uppercase tracking-wide text-tinta/75 transition-colors hover:border-tinta/50 hover:text-tinta"
+            <button
+              onClick={onVolverAlMapa}
+              className="mt-2 w-full rounded border border-tinta/25 py-2.5 font-[family-name:var(--font-ui)] text-sm uppercase tracking-wide text-tinta/75 transition-colors hover:border-tinta/50 hover:text-tinta"
             >
               Volver al mapa
-            </Link>
+            </button>
           ) : (
             <button
               onClick={onCambiarRival}

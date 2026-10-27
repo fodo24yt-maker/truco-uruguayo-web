@@ -306,9 +306,10 @@ export default function Gira() {
                 Cerrado
               </p>
             ) : (
-              /* Pasa por `lib/entrada.ts`, como toda entrada a una partida: acá
-                 es donde sale el intersticial de la Gira, si toca (y no al
-                 entrar al mapa, que es mirar). */
+              /* Pasa por `lib/entrada.ts`, como toda entrada a una partida.
+                 Entrar no lleva anuncio (desde el 27/10/2026): el de la Gira,
+                 si toca, sale al dejar el cartel de fin de la partida, con
+                 "Volver al mapa" u "Otra contra…". */
               <EntradaPartida
                 pedido={{ modo: "gira", depto: slugDepartamento(rival.departamento) }}
                 className={`shrink-0 rounded bg-bordo px-6 py-3 text-center font-[family-name:var(--font-ui)] text-base uppercase tracking-wide text-crema transition-colors hover:bg-bordo-claro ${verHistoria ? "hidden sm:block" : ""}`}

@@ -103,14 +103,37 @@ test("cada excepción de la lista existe todavía (si no, la lista miente)", () 
 test("la mesa sólo reparte partidas nuevas al montarse o pasando por el portero", () => {
   const mesa = CODIGO.find((a) => a.ruta === "app/jugar/mesa/page.tsx")!.codigo;
   const repartos = mesa.match(/nuevaPartida\(\)/g)?.length ?? 0;
-  const pedidos = mesa.split("portero.pedirPartida(").slice(1);
+  const pedidos = mesa.split(/portero\.(?:pedirPartida|pedirRevancha)\(/).slice(1);
   // Cada pedido al portero lleva su reparto adentro…
   for (const tramo of pedidos) {
-    assert.match(tramo.slice(0, 1200), /nuevaPartida\(\)/, "un pedirPartida sin reparto adentro");
+    assert.match(tramo.slice(0, 1200), /nuevaPartida\(\)/, "un pedirPartida/pedirRevancha sin reparto adentro");
   }
   // …y fuera de ellos queda UNO solo: el de cuando se monta la mesa.
   assert.equal(repartos, pedidos.length + 1, "hay un reparto de partida nueva que no pasa por el portero");
   assert.ok(pedidos.length >= 2, "la revancha y el cambio de rival tienen que pasar por el portero");
+});
+
+/**
+ * El intersticial sale SÓLO al dejar el cartel de una partida terminada
+ * (27/10/2026): la política de Google Play no deja ponerlo al empezar a
+ * jugar. Lo que lo muestra se llama desde un único lugar de cada capa.
+ */
+test("el intersticial sólo se pide al dejar el cartel de fin de partida", () => {
+  const usos = (patron: RegExp) =>
+    CODIGO.filter(({ codigo }) => patron.test(codigo)).map(({ ruta }) => ruta);
+  assert.deepEqual(usos(/\.alDejarPartidaTerminada\(/), ["lib/entrada.ts"], "el gestor sólo lo llama el portero");
+  assert.deepEqual(
+    usos(/portero\.(?:pedirRevancha|dejarPartidaTerminada)\(/),
+    ["app/jugar/mesa/page.tsx"],
+    "sólo la mesa, que es donde está el cartel de fin",
+  );
+  const mesa = CODIGO.find((a) => a.ruta === "app/jugar/mesa/page.tsx")!.codigo;
+  assert.equal(mesa.match(/portero\.pedirRevancha\(/g)?.length, 1, "la revancha es una sola: 'Otra contra…'");
+  assert.equal(
+    mesa.match(/portero\.dejarPartidaTerminada\(/g)?.length,
+    2,
+    "'Cambiar de rival' y 'Volver al mapa', y nada más",
+  );
 });
 
 test("no queda ningún banner ni hueco de banner", () => {

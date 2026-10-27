@@ -10,8 +10,10 @@
  * navegaciones de la app y no cuando se abre en otra pestaña:
  *
  *  · si se puede pasar ya (en la web, siempre), el enlace navega solo;
- *  · si hay un candado o un anuncio, se frena acá y navega el portero cuando
- *    corresponda.
+ *  · si hay un candado, se frena acá y el portero abre el diálogo.
+ *
+ * Entrar a jugar no lleva anuncio nunca (desde el 27/10/2026): el
+ * intersticial sale sólo al dejar el cartel de fin de una partida.
  *
  * El candado se dibuja sólo si se pide (`conCandado`): el aviso visual es una
  * decisión de diseño de cada pantalla; el candado de verdad lo pone el portero
