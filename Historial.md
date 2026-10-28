@@ -12,6 +12,73 @@
 
 ---
 
+## 2026-10-28 — Los píxeles negros de los ejercicios de Aprender (arreglo aplicado, sin medir en el teléfono)
+
+### Resumen, para el que llega
+
+**El síntoma.** Santiago vio píxeles negros en los ejercicios de Aprender.
+Lo pidió desde el celular, así que **no hubo teléfono por USB ni jugador
+automático**: el diagnóstico sale de lo que ya estaba medido en la mesa (8/10 y
+11/10) y de mirar las capas en la compu.
+
+**Lo que había en la lección, de la familia de lo que rompe la Mali:**
+
+1. **`PanelPapel` tenía `shadow-xl shadow-black/40`**: dos `box-shadow` con
+   desenfoque (25 y 10 px). Es la causa principal medida el 8/10 en la mesa
+   (8,3% de los cuadros con basura → 0,8% sin desenfoques). Y **no se veía**:
+   el `clip-path` del papel recorta todo lo que cae fuera del polígono, sombra
+   incluida. Era una sombra invisible que igual se rasterizaba.
+2. **La explicación del ejercicio aparecía con `anim-pop`**, que anima
+   `transform` y `opacity`: mientras dura es una capa compuesta, y está
+   adentro del `clip-path` del panel. Para recortarla, Chromium arma una
+   **máscara del tamaño del panel entero**. Medido con CDP `LayerTree` en
+   "La muestra", a 390×844:
+
+   | | capas |
+   |---|---|
+   | ejercicio quieto | 5 |
+   | **durante el pop, antes** | **8**: la animación (290×208), una por `Overlap` (76×102) y una de **370×3474 sin razón de composición**, que es la máscara del recorte |
+   | durante el pop, ahora | 5 |
+
+   Una textura auxiliar enorme que nace y muere en cada respuesta, justo sobre
+   las cartas del ejercicio: es lo que el 11/10 quedó escrito como "texturas
+   que nacen cuando se re-rasteriza la zona".
+
+**El arreglo:**
+
+- `components/PanelPapel.tsx`: sin sombra.
+- `components/Ejercicio.tsx`: la explicación aparece de golpe, sin `anim-pop`.
+
+**Cómo se ve:** igual. Las lecciones "La muestra" y "El envido" enteras,
+comparadas píxel a píxel antes y después: sólo cambian ~5000 píxeles de 5,6
+millones, todos en el filo con antialias del borde rasgado, y por 4/255 como
+mucho. El ejercicio respondido da idéntico. Lo único que se pierde es el
+"pop" de 140 ms de la explicación.
+
+**El guardián:** `mirar-web.mjs` (sección "los ejercicios de aprender")
+responde un ejercicio de `/aprender/la-flor` y falla si el panel tiene un
+`box-shadow` desenfocado o si responder arranca una animación de
+`transform`/`opacity` adentro del recorte. Saboteado con el código viejo, da
+las dos fallas.
+
+**Lo que NO se tocó, y por qué:**
+
+- **El `clip-path` del papel** (el borde rasgado). Es diseño y se ve, y sin
+  una capa compuesta adentro ya no necesita la máscara grande. Si los píxeles
+  siguen, es **el próximo candidato**: es el último `clip-path` de CSS del
+  proyecto, y en el rasterizado un recorte no convexo con antialias también
+  pide una textura auxiliar.
+- **El `transition-colors` de los botones de respuesta.** Anima sólo pintura,
+  no crea capas, y nunca se midió como causa.
+- **Una `opacity: .999` por carta**, que curó el menú (10/9) pero empeoró la
+  mesa 8 veces (11/10). Sin medir acá, no entra.
+
+**Pendiente:** que Santiago instale el APK nuevo y diga si en los ejercicios
+siguen saliendo. Si siguen, medir con `medir-celular.mjs --pixeles` respondiendo
+ejercicios, y probar como rama el papel sin `clip-path`.
+
+---
+
 ## 2026-10-19 — El sonido: las voces se generan acá, la cata, y los 19 rivales
 
 > **La sesión tuvo dos partes.** Primero la cata (todo lo de abajo, hasta

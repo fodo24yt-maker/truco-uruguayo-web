@@ -401,6 +401,48 @@ console.log("\naprender, en un celular:");
   }
 }
 
+/* ══ 1bis-b. LOS EJERCICIOS, SIN TEXTURAS AUXILIARES (28/10/2026) ══════════
+   Santiago vio píxeles negros en los ejercicios de Aprender. Había dos cosas
+   de la familia de lo que rompe la Mali del Redmi (`Historial.md`, 8/10):
+
+   · `PanelPapel` tenía un `box-shadow` con desenfoque, que además no se veía
+     (lo tapa su propio `clip-path`);
+   · la explicación aparecía con `anim-pop`: una animación compuesta adentro
+     del `clip-path`, que obliga a Chromium a armar una máscara del tamaño del
+     panel entero mientras dura.
+
+   Se comprueban las dos, respondiendo un ejercicio de verdad. */
+console.log("\nlos ejercicios de aprender:");
+{
+  const ctx = await nav.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const pag = await ctx.newPage();
+  await abrir(pag, "/aprender/la-flor");
+  await pag.waitForTimeout(500);
+  const ejercicio = pag.locator("section").filter({ hasText: "Probá vos" }).first();
+  await ejercicio.locator("button").first().tap();
+  const m = await pag.evaluate(() => {
+    const panel = document.querySelector(".papel");
+    if (!panel) return null;
+    const desenfocadas = [panel, ...panel.querySelectorAll("*")].filter((el) =>
+      [...getComputedStyle(el).boxShadow.matchAll(/(-?[\d.]+)px (-?[\d.]+)px ([\d.]+)px/g)].some((s) => +s[3] > 0),
+    );
+    const compuestas = panel
+      .getAnimations({ subtree: true })
+      .filter((a) => a.effect?.getKeyframes().some((k) => "transform" in k || "opacity" in k || "scale" in k));
+    return {
+      desenfocadas: desenfocadas.map((el) => `${el.tagName.toLowerCase()}.${(el.getAttribute("class") || "").split(" ")[0]}`),
+      compuestas: compuestas.length,
+    };
+  });
+  if (!m) falla("/aprender/la-flor", "no encontré el panel de papel: el guardián quedó ciego");
+  else {
+    if (m.desenfocadas.length) falla("/aprender/la-flor", `box-shadow con desenfoque en el panel: ${m.desenfocadas.join(", ")}`);
+    if (m.compuestas) falla("/aprender/la-flor", `responder arranca ${m.compuestas} animación(es) de transform/opacity adentro del clip-path`);
+    if (!m.desenfocadas.length && !m.compuestas) console.log("  /aprender/la-flor                  OK  sin sombras desenfocadas ni animaciones compuestas al responder");
+  }
+  await ctx.close();
+}
+
 /* ══ 2. LA VITRINA DE TROFEOS ══════════════════════════════════════════════
    Se abre desde el mapa de la gira y muestra los diecinueve objetos: los
    ganados con su marcador, los que faltan apagados.

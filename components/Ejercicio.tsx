@@ -167,9 +167,22 @@ export function Ejercicio({
         })}
       </div>
 
-      {/* La explicación: lo importante del ejercicio */}
+      {/* La explicación: lo importante del ejercicio.
+
+          ── APARECE DE GOLPE, SIN `anim-pop`, DESDE EL 28/10/2026 ──────────
+          Santiago vio píxeles negros en los ejercicios. El `anim-pop` anima
+          `transform` y `opacity`, o sea que mientras dura la explicación es
+          una capa aparte del compositor. Y está adentro de `PanelPapel`, que
+          recorta con `clip-path`: para recortar una capa compuesta, Chromium
+          arma una MÁSCARA del tamaño del panel entero —medido con
+          `LayerTree`: una capa de 370×3474 en "La muestra" que sólo existe
+          mientras dura el pop, más otra por `Overlap`—. Una textura auxiliar
+          que nace y muere en cada respuesta, justo sobre las cartas del
+          ejercicio, es la familia de lo que rompe la Mali del Redmi
+          (`globals.css` e `Historial.md`, 8/10 y 11/10). Sin la animación,
+          responder no crea ninguna capa. */}
       {respondido && (
-        <div className="anim-pop mt-4 border-l-4 border-bordo pl-4">
+        <div className="mt-4 border-l-4 border-bordo pl-4">
           <p className="font-[family-name:var(--font-ui)] text-sm uppercase tracking-wide text-bordo">
             {acerto ? "Bien ahí" : "No era esa"}
           </p>
