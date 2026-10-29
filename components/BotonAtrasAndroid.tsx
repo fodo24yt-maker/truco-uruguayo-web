@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+import { tocarEfecto } from "@/lib/audio";
 import { volverDesde } from "@/lib/navegacion";
 
 /**
@@ -53,12 +54,16 @@ export function BotonAtrasAndroid() {
            que es la tecla que esas hojas ya escuchan: así el que abre una hoja
            nueva no tiene que acordarse de avisarle a este archivo. */
         if (document.querySelector('[role="dialog"][aria-modal="true"]')) {
+          tocarEfecto("volver"); // el mismo de la flecha y del "Cerrar"
           window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
           return;
         }
 
         const destino = volverDesde(ruta, window.location.search);
-        if (destino) router.push(destino);
+        if (destino) {
+          tocarEfecto("volver");
+          router.push(destino);
+        }
         // Sin adónde volver estás en el inicio, y ahí el atrás sale de la app,
         // que es lo que espera cualquiera que use Android.
         else void App.exitApp();

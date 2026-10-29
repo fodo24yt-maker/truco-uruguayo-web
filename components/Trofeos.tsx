@@ -69,6 +69,7 @@ export function Trofeos({ trofeos, onCerrar }: { trofeos: Trofeo[]; onCerrar: ()
           ref={cerrar}
           type="button"
           onClick={onCerrar}
+          data-sonido="volver"
           className="rounded px-3 py-1.5 font-[family-name:var(--font-ui)] text-sm uppercase tracking-wide text-crema/80 transition-colors hover:bg-black/30 hover:text-crema"
         >
           Cerrar

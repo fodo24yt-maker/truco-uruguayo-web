@@ -65,6 +65,7 @@ export function BarraApp() {
         {volver ? (
           <Link
             href={volver}
+            data-sonido="volver"
             className="flex items-center gap-1 rounded px-2 py-2 font-[family-name:var(--font-ui)] text-sm uppercase tracking-wide text-dorado transition-colors hover:bg-black/30"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" aria-hidden="true">

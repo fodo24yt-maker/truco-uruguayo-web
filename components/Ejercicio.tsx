@@ -147,6 +147,7 @@ export function Ejercicio({
                 }
               }}
               disabled={respondido}
+              data-sonido={opcion.correcta ? "acierto" : "error"}
               className={`rounded border-2 px-4 py-3 text-left text-[15px] transition-colors ${
                 mostrarComoCorrecta
                   ? "border-quiero bg-quiero/15 text-tinta"

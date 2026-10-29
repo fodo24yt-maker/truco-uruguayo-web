@@ -5,6 +5,12 @@
  *
  *     node herramientas/arranques-en-frio.mjs [--vueltas 10] [--minutos 2] [--ramas A,SC1]
  *     node herramientas/arranques-en-frio.mjs --modos ninguno,hw,sw,prerraster [--ramas PC]
+ *     node herramientas/arranques-en-frio.mjs --aprender [--vueltas 6] [--minutos 2] [--ramas A,LS0]
+ *
+ * `--aprender` (28/10/2026): en vez de la mesa, `jugar-aprender.mjs` entra
+ * por la portada a una lección y responde el ejercicio. Lo pidió Santiago con
+ * los cuadraditos de Aprender: "medí también saliendo y entrando de la app,
+ * para ver si es porque carga mal al principio". La sesión va `--liviano`.
  *
  * `--modos` turna cómo dibuja Android el WebView, una forma por vuelta, con un
  * interruptor de laboratorio en `MainActivity.java` que leía `truco_pintado`
@@ -59,6 +65,13 @@ const MODOS = ["ninguno", "hw", "sw", "prerraster"];
 const iModos = args.indexOf("--modos");
 const modos = iModos === -1 ? null : String(args[iModos + 1] || "").split(",").filter((m) => MODOS.includes(m));
 if (modos && !modos.length) morir(`--modos acepta: ${MODOS.join(", ")}`);
+const APRENDER = args.includes("--aprender");
+/* Lo que se le pasa al jugador de Aprender tal cual: `--scroll`, `--sonda`,
+   `--caminos` y `--lecciones a,b` (los nombres ya los valida él). */
+const PARA_EL_JUGADOR = [
+  ...["--scroll", "--sonda", "--caminos"].filter((b) => args.includes(b)),
+  ...(args.includes("--lecciones") ? ["--lecciones", String(args[args.indexOf("--lecciones") + 1] || "")] : []),
+];
 
 elCelular();
 
@@ -106,7 +119,7 @@ for (let i = 0; i < vueltas; i++) {
     console.log(`   ▸ modo de pintado: ${modo} (confirmado en el logcat)`);
   }
 
-  const medir = spawn("node", ["herramientas/medir-celular.mjs", "--sesion", String(minutos), "--jpeg", "90", "--tramo", tramo], { stdio: ["ignore", "pipe", "inherit"] });
+  const medir = spawn("node", ["herramientas/medir-celular.mjs", "--sesion", String(minutos), "--jpeg", "90", "--tramo", tramo, ...(APRENDER ? ["--liviano"] : [])], { stdio: ["ignore", "pipe", "inherit"] });
   let sesion = null;
   await new Promise((ok) => {
     medir.stdout.on("data", (d) => {
@@ -123,7 +136,8 @@ for (let i = 0; i < vueltas; i++) {
   if (rama !== "A") appendFileSync(path.join(sesion, "control.txt"), `rama ${rama}\n`);
 
   const jugador = spawn("node", [
-    "herramientas/jugar-celular.mjs", String(minutos), path.join(sesion, "jugador.log"), "--rapido", "--dedo", "--control", path.join(sesion, "control.txt"),
+    APRENDER ? "herramientas/jugar-aprender.mjs" : "herramientas/jugar-celular.mjs",
+    String(minutos), path.join(sesion, "jugador.log"), ...(APRENDER ? PARA_EL_JUGADOR : ["--rapido"]), "--dedo", "--control", path.join(sesion, "control.txt"),
   ], { stdio: "inherit" });
   enCurso = [medir, jugador];
   await Promise.all([new Promise((ok) => medir.on("exit", ok)), new Promise((ok) => jugador.on("exit", ok))]);
@@ -131,4 +145,4 @@ for (let i = 0; i < vueltas; i++) {
 }
 
 console.log(`\n✓ ${sesiones.length} arranques. Para contar la basura:\n`);
-console.log(`  node herramientas/medir-celular.mjs --pixeles ${sesiones.join(" ")} --por-tramo --cada 1\n`);
+console.log(`  node herramientas/medir-celular.mjs --pixeles ${sesiones.join(" ")} --por-tramo --cada 1${APRENDER ? " --ruta aprender" : ""}\n`);

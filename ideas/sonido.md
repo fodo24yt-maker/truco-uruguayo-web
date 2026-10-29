@@ -1,16 +1,23 @@
 # El sonido: qué hay que grabar
 
-> **Estado al 10/9/2026: no hay un solo archivo de audio en el proyecto.**
-> Lo que sí hay son los ajustes (`lib/sonido.ts` y el panel del engranaje): las
-> cuatro barras andan y lo que se elige queda guardado. Este documento es la
-> lista de lo que falta para que suene algo.
+> **Estado al 23/10/2026: suenan la música y las voces. Faltan los efectos.**
+>
+> - **Las voces NO se grabaron: se generaron** en la PC de Santiago (Qwen3-TTS
+>   inventa la voz de cada rival, Chatterbox dice los 14 cantos, Whisper
+>   controla). Están en el juego: `public/audio/voces/`, `lib/voces.ts`.
+>   Cómo se hacen: `herramientas/generar-voces.mjs` y el Historial del
+>   19/10/2026.
+> - **La música son 7 temas** (uno hecho por código y seis de IA) **por
+>   sección**, no por departamento. Ver la sección 4.
+> - **El reproductor es `lib/audio.ts`**, con su explicación arriba.
+>
+> Lo de abajo es el plan del 10/9, cuando las voces las iban a grabar Santiago
+> y unos amigos. Se deja como estaba, salvo donde dice "Hoy", porque la lista
+> de cantos, los nombres de archivo y las decisiones (sin números, sólo habla
+> el rival) siguen valiendo.
 
-Se escribe en este orden a propósito. Las voces las van a poner Santiago y unos
-amigos, o sea que grabar es juntar gente un rato: lo peor que puede pasar es
-llegar a esa tarde sin saber cuántas tomas son ni cómo se llama cada archivo, y
-tener que volver a juntarla porque faltaban dos.
-
-**El total son 292 archivos**: 266 voces, 9 músicas y 17 efectos.
+**El plan eran 292 archivos**: 266 voces, 9 músicas y 17 efectos. **Hoy son 539**:
+532 voces (dos tomas por canto) y 7 músicas. Los 17 efectos están sin hacer.
 
 ---
 
@@ -146,11 +153,31 @@ personas.
 
 ---
 
-## 4. La música: 9 pistas
+## 4. La música
 
-Van atadas a los **7 ambientes que ya existen** en `lib/ambientes.ts`, más la
-portada y el mapa. La música cambia al cambiar de departamento, igual que
-cambia la escena.
+> **Hoy (23/10/2026):** no quedó por departamento, sino **por sección**, porque
+> lo que Santiago pidió es que cambie "dependiendo de lo que se esté haciendo",
+> y que se escuchen los cantos más que la música.
+
+| sección | temas | nivel |
+|---|---|---|
+| menús (portada, jugar, legales) | `tango-1910`, `tango-2110` | 1 |
+| mesa | `milonga-1910`, `milonga-2110`, `por-codigo` | 0,75 |
+| gira (el mapa) | `candombe-1910`, `candombe-2110` | 1 |
+| aprender | `por-codigo`, `milonga-2110`, `tango-2110` | 0,7 |
+| anotador | — (se usa jugando con gente) | — |
+
+- **Los temas:** `public/audio/musica/*.m4a`, todos a -23 LUFS y en AAC de
+  80 kbps. Salen de `herramientas/publicar-musica.mjs`.
+- **Las fuentes:** `herramientas/musica/sintetizada.mjs` (la milonga por
+  código) y `herramientas/musica/con-ia.py` (ACE-Step 1.5).
+- **No hace falta que cierren sobre sí mismos:** el reproductor encadena temas
+  de la misma sección con cruces de 5 s, y al cambiar de sección cruza en 2,5 s.
+- **Mientras habla un rival, la música se agacha** unos 9 dB.
+- **La barra de Música arranca en 30.**
+
+Lo de abajo es el plan del 10/9, que no se hizo así: una pista por ambiente de
+`lib/ambientes.ts`. Queda como idea para cuando haya más temas.
 
 | archivo | el lugar | departamentos |
 |---|---|---|
@@ -161,16 +188,6 @@ cambia la escena.
 | `musica/costa.m4a` | la rambla, a la tardecita | Maldonado, Rocha |
 | `musica/litoral.m4a` | el río, contra la luz | Colonia, Soriano, Río Negro, Paysandú, Salto |
 | `musica/norte.m4a` | el norte, con el sol alto | Rivera, Artigas, Tacuarembó |
-| `musica/portada.m4a` | la pantalla de inicio | — |
-| `musica/gira.m4a` | el mapa del tesoro | — |
-
-Tienen que **cerrar sobre sí mismas**: se repiten mientras dure la partida, que
-pueden ser diez minutos. Una pista que al volver al principio da un salto se
-escucha el salto veinte veces.
-
-**Se puede arrancar con tres** —`portada`, `campo` y `gira`— y crecer después:
-`lib/ambientes.ts` ya sabe qué ambiente le toca a cada departamento, así que
-agregar la cuarta no toca código.
 
 ---
 

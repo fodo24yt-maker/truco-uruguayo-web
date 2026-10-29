@@ -45,9 +45,38 @@ export interface Pendiente {
   de: Jugador; // quién cantó y espera respuesta
 }
 
+/**
+ * Los catorce cantos que tienen voz (`ideas/sonido.md`). La lista está
+ * cerrada: son todas las frases que un rival puede decir en voz alta, salvo los
+ * números del tanto, que no se graban (se decidió el 10/9/2026).
+ */
+export const CLAVES_VOZ = [
+  "envido",
+  "real-envido",
+  "falta-envido",
+  "truco",
+  "retruco",
+  "vale-cuatro",
+  "flor",
+  "con-flor-envido",
+  "contraflor-al-resto",
+  "quiero",
+  "no-quiero",
+  "con-flor-me-achico",
+  "mazo",
+  "son-buenas",
+] as const;
+export type ClaveVoz = (typeof CLAVES_VOZ)[number];
+
 export interface Evento {
   quien: Jugador | "sistema";
   texto: string;
+  /**
+   * Qué voz le corresponde, si es un canto (desde el 23/10/2026). Va al lado
+   * del texto, donde se arma la frase, para que el que reproduce no tenga que
+   * adivinar el audio leyendo castellano. Los números del tanto no llevan.
+   */
+  voz?: ClaveVoz;
 }
 
 /**
@@ -194,6 +223,7 @@ export const puntosTruco = (nivel: number, querido: boolean) =>
   querido ? Math.max(nivel + 1, 1) : Math.max(nivel, 1);
 
 export const NOMBRE_TRUCO = ["truco", "retruco", "vale cuatro"] as const;
+const VOZ_TRUCO: readonly ClaveVoz[] = ["truco", "retruco", "vale-cuatro"];
 
 // ─── Empezar ────────────────────────────────────────────────────────────────
 
@@ -542,7 +572,7 @@ export function aplicar(previo: Partida, accion: Accion, quien: Jugador): Partid
         p.pendiente?.tipo === "envido" ? [...p.pendiente.cadena, accion.canto] : [accion.canto];
       p.pendiente = { tipo: "envido", cadena, de: quien };
       p.turno = otro(quien);
-      p.eventos.push({ quien, texto: textoCanto(accion.canto, p) });
+      p.eventos.push({ quien, texto: textoCanto(accion.canto, p), voz: accion.canto });
       return p;
     }
 
@@ -557,7 +587,7 @@ export function aplicar(previo: Partida, accion: Accion, quien: Jugador): Partid
       p.truco.cantadoPor = quien;
       p.pendiente = { tipo: "truco", cadena: [], de: quien };
       p.turno = otro(quien);
-      p.eventos.push({ quien, texto: `¡${NOMBRE_TRUCO[p.truco.nivel - 1]}!` });
+      p.eventos.push({ quien, texto: `¡${NOMBRE_TRUCO[p.truco.nivel - 1]}!`, voz: VOZ_TRUCO[p.truco.nivel - 1] });
       return p;
     }
 
@@ -568,7 +598,7 @@ export function aplicar(previo: Partida, accion: Accion, quien: Jugador): Partid
       return responderNoQuiero(p, quien);
 
     case "mazo": {
-      p.eventos.push({ quien, texto: "Me voy al mazo" });
+      p.eventos.push({ quien, texto: "Me voy al mazo", voz: "mazo" });
       // Con `previo`: arriba ya se marcó que este jugador habló.
       return terminarMano(p, otro(quien), puntosPorIrseAlMazo(previo, quien));
     }
@@ -599,6 +629,7 @@ function cantarFlor(p: Partida, quien: Jugador, canto: CantoFlor | null): Partid
         : canto === "contraflor-al-resto"
           ? "¡Contraflor al resto!"
           : "¡Flor!",
+    voz: canto ?? "flor",
   });
 
   // Si venía un truco sin contestar, queda esperando su turno: la flor también
@@ -682,7 +713,7 @@ function seguirDespuesDeApuesta(p: Partida): Partida {
 function responderQuiero(p: Partida, quien: Jugador): Partida {
   const pendiente = p.pendiente!;
   p.pendiente = null;
-  p.eventos.push({ quien, texto: "¡Quiero!" });
+  p.eventos.push({ quien, texto: "¡Quiero!", voz: "quiero" });
 
   if (pendiente.tipo === "truco") {
     p.truco.querido = true;
@@ -731,7 +762,7 @@ function responderQuiero(p: Partida, quien: Jugador): Partida {
   p.envidoCerrado = true;
   p.envidoJugado = { ...tantos, ganador, dicho: { [mano]: true, [pie]: pieSupera } as Record<Jugador, boolean> };
   p.eventos.push({ quien: mano, texto: `${tantos[mano]}` });
-  p.eventos.push({ quien: pie, texto: pieSupera ? `${tantos[pie]}` : "Son buenas" });
+  p.eventos.push(pieSupera ? { quien: pie, texto: `${tantos[pie]}` } : { quien: pie, texto: "Son buenas", voz: "son-buenas" });
 
   const { querido } = puntosEnvido(pendiente.cadena as CantoEnvido[], p.puntos);
   sumar(p, ganador, querido, { vos: "Ganás el envido", el: "gana el envido" });
@@ -741,10 +772,11 @@ function responderQuiero(p: Partida, quien: Jugador): Partida {
 function responderNoQuiero(p: Partida, quien: Jugador): Partida {
   const pendiente = p.pendiente!;
   p.pendiente = null;
-  p.eventos.push({
-    quien,
-    texto: pendiente.tipo === "flor" ? "Con flor me achico" : "No quiero",
-  });
+  p.eventos.push(
+    pendiente.tipo === "flor"
+      ? { quien, texto: "Con flor me achico", voz: "con-flor-me-achico" }
+      : { quien, texto: "No quiero", voz: "no-quiero" },
+  );
 
   if (pendiente.tipo === "truco") {
     // El que cantó se lleva la mano con lo que valía antes de su canto

@@ -70,6 +70,10 @@ const PERMITIDOS: Record<string, { rutas: string[]; porque: string }> = {
       "el ensayo del arranque pinta la mesa DEBAJO de la pantalla de carga y vuelve al inicio: " +
       "no es una partida, y a propósito no cuenta como la primera ni pide anuncio",
   },
+  "lib/audio.ts": {
+    rutas: ["/anotador", "/jugar/mesa", "/jugar/gira"],
+    porque: "sólo reconoce en qué sección estás para elegir la música (ambienteDeRuta); no entra a nada",
+  },
   "app/sitemap.ts": { rutas: ["/anotador"], porque: "es para los buscadores" },
   "app/anotador/layout.tsx": { rutas: ["/anotador"], porque: "es la URL canónica" },
 };

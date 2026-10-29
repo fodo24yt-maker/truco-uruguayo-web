@@ -8,6 +8,8 @@
  *     node herramientas/medir-celular.mjs --analizar CARPETA  el informe de una sesión grabada
  *     node herramientas/medir-celular.mjs --pixeles CARPETA   la basura de la mesa, por rama y por zona
  *     node herramientas/medir-celular.mjs --pixeles C1 C2… --por-tramo   varias sesiones juntas, por APK
+ *     node herramientas/medir-celular.mjs --sesion 27 --jpeg 90 --liviano   sin frenar el screencast (28/10/2026)
+ *     node herramientas/medir-celular.mjs --pixeles CARPETA --ruta aprender  la basura de los ejercicios de Aprender
  *
  * Anda con el APK de depuración de siempre (`celular-usb.mjs --apk`), que
  * publica el inspector del WebView por su cuenta (ver `puente-devtools.mjs`).
@@ -112,6 +114,30 @@ const numero = (bandera, porOmision) => {
   const v = i === -1 || args[i + 1] === undefined || args[i + 1] === "" ? NaN : Number(args[i + 1]);
   return Number.isFinite(v) ? v : porOmision;
 };
+
+/* `--liviano` (28/10/2026): que la propia medición no se coma cuadros. El
+   screencast manda el cuadro siguiente recién cuando se le confirma el
+   anterior, y la confirmación sale del mismo bucle que cada segundo esperaba
+   dos consultas por adb SÍNCRONAS (~250 ms quieto) y cada 15 s un `top` de
+   más de un segundo. Con esto el cerrojo y el PID se preguntan sin frenar
+   (una sola llamada) y no se mide memoria, hilos ni temperatura. Santiago:
+   "fijate que el frame rate sea bueno… capaz más adelante son parpadeantes y
+   no los captás". */
+const LIVIANO = args.includes("--liviano");
+function cerrojoSinFrenar() {
+  return new Promise((ok) => {
+    const p = spawn(ADB, ["shell", `dumpsys activity activities | grep -m1 topResumedActivity; pidof ${PAQUETE}`], { stdio: ["ignore", "pipe", "ignore"] });
+    let s = "";
+    p.stdout.on("data", (d) => { s += d; });
+    p.on("close", () => {
+      const quien = /topResumedActivity=\S+\s+\S+\s+([^/\s]+)\//.exec(s)?.[1] ?? null;
+      // El PID es el primer número de la ÚLTIMA línea (si el grep no encontró nada, no hay otra).
+      const ultima = s.trim().split("\n").pop() || "";
+      const primero = ultima.trim().split(/\s+/)[0];
+      ok({ quien, pidAhora: /^\d+$/.test(primero) ? primero : null });
+    });
+  });
+}
 
 // ── Las ramas de CSS ────────────────────────────────────────────────────────
 
@@ -319,6 +345,107 @@ export const RAMAS = {
     css: `.escena [data-mano="tuya"] .carta:not(.halo-pieza) { box-shadow: ${SOMBRAS_MESA.mano.join(", ")} !important; }`,
     revisar: [['[data-mano="tuya"] .carta:not(.halo-pieza)', "boxShadow"], ['[data-mesa="mazo"] .carta', "boxShadow"]],
   },
+
+  /* ── APRENDER (28/10/2026) ──────────────────────────────────────────────
+     Los cuadraditos en los ejercicios, "sobre las cartas y los botones de
+     respuesta", al llegar al ejercicio y al tocar una respuesta. Ninguna de
+     las curas de arriba llega a las lecciones. Lo que tienen de distinto es
+     el papel (`PanelPapel`), que envuelve la lección entera: la ÚNICA sombra
+     con desenfoque que queda en Aprender (`shadow-xl`, que su propio
+     `clip-path` recorta entera: no se ve pero se dibuja) y el último
+     `clip-path` del proyecto, un polígono cóncavo. Las ramas van con
+     `!important` porque el recorte es un estilo en línea. */
+  LS0: {
+    que: "Aprender: el papel sin su sombra desenfocada (no se veía)",
+    css: `.papel { box-shadow: none !important; }`,
+    revisar: [[".papel", "boxShadow"]],
+  },
+  LK0: {
+    que: "Aprender: el papel sin el recorte de borde roto (clip-path)",
+    css: `.papel { clip-path: none !important; }`,
+    revisar: [[".papel", "clipPath"]],
+  },
+  LO: {
+    que: "Aprender: cada carta de la lección en su búfer (como el menú del 10/9)",
+    css: `article.prosa .carta { opacity: 0.999; }`,
+    revisar: [["article.prosa .carta", "opacity"], ["article.prosa section", "opacity"]],
+  },
+  LM0: {
+    que: "Aprender: el ejercicio sin transiciones ni la animación de la explicación",
+    css: `article.prosa section, article.prosa section * { transition: none !important; animation: none !important; }`,
+    revisar: [["article.prosa section button", "transitionDuration"]],
+  },
+  LC1: {
+    que: "Aprender: el ejercicio en su propia capa (como la mano del 11/10)",
+    css: `article.prosa section { will-change: transform; }`,
+    revisar: [["article.prosa section", "willChange"], [".papel", "willChange"]],
+  },
+  /* Las cartas de la lección FUERA de los mosaicos del texto (28/10/2026,
+     tercera tanda): en el barrido intercalado de lo que queda en pantalla,
+     las dos fueron las únicas que dieron 0. `FIGC`: cada figura con cartas y
+     el ejercicio en su propia capa del compositor; `CARTAC`: cada carta. */
+  FIGC: {
+    que: "Aprender: las figuras con cartas y el ejercicio en su propia capa",
+    css: `article.prosa figure, article.prosa section { will-change: transform; }`,
+    revisar: [["article.prosa figure", "willChange"], ["article.prosa section", "willChange"]],
+  },
+  CARTAC: {
+    que: "Aprender: cada carta de la lección en su propia capa",
+    css: `article.prosa .carta { will-change: transform; }`,
+    revisar: [["article.prosa .carta", "willChange"]],
+  },
+  /* Desde el 28/10/2026 a la noche `CARTAC` está EN EL CÓDIGO (`[data-leccion]
+     .carta`), así que "A" ya la trae. Ésta es la lección de antes, sin las
+     capas, para comparar con el APK (como `SC1` en la mesa). */
+  SCARTAC: {
+    que: "Aprender como estaba: las cartas SIN su capa propia",
+    css: `[data-leccion] .carta { will-change: auto !important; }`,
+    revisar: [["[data-leccion] .carta", "willChange"]],
+  },
+  /* H6, que salió de mirar los primeros bloques reales ampliados (28/10): caen
+     en el papel EN EL HUECO ENTRE DOS CARTAS, donde está la sombra dura de
+     cada una (`--sombra-carta`: 25 capas de `box-shadow` de radio 0, cada una
+     recortada por fuera de la carta). Sólo para medir: sin sombra, la carta se
+     ve distinta. */
+  LSC0: {
+    que: "Aprender: las cartas de la lección sin sombra (sólo para medir)",
+    css: `article.prosa .carta { box-shadow: none !important; }`,
+    revisar: [["article.prosa .carta", "boxShadow"]],
+  },
+  /* Lo que curó el mapa (8/9) y la mesa (`.escena > *`): partir el
+     rasterizado en pasadas, una por cada hijo del dibujo. La basura de las
+     lecciones cae en cualquier parte del contenido (párrafos, figuras con
+     cartas, el ejercicio), así que el corte va en los hijos del artículo:
+     cada párrafo, figura o ejercicio en su propio búfer. `LA` es lo grueso,
+     el artículo entero en uno solo ("una textura grande que envuelve la zona
+     protege", 11/10). */
+  LG: {
+    que: "Aprender: cada hijo del artículo de la lección en su propio búfer (opacity .999)",
+    css: `article.prosa > * { opacity: 0.999; }`,
+    revisar: [["article.prosa > p", "opacity"], ["article.prosa > section", "opacity"], ["article.prosa", "opacity"]],
+  },
+  LA: {
+    que: "Aprender: el artículo entero de la lección en un búfer (opacity .999)",
+    css: `article.prosa { opacity: 0.999; }`,
+    revisar: [["article.prosa", "opacity"], ["article.prosa > p", "opacity"]],
+  },
+  /* `SLA` y `LPP` usan el gancho `[data-leccion]`, que sólo tuvo el APK de
+     las 18:15 del 28/10/2026 (con `LA` en el código). Ese arreglo estaba mal y
+     se sacó, y el gancho con él: sobre el código de hoy estas dos ramas no
+     hacen nada. Quedan para leer el Historial. */
+  SLA: {
+    que: "Aprender como estaba antes del 28/10: el artículo SIN su búfer",
+    css: `[data-leccion] article.prosa { opacity: 1 !important; }`,
+    revisar: [["[data-leccion] article.prosa", "opacity"]],
+  },
+  /* El papel ENTERO de la lección en su búfer (28/10, segunda tanda): al
+     scrollear daba casi cero, pero mirada la sonda, la basura que deja es
+     HORRIBLE (filas de bloques negros sobre el texto) y queda pegada. Descartada. */
+  LPP: {
+    que: "Aprender: el papel entero de la lección en su búfer (sin el del artículo)",
+    css: `[data-leccion] article.prosa { opacity: 1 !important; } [data-leccion] .papel { opacity: 0.999; }`,
+    revisar: [["[data-leccion] .papel", "opacity"], ["[data-leccion] article.prosa", "opacity"]],
+  },
 };
 
 // ── Lo que se inyecta en la página ──────────────────────────────────────────
@@ -350,6 +477,7 @@ export const GUION_PAGINA = `(() => {
       if (tx) s += '"' + tx + '"';
     }
     if (el.closest && el.closest('[data-mano="tuya"]')) s = "mano>" + s;
+    if (el.closest && el.closest("article.prosa section")) s = "ejercicio>" + s;
     return s;
   };
   const nav = performance.getEntriesByType("navigation")[0];
@@ -413,6 +541,32 @@ export const GUION_PAGINA = `(() => {
     new MutationObserver(() => { if (!pedido) { pedido = true; requestAnimationFrame(mirar); } })
       .observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
   } catch {}
+  /* LO QUE PASA EN UN EJERCICIO DE APRENDER (28/10/2026), con la hora, igual
+     que lo de la mesa: aparece o se va la explicación (responder, "Probar de
+     nuevo"), y el scroll, que en una lección es lo que trae mosaicos nuevos.
+     Afuera de \`/aprender/\` no cuenta nada. */
+  try {
+    const enLeccion = () => location.pathname.startsWith("/aprender/");
+    const explicaciones = () => document.querySelectorAll("article.prosa section .anim-pop").length;
+    let antesExpl = 0, pedidoA = false;
+    const mirarA = () => {
+      pedidoA = false;
+      if (!enLeccion()) { antesExpl = 0; return; }
+      const ahora = explicaciones();
+      if (ahora > antesExpl) enviar("aprender", { t: performance.now(), que: "explicacion" });
+      if (ahora < antesExpl) enviar("aprender", { t: performance.now(), que: "explicacion-se-va" });
+      antesExpl = ahora;
+    };
+    new MutationObserver(() => { if (!pedidoA && enLeccion()) { pedidoA = true; requestAnimationFrame(mirarA); } })
+      .observe(document, { subtree: true, childList: true });
+    let quieto = null;
+    addEventListener("scroll", () => {
+      if (!enLeccion()) return;
+      if (quieto === null) enviar("aprender", { t: performance.now(), que: "scroll", y: Math.round(scrollY) });
+      clearTimeout(quieto);
+      quieto = setTimeout(() => { quieto = null; enviar("aprender", { t: performance.now(), que: "scroll-quieto", y: Math.round(scrollY) }); }, 150);
+    }, { passive: true });
+  } catch {}
 })()`;
 
 /* Cada 500 ms: dónde está la mano, la escena y la hija de abajo, la ruta, y si
@@ -435,9 +589,21 @@ const muestreo = (rama) => `(() => {
     const cs = [...document.querySelectorAll(sel)].map(caja).filter((c) => c && c[2] > 0 && c[3] > 0);
     if (cs.length) zonas[nombre] = cs;
   }
+  /* En una lección (28/10/2026) las cajas van en coordenadas del DOCUMENTO
+     (sumando el scroll): la página se mueve, y el cuadro trae su propio
+     scroll para ubicar cada bloque. */
+  let zonasDoc = null;
+  if (location.pathname.startsWith("/aprender/")) {
+    zonasDoc = {};
+    for (const [nombre, sel] of ${JSON.stringify(ZONAS_APRENDER)}) {
+      const cs = [...document.querySelectorAll(sel)].map(caja).filter((c) => c && c[2] > 0 && c[3] > 0).map(([x, y, w, h]) => [x, Math.round(y + scrollY), w, h]);
+      if (cs.length) zonasDoc[nombre] = cs;
+    }
+  }
   return { ahora: Date.now(), ruta: location.pathname, carga: !!document.querySelector("[data-pantalla-carga]"),
     mano: caja(mano), abajo: mano ? caja(abajo) : null, escena: caja(document.querySelector(".escena")),
-    abanico: caja(document.querySelector(".mano-abanico")), zonas, revisado };
+    abanico: caja(document.querySelector(".mano-abanico")), zonas, revisado,
+    ...(zonasDoc ? { zonasDoc, scrollY: Math.round(scrollY) } : {}) };
 })()`;
 
 /* Qué se llama cómo en la mesa. El orden importa: un bloque se le atribuye a
@@ -462,6 +628,20 @@ export const ZONAS_MESA = [
   ["rival", '[filter="url(#rival-foco)"]'],
   ["medallon", ".escena span.rounded-full"],
   ["cantos", '[data-mano="tuya"]'],
+];
+
+/* Lo mismo en un ejercicio de Aprender (28/10/2026). Santiago los ve "sobre
+   las cartas y los botones de respuesta". El ejercicio es la `<section>` de
+   `Ejercicio.tsx` adentro del `article.prosa` de la lección; el papel
+   (`PanelPapel`) envuelve todo, así que va al final. */
+export const ZONAS_APRENDER = [
+  ["explicacion", "article.prosa section .anim-pop"],
+  ["botones", "article.prosa section button[data-sonido]"],
+  ["cartas", "article.prosa section .carta"],
+  ["ejercicio", "article.prosa section"],
+  ["cartas-leccion", "article.prosa .carta"],
+  ["barra", "header.barra-app"],
+  ["papel", ".papel"],
 ];
 
 // ── CDP a mano, sin Playwright ──────────────────────────────────────────────
@@ -652,6 +832,8 @@ async function sesion(minutos, conCuadros, jpeg) {
       anotar("cuadros.jsonl", {
         n, t: Math.round(md.timestamp * 1000), f: nombre, ancho, alto,
         dw: md.deviceWidth, dh: md.deviceHeight, arriba: md.offsetTop, tramo, rama,
+        // El scroll de ESTE cuadro (28/10/2026): en una lección la página se mueve.
+        scroll: md.scrollOffsetY,
       });
       const w = writeFile(archivo(`cuadros/${nombre}`), buf).finally(() => escrituras.delete(w));
       escrituras.add(w);
@@ -753,7 +935,7 @@ async function sesion(minutos, conCuadros, jpeg) {
     // El cerrojo, una vez por segundo
     if (Date.now() - ultimoCerrojo >= 1000) {
       ultimoCerrojo = Date.now();
-      const quien = enPrimerPlano();
+      const { quien, pidAhora } = LIVIANO ? await cerrojoSinFrenar() : { quien: enPrimerPlano(), pidAhora: pidDeLaApp() };
       const ahoraFuera = quien !== PAQUETE;
       if (ahoraFuera !== fuera) {
         fuera = ahoraFuera;
@@ -763,7 +945,6 @@ async function sesion(minutos, conCuadros, jpeg) {
       /* Si la app volvió pero es OTRO proceso (la mató el sistema y se
          reabrió), el inspector de esta sesión ya no existe: se termina acá,
          guardando todo. Un arranque en frío se mide con una sesión nueva. */
-      const pidAhora = pidDeLaApp();
       if (cdp.cerrado || (pidAhora && pidAhora !== pid)) {
         anotar("eventos.jsonl", { t: ahoraTel(), que: "app-reiniciada" });
         console.log("   ⚠ la app es otro proceso (o se cerró el inspector): la sesión termina acá");
@@ -778,7 +959,7 @@ async function sesion(minutos, conCuadros, jpeg) {
     } catch { /* la página se estaba recargando */ }
 
     // El sistema: memoria y temperatura cada 5 s, hilos cada 15 s
-    if (Date.now() - ultimoSistema >= 5000) {
+    if (!LIVIANO && Date.now() - ultimoSistema >= 5000) {
       ultimoSistema = Date.now();
       const fila = { t: ahoraTel(), ...memoria(pid, renderer), temp: temperatura() };
       if (Date.now() - ultimoHilos >= 15000) { ultimoHilos = Date.now(); fila.hilos = hilos(pid, renderer); }
@@ -1033,6 +1214,22 @@ async function pixeles(carpetas) {
      (H-1, H-2 → H), para medir un APK contra otro con una sesión por
      instalación. Sin eso junta por rama de CSS, como siempre. */
   const porNombre = args.includes("--por-tramo");
+  /* `--ruta aprender` (28/10/2026): los ejercicios de Aprender en vez de la
+     mesa. La página SCROLLEA, y eso cambia tres cosas: la grilla de 4 de los
+     mosaicos va pegada al DOCUMENTO (su fase en pantalla sale del scroll de
+     cada cuadro), un bloque se ubica en coordenadas del documento (si no, un
+     bloque pegado "renace" en cada cuadro del scroll), y las zonas son las de
+     `ZONAS_APRENDER`. Sin la bandera, todo es como siempre. */
+  const aprender = (args.includes("--ruta") ? args[args.indexOf("--ruta") + 1] : "mesa") === "aprender";
+  const ES_LECCION = /^\/aprender\/[^/]+\/?$/;
+  const ZONAS = aprender ? ZONAS_APRENDER : ZONAS_MESA;
+  /* `--solo-tramos A-1,LS0-1` (28/10/2026): contar sólo esos tramos. Con el
+     jugador que scrollea, una sesión de 28 min trae ~25.000 cuadros y
+     contarla entera tarda casi lo mismo que grabarla; así se reparte entre
+     varios procesos, un grupo de tramos cada uno. */
+  const soloTramos = args.includes("--solo-tramos") ? new Set(String(args[args.indexOf("--solo-tramos") + 1] || "").split(",")) : null;
+  // Cada proceso escribe sus propios archivos: si no, se pisan entre ellos.
+  const sufijo = soloTramos ? `-${[...soloTramos].join("_").replace(/[^\w-]/g, "")}` : "";
   const grupoDe = (tramo, rama) => (porNombre ? String(tramo).replace(/-\d+$/, "") : String(rama));
   const varias = carpetas.length > 1;
 
@@ -1050,10 +1247,10 @@ async function pixeles(carpetas) {
      `MARGEN_ZONA` (una sombra sale de la caja de su dueño); si no, "otro". */
   const zonaDe = (m, cx, cy) => {
     /* Las sesiones de antes del 8/10 no tienen `zonas`: se usa lo que había. */
-    const zonas = { ...fijas, ...(m.zonas ?? { cartas: m.abanico ? [m.abanico] : [], cantos: m.mano ? [m.mano] : [] }) };
+    const zonas = aprender ? { ...fijas, ...(m.zonasDoc ?? {}) } : { ...fijas, ...(m.zonas ?? { cartas: m.abanico ? [m.abanico] : [], cantos: m.mano ? [m.mano] : [] }) };
     if (zonas.mano && !zonas.cartas) zonas.cartas = zonas.mano; // así se llamaba el 8/10 a la mañana
     for (const margen of [0, MARGEN_ZONA]) {
-      for (const [nombre] of ZONAS_MESA) {
+      for (const [nombre] of ZONAS) {
         for (const [x, y, w, h] of zonas[nombre] ?? []) {
           if (cx >= x - margen && cx <= x + w + margen && cy >= y - margen && cy <= y + h + margen) return margen ? `cerca de ${nombre}` : nombre;
         }
@@ -1067,6 +1264,9 @@ async function pixeles(carpetas) {
   const porTramo = new Map();
   const porSuceso = new Map(); // grupo → Map(tipo → { veces, nacen })
   const versiones = new Set();
+  const nacidos = []; // Aprender: cada bloque nuevo, con su color y de qué pantalla se venía
+  const exposicion = new Map(); // Aprender: "grupo|ruta" → cuadros contados (para comparar dentro de una lección)
+  const ritmo = new Map(); // Aprender: grupo → intervalos entre cuadros seguidos (ms)
 
   for (const carpeta of carpetas) {
     if (!existsSync(carpeta)) morir(`No existe ${carpeta}`);
@@ -1095,11 +1295,22 @@ async function pixeles(carpetas) {
        que ya se asentó. */
     const entradas = [];
     let antes = null;
+    /* En Aprender, la entrada es llegar a una lección, y se anota de dónde se
+       venía: la basura del menú (10/9) traía el color de la pantalla anterior. */
+    let rutaAntes = null;
+    const llegadas = []; // [t, de dónde]
     for (const m of muestras) {
+      if (aprender) {
+        const enLeccion = ES_LECCION.test(m.ruta ?? "") && !m.carga;
+        if (enLeccion && m.ruta !== rutaAntes) { entradas.push(m.ahora); llegadas.push([m.ahora, rutaAntes ?? "?"]); }
+        if (!m.carga) rutaAntes = m.ruta;
+        continue;
+      }
       const enMesa = !!m.ruta?.startsWith("/jugar/mesa") && !m.carga;
       if (enMesa && antes === false) entradas.push(m.ahora);
       antes = enMesa;
     }
+    const deDonde = (t) => { let d = "?"; for (const [x, r] of llegadas) { if (x > t) break; d = r; } return d; };
     for (const e of eventos) {
       if (e.que === "app-vuelve" || (e.que === "nota" && /^(cambia-rival|vuelve-a-la-app)/.test(e.nota || ""))) entradas.push(e.t);
     }
@@ -1117,6 +1328,26 @@ async function pixeles(carpetas) {
       return m;
     };
 
+    /* LA TASA DE CUADROS (28/10/2026), sobre todos los cuadros que llegaron
+       con la lección en pantalla, no sólo los contados. Santiago: "fijate que
+       el frame rate sea bueno para poder medir". Quieta, la página no manda
+       cuadros (y la basura, si queda, la trae el siguiente); por eso se mira
+       sólo "en movimiento": intervalos de menos de medio segundo. */
+    if (aprender) {
+      let k = 0, previo = null;
+      for (const c of cuadros) {
+        while (k + 1 < muestras.length && muestras[k + 1].ahora <= c.t) k++;
+        const m = muestras[k];
+        const ok = m && ES_LECCION.test(m.ruta ?? "") && !m.carga && c.tramo !== "inicio" && !fueras.some(([a, b]) => c.t >= a && c.t <= b);
+        if (ok && previo && previo.tramo === c.tramo && previo.rama === c.rama) {
+          const g = grupoDe(c.tramo, c.rama);
+          if (!ritmo.has(g)) ritmo.set(g, []);
+          ritmo.get(g).push(c.t - previo.t);
+        }
+        previo = ok ? c : null;
+      }
+    }
+
     const vistos = new Map(); // dónde hubo un bloque, y cuándo fue la última vez
     const filas = [];
     const nacimientos = []; // [t, grupo]
@@ -1124,11 +1355,14 @@ async function pixeles(carpetas) {
     let j = 0;
     let ultimo = -Infinity;
     for (const c of cuadros) {
+      if (soloTramos && !soloTramos.has(c.tramo)) continue;
       if (c.t - ultimo < cada) continue;
       if (fueras.some(([a, b]) => c.t >= a && c.t <= b)) continue;
       while (j + 1 < muestras.length && muestras[j + 1].ahora <= c.t) j++;
       const m = muestras[j];
-      if (!m || m.ahora > c.t || !m.ruta?.startsWith("/jugar/mesa") || m.carga || !m.escena) continue;
+      if (aprender) {
+        if (!m || m.ahora > c.t || m.carga || !ES_LECCION.test(m.ruta ?? "")) continue;
+      } else if (!m || m.ahora > c.t || !m.ruta?.startsWith("/jugar/mesa") || m.carga || !m.escena) continue;
       let img;
       try {
         img = await sharp(f(`cuadros/${c.f}`)).removeAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -1139,26 +1373,49 @@ async function pixeles(carpetas) {
       desdeCuadro = Math.min(desdeCuadro, c.t);
       hastaCuadro = Math.max(hastaCuadro, c.t);
       const W = img.info.width, H = img.info.height;
-      const esc = W / (c.dw || m.escena[2] || 360);
+      const esc = W / (c.dw || m.escena?.[2] || 360);
       const arriba = c.arriba || 0;
-      // La grilla de la capa de la mesa arranca en el borde de arriba de la escena.
-      const y0 = Math.round((m.escena[1] + arriba) * esc);
-      const y1 = Math.round((m.escena[1] + m.escena[3] + arriba) * esc);
-      const bs = bloquesPlanosDe(img.data, W, H, 0, y0 % 4, y0, y1);
-      const ctl = bloquesPlanosDe(img.data, W, H, 2, (y0 + 2) % 4, y0, y1).length;
-      for (const b of bs) b.zona = zonaDe(m, (b.x + 2) / esc, (b.y + 2) / esc - arriba);
+      let bs, ctl, desp = 0;
+      if (aprender) {
+        /* La grilla va pegada al documento: el borde de arriba de la página
+           cae en (arriba - scroll) px CSS de la pantalla. `desp` pasa un
+           bloque de la pantalla al documento, en px de pantalla. */
+        const scroll = c.scroll ?? m.scrollY ?? 0;
+        desp = Math.round(scroll * esc);
+        const fase = ((Math.round(arriba * esc) - desp) % 4 + 4) % 4;
+        bs = bloquesPlanosDe(img.data, W, H, 0, fase, 0, H).filter((x) => !esFiloDeEspada(x.rgb));
+        ctl = bloquesPlanosDe(img.data, W, H, 2, (fase + 2) % 4, 0, H).filter((x) => !esFiloDeEspada(x.rgb)).length;
+        for (const b of bs) b.zona = zonaDe(m, (b.x + 2) / esc, (b.y + 2) / esc - arriba + scroll);
+      } else {
+        // La grilla de la capa de la mesa arranca en el borde de arriba de la escena.
+        const y0 = Math.round((m.escena[1] + arriba) * esc);
+        const y1 = Math.round((m.escena[1] + m.escena[3] + arriba) * esc);
+        bs = bloquesPlanosDe(img.data, W, H, 0, y0 % 4, y0, y1);
+        ctl = bloquesPlanosDe(img.data, W, H, 2, (y0 + 2) % 4, y0, y1).length;
+        for (const b of bs) b.zona = zonaDe(m, (b.x + 2) / esc, (b.y + 2) / esc - arriba);
+      }
 
       const grupo = grupoDe(c.tramo, c.rama);
+      if (aprender && c.tramo !== "inicio") exposicion.set(`${grupo}|${m.ruta}`, (exposicion.get(`${grupo}|${m.ruta}`) ?? 0) + 1);
       const clave = `${carpeta}|${c.tramo}|${c.rama}`;
       if (!porTramo.has(clave)) porTramo.set(clave, { corto, tramo: c.tramo, rama: c.rama, grupo, cuadros: 0, sucios: 0, suma: 0, max: 0, ctl: 0, nacen: 0, posiciones: new Map() });
       const T = porTramo.get(clave);
       let nacenAca = 0;
+      /* En una lección, un bloque pegado se queda en su mosaico hasta que algo
+         lo vuelve a rasterizar: sale de la pantalla al scrollear y vuelve a
+         entrar igual, y la pantalla quieta no manda cuadros. Contarlo cada
+         vez que reaparece inflaba todo (28/10/2026: el MISMO punto de El
+         envido contó 6 veces). Ahí "nace" es un lugar del documento con
+         basura que no se había visto EN ESTA VISITA a la lección: la clave
+         lleva la visita (cada llegada a una lección es otra). */
+      const visita = aprender ? llegadas.filter(([x]) => x <= c.t).length : 0;
       for (const b of bs) {
-        const k = `${b.x},${b.y}`;
-        if (!(c.t - (vistos.get(k) ?? -Infinity) < 1000)) {
+        const k = aprender ? `${visita}|${m.ruta}|${b.x},${b.y + desp}` : `${b.x},${b.y + desp}`;
+        if (aprender ? !vistos.has(k) : !(c.t - (vistos.get(k) ?? -Infinity) < 1000)) {
           T.nacen++;
           nacenAca++;
           if (c.tramo !== "inicio") nacimientos.push([c.t, grupo]);
+          if (aprender && c.tramo !== "inicio") nacidos.push({ grupo, t: c.t, f: c.f, n: c.n, x: b.x, y: b.y, zona: b.zona, rgb: b.rgb, de: deDonde(c.t), ruta: m.ruta });
         }
         vistos.set(k, c.t);
       }
@@ -1175,7 +1432,7 @@ async function pixeles(carpetas) {
       T.ctl += ctl;
       T.max = Math.max(T.max, bs.length);
       if (bs.length) T.sucios++;
-      for (const b of bs) T.posiciones.set(`${b.x},${b.y}`, b.zona);
+      for (const b of bs) T.posiciones.set(aprender ? `${m.ruta}|${b.x},${b.y + desp}` : `${b.x},${b.y + desp}`, b.zona);
       filas.push({ n: c.n, f: c.f, t: c.t, tramo: c.tramo, rama: c.rama, bloques: bs, control: ctl, ancho: W, alto: H });
       if (filas.length % 300 === 0) console.error(`   … ${corto}: ${filas.length} cuadros`);
     }
@@ -1184,14 +1441,19 @@ async function pixeles(carpetas) {
        la vista y mientras había cuadros medidos (un toque en el menú no
        cuenta, y uno al final de la sesión no tiene ventana para mirar). */
     for (const e of pagina) {
-      if (e.tipo !== "mesa" && e.tipo !== "toque") continue;
+      if (aprender ? e.tipo !== "aprender" && e.tipo !== "toque" && e.tipo !== "navegado" : e.tipo !== "mesa" && e.tipo !== "toque") continue;
       if (e.tramo === "inicio" || typeof e.origen !== "number") continue;
+      if (soloTramos && !soloTramos.has(e.tramo)) continue;
       const t = e.origen + e.t;
       if (t < desdeCuadro || t + VENTANA_NACE > hastaCuadro) continue;
       if (fueras.some(([a, b]) => t >= a && t <= b)) continue;
       const m = muestraEn(t);
-      if (!m?.ruta?.startsWith("/jugar/mesa") || m.carga) continue;
-      const tipo = e.tipo === "mesa" ? e.que : claseDeTocado(e.quien || "");
+      if (aprender) {
+        if (e.tipo === "navegado" ? !ES_LECCION.test(e.ruta ?? "") : !ES_LECCION.test(m?.ruta ?? "") || m.carga) continue;
+      } else if (!m?.ruta?.startsWith("/jugar/mesa") || m.carga) continue;
+      const tipo = aprender
+        ? e.tipo === "aprender" ? e.que : e.tipo === "navegado" ? "llega-leccion" : claseDeTocadoAprender(e.quien || "")
+        : e.tipo === "mesa" ? e.que : claseDeTocado(e.quien || "");
       const grupo = grupoDe(e.tramo, e.rama);
       if (!porSuceso.has(grupo)) porSuceso.set(grupo, new Map());
       const S = porSuceso.get(grupo);
@@ -1203,7 +1465,7 @@ async function pixeles(carpetas) {
 
     const salida = f("pixeles");
     mkdirSync(salida, { recursive: true });
-    writeFileSync(path.join(salida, "bloques.jsonl"), filas.map((x) => JSON.stringify(x)).join("\n") + "\n");
+    writeFileSync(path.join(salida, `bloques${sufijo}.jsonl`), filas.map((x) => JSON.stringify(x)).join("\n") + "\n");
     if (guardar) {
       // Los cuadros con más bloques, marcados en verde, para mirarlos con los ojos
       for (const p of [...filas].sort((a, b) => b.bloques.length - a.bloques.length).slice(0, guardar)) {
@@ -1263,7 +1525,78 @@ async function pixeles(carpetas) {
       }).join("")}`);
     }
   }
+  if (aprender) informeAprender(nacidos, ritmo, exposicion);
+  if (aprender && carpetas.length === 1) writeFileSync(path.join(carpetas[0], "pixeles", `nacidos${sufijo}.jsonl`), nacidos.map((x) => JSON.stringify(x)).join("\n") + "\n");
   console.log(`\n   cada cuadro, en CARPETA/pixeles/bloques.jsonl${guardar ? " (y los peores marcados al lado)" : ""}\n`);
+}
+
+/* EL ÚNICO DIBUJO QUE ENGAÑA AL DETECTOR EN LAS LECCIONES (28/10/2026): el
+   filo claro de la hoja de la espada (`--color-espada-luz` al 95% sobre la
+   hoja, ~rgb(106,150,194)), en las cartas GRANDES del cuerpo de la lección,
+   donde es una franja de más de 4 px de ancho, plana y de un color que no
+   hay alrededor. Calibrado en la compu sobre las 8 lecciones enteras (271
+   capturas, 360×800 a DPR 2): dos lugares en total, y los dos son ése. En el
+   teléfono salió igual, en el mismo lugar del documento en cada visita. */
+const esFiloDeEspada = ([r, g, b]) => Math.abs(r - 108) <= 14 && Math.abs(g - 151) <= 14 && Math.abs(b - 195) <= 14;
+
+/* Qué tipo de toque fue, en una lección. */
+const claseDeTocadoAprender = (quien) =>
+  quien.startsWith("ejercicio>") ? (/probar de nuevo/i.test(quien) ? "toca-de-nuevo" : "toca-respuesta")
+  : /^a\b|^a\[|^a"/.test(quien) ? "toca-enlace" : "toca-otro";
+
+/* El color de un bloque, en palabras: si la basura trae el color de la
+   pantalla ANTERIOR (10/9), eso se ve acá. La portada y la mesa son madera
+   (marrón), la lista de Aprender es la noche (casi negro), una lección es
+   papel (crema). */
+const familiaDe = ([r, g, b]) => {
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+  if (mx < 60) return "casi negro";
+  if (mn > 170 && r >= b) return "crema/blanco";
+  if (r > g && g > b && r - b > 40 && mx <= 190) return "marrón";
+  if (mx - mn < 25) return "gris";
+  return "otro color";
+};
+
+function informeAprender(nacidos, ritmo, exposicion) {
+  const grupos = [...new Set(nacidos.map((x) => x.grupo))];
+  if (nacidos.length) {
+    console.log("\n   los bloques NUEVOS, por color y por la pantalla de la que se venía (¿es el color de la anterior?)");
+    for (const g of grupos) {
+      const de = new Map();
+      for (const x of nacidos.filter((y) => y.grupo === g)) {
+        const k = `${String(x.de).replace(/\/$/, "") || "/"} → ${familiaDe(x.rgb)}`;
+        de.set(k, (de.get(k) ?? 0) + 1);
+      }
+      console.log(`   ${g.padEnd(8)} ${[...de].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k}: ${n}`).join(" · ")}`);
+    }
+  }
+  /* POR LECCIÓN Y POR RAMA (28/10/2026): la lección pesa más que la rama (en
+     un mismo experimento, un tramo en El envido dio 44 y otro en La baraja
+     0), así que las ramas se comparan DENTRO de cada lección: nacen / cuadros
+     mirados con esa lección en pantalla. */
+  if (exposicion.size) {
+    const rutas = [...new Set([...exposicion.keys()].map((k) => k.split("|")[1]))].sort();
+    const gs = [...new Set([...exposicion.keys()].map((k) => k.split("|")[0]))];
+    console.log("\n   por lección y rama: nacen / cuadros (c/100)");
+    console.log(`   ${"".padEnd(18)}${gs.map((g) => g.padEnd(20)).join("")}`);
+    for (const r of rutas) {
+      console.log(`   ${r.replace(/^\/aprender\/|\/$/g, "").padEnd(18)}${gs.map((g) => {
+        const n = exposicion.get(`${g}|${r}`) ?? 0;
+        const b = nacidos.filter((x) => x.grupo === g && x.ruta === r).length;
+        return (n ? `${b} / ${n} (${((100 * b) / n).toFixed(2)})` : "—").padEnd(20);
+      }).join("")}`);
+    }
+  }
+  if (ritmo.size) {
+    console.log("\n   la tasa de cuadros con la lección en pantalla (en movimiento: intervalos < 500 ms)");
+    console.log("   grupo     intervalos   p50 ms  p90 ms  p99 ms  cuadros/s  huecos 100–500 ms");
+    for (const [g, xs] of ritmo) {
+      const mov = xs.filter((x) => x < 500);
+      if (!mov.length) continue;
+      const media = mov.reduce((a, b) => a + b, 0) / mov.length;
+      console.log(`   ${g.padEnd(9)} ${String(mov.length).padStart(10)} ${String(percentil(mov, 50)).padStart(8)} ${String(percentil(mov, 90)).padStart(7)} ${String(percentil(mov, 99)).padStart(7)} ${(1000 / media).toFixed(1).padStart(10)} ${String(mov.filter((x) => x >= 100).length).padStart(18)}`);
+    }
+  }
 }
 
 // ── Andar ───────────────────────────────────────────────────────────────────

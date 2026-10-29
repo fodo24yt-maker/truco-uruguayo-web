@@ -7,6 +7,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { Carta } from "@/components/Carta";
 import { BarraCarga } from "@/components/PantallaCarga";
 import { portero } from "@/lib/entrada";
+import { callarRival, cantar, precargarVoces } from "@/lib/audio";
 import { DialogoMio, DialogoRival } from "@/components/mesa/Dialogo";
 import { ObjetoDeMesa } from "@/components/mesa/Objetos";
 import { CartelEnMesa, TantosBajoMedallon } from "@/components/mesa/Tantos";
@@ -681,6 +682,31 @@ function Mesa() {
   }, [p]);
   useEffect(() => () => portero.marcarPartidaEnCurso(false), []);
 
+  /* LAS VOCES DEL RIVAL (desde el 23/10/2026). Cada canto nuevo que dice él
+     suena con su voz; los tuyos no, que no se le pone a quien juega una voz
+     que no es la suya. El motor marca cada canto con su `voz` donde arma la
+     frase (lib/motor/partida.ts), así que acá no se lee castellano.
+
+     Los eventos se vuelven a cero con cada mano: si hay menos que los ya
+     oídos, empezó otra y se cuenta de nuevo. Un "¡Quiero!" de envido trae
+     detrás el "Son buenas" en la misma jugada: van los dos, en fila y con el
+     tiempo del tanto en el medio (lib/audio.ts). Las voces del rival se
+     precargan al sentarse a la mesa, y al levantarse se calla: lo que tenía
+     para decir ya no va. */
+  const cantosOidos = useRef(0);
+  useEffect(() => {
+    precargarVoces(rival.id);
+  }, [rival.id]);
+  useEffect(() => () => callarRival(), []);
+  useEffect(() => {
+    if (!p) return;
+    if (p.eventos.length < cantosOidos.current) cantosOidos.current = 0;
+    for (const e of p.eventos.slice(cantosOidos.current)) {
+      if (e.quien === "rival" && e.voz) cantar(rival.id, e.voz);
+    }
+    cantosOidos.current = p.eventos.length;
+  }, [p, rival.id]);
+
   if (!p) return <Cargando />;
 
   const hacer = (accion: Accion) => {
@@ -993,6 +1019,9 @@ function Mesa() {
       <div className="barra-juego relative z-30 flex shrink-0 items-center justify-between gap-2 px-2">
         <Link
           href={esHistoria ? "/jugar/gira" : "/jugar"}
+          // En la mesa los toques no suenan (components/Musica.tsx), salvo
+          // irse: suena igual que la flecha de la barra y el atrás de Android.
+          data-sonido="volver"
           className="flex items-center gap-1 rounded px-1.5 py-1 font-[family-name:var(--font-ui)] text-[11px] uppercase tracking-wide text-crema/75 transition-colors hover:text-crema"
         >
           <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" aria-hidden="true">
@@ -2232,6 +2261,7 @@ function Cartel({
           (desdeLaGira ? (
             <Link
               href="/jugar/gira"
+              data-sonido="volver"
               className="mt-2 block w-full rounded border border-tinta/25 py-2.5 text-center font-[family-name:var(--font-ui)] text-sm uppercase tracking-wide text-tinta/75 transition-colors hover:border-tinta/50 hover:text-tinta"
             >
               Volver al mapa

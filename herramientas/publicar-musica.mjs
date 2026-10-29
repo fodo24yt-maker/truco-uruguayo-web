@@ -115,7 +115,7 @@ for (const t of TEMAS) {
   ]);
   const tipo = jsonDeLoudnorm(r.stderr).normalization_type;
   const segundos = Math.round(duracion(destino) * 10) / 10;
-  filas.push({ archivo: `/audio/musica/${t.clave}.m4a`, segundos });
+  filas.push({ clave: t.clave, archivo: `/audio/musica/${t.clave}.m4a`, segundos });
   console.log(`${t.clave.padEnd(14)} ${t.que.padEnd(26)} ${String(segundos).padStart(5)} s   antes ${medido.input_i} LUFS → ${LUFS} (${tipo})`);
 }
 
@@ -132,13 +132,15 @@ const indice = `/**
  */
 
 export interface Tema {
+  /** El nombre con el que lo agrupa \`AMBIENTES_MUSICALES\` en \`lib/audio.ts\`. */
+  clave: string;
   archivo: string;
   /** Lo que dura, para saber cuándo cruzar al siguiente sin esperar a que cargue. */
   segundos: number;
 }
 
 export const TEMAS: readonly Tema[] = [
-${filas.map((f) => `  { archivo: "${f.archivo}", segundos: ${f.segundos} },`).join("\n")}
+${filas.map((f) => `  { clave: "${f.clave}", archivo: "${f.archivo}", segundos: ${f.segundos} },`).join("\n")}
 ];
 `;
 writeFileSync(INDICE, indice);

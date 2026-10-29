@@ -196,6 +196,8 @@ function Columna({ lado, puntos, onSumar }: { lado: Lado; puntos: number; onSuma
     <button
       type="button"
       onClick={onSumar}
+      // Con la columna llena ya no suma: un palito que no se dibuja no suena.
+      data-sonido={puntos < META ? "palito" : "no"}
       aria-label={`${NOMBRE[lado]}: ${comoSeDice(puntos)}. Tocá para sumar un punto`}
       className="grid min-h-0 grid-rows-2 text-left text-bordo transition-colors hover:bg-tinta/5"
     >
@@ -241,6 +243,7 @@ function Controles({
       type="button"
       onClick={() => onCambiar(-1)}
       disabled={puntos === 0}
+      data-sonido="borrar"
       aria-label={`Restarle un punto a ${NOMBRE[lado]}`}
       className="h-11 w-11 shrink-0 rounded-full border-2 border-crema/25 font-[family-name:var(--font-ui)] text-xl text-crema/80 transition-colors hover:border-crema/50 hover:bg-black/30 disabled:border-crema/10 disabled:text-crema/20"
     >
@@ -253,6 +256,7 @@ function Controles({
       type="button"
       onClick={() => onCambiar(1)}
       disabled={puntos === META}
+      data-sonido="palito"
       aria-label={`Sumarle un punto a ${NOMBRE[lado]}`}
       className="h-11 min-w-0 flex-1 rounded-full bg-quiero font-[family-name:var(--font-ui)] text-2xl leading-none text-crema transition-colors hover:brightness-110 disabled:bg-quiero/25 disabled:text-crema/40"
     >
@@ -393,6 +397,8 @@ export default function Anotador() {
             type="button"
             onClick={() => (confirmando ? (setCuenta(CUENTA_VACIA), setConfirmando(false)) : setConfirmando(true))}
             disabled={vacía}
+            // El primer toque sólo pregunta; el segundo borra, y suena a goma.
+            data-sonido={confirmando ? "borrar" : undefined}
             aria-label={confirmando ? "Confirmar: borrar la cuenta" : "Empezar una cuenta nueva"}
             className={`h-11 shrink-0 rounded-full border-2 font-[family-name:var(--font-ui)] text-xs uppercase tracking-wide transition-colors ${
               confirmando

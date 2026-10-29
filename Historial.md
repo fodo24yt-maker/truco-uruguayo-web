@@ -12,6 +12,1280 @@
 
 ---
 
+## 2026-10-28 — Los píxeles de los ejercicios de Aprender
+
+> **CORRECCIÓN, MISMO DÍA A LA NOCHE (léase antes que el resumen de abajo).**
+> El arreglo que dice el resumen (`[data-leccion] article.prosa {opacity:
+> .999}`) **ESTABA MAL y se sacó del código**. Santiago instaló el APK y vio
+> "los píxeles en más lugares".
+>
+> **Por qué le erré:** todo se midió con el detector de cuadraditos de 4×4
+> planos (`bloquesPlanosDe`). Con el artículo en su búfer, la basura cambia de
+> FORMA:
+>
+> - aparecen PEDAZOS ENTEROS de la pantalla corridos ~5 px (la parte de arriba
+>   de un ejercicio desplazada, con "TIRÓ" en su lugar y "MUESTRA" más
+>   arriba);
+> - el detector no los ve, y contaba "8 veces menos".
+>
+> **La prueba ya la tenía y la descarté:** la comparación con/sin en el
+> teléfono dio dos capturas con diferencias enormes, y las atribuí "al jugador
+> que movía la página" sin mirarlas. Eran justamente eso.
+>
+> **Desde ahí se mide con una SONDA que ve cualquier forma.** Está más abajo,
+> en "Segunda tanda".
+
+### Segunda tanda (noche del 28/10): instrumentos que ven cualquier forma
+
+**Lo que dijo Santiago con el APK de las 18:15** (el del artículo en su
+búfer): ve los píxeles "en toda la lección", sobre todo **scrolleando, al
+entrar a la lección y recién abierta la app**. Pidió además medir los caminos
+de un usuario real (entrar y salir rápido de una sección a otra o a la misma,
+pasar por una partida, cerrar y abrir la app) y ser escéptico con las propias
+hipótesis.
+
+**Tres instrumentos nuevos:**
+
+1. **La sonda** (`jugar-aprender.mjs --sonda`), con la página quieta y después
+   de cada cosa que hace el jugador:
+   - "lo que hay" es un cuadro que se PIDE moviendo la opacidad de un puntito
+     de 2 px en su propia capa, o sea un cuadro compuesto sin volver a
+     rasterizar nada;
+   - después, dos dibujos frescos: uno con un cambio casi invisible al fondo
+     del artículo (blanco al 6%) y otro al sacarlo;
+   - un píxel está roto en pantalla si lo que había difiere de los dos frescos
+     y los frescos coinciden.
+
+   Cuesta llegar a una sonda limpia: hubo cinco versiones y cada una cayó por
+   una trampa distinta.
+   - **`Page.captureScreenshot` con la página quieta a veces no volvía** (más
+     de 15 s). Se usan los cuadros del screencast.
+   - **El screencast se saltea cuadros:** el último que llegó puede ser viejo.
+     Por eso "lo que hay" se pide con el puntito.
+   - **Un cambio del 0,4% o del 2% no mueve ni un píxel del papel claro**, y no
+     llega cuadro nuevo. Se usa el 6%.
+   - **Estilos de sonda colgados** de jugadores cortados a mitad de una sonda:
+     con el fondo ya puesto, agregar otro igual no cambia nada. Ahora se
+     limpian antes de cada sonda.
+   - **El redibujado de la propia sonda también deja basura.** De ahí los dos
+     frescos.
+2. **La consistencia al scrollear** (`herramientas/consistencia.mjs`, nuevo):
+   dos cuadros seguidos, corridos lo que se movió el scroll (±1 px), tienen
+   que coincidir. Lo que no coincide apareció o desapareció sin moverse:
+   basura, de cualquier forma.
+   - Se descartan los pares cercanos a un clic o a la explicación.
+   - **No ve la basura que queda pegada y se mueve con el contenido.**
+3. **`jugar-aprender.mjs --caminos`**: cada 30–60 s hace uno de estos
+   caminos:
+   - lista y vuelta enseguida a la misma lección;
+   - otra lección enseguida;
+   - portada → Jugar → Partida rápida → unos segundos en la mesa → Salir →
+     Aprender.
+
+   Si sale un anuncio, Atrás. Los arranques en frío pasan `--sonda` y
+   `--caminos` al jugador.
+
+**Una cosa que pasó:** a las 18:54, en medio de un experimento, el escritorio
+de MIUI pasó al frente (no por un toque mío: el cerrojo bloqueó el siguiente),
+y a los 20 s Android cerró la app por `LOW_MEMORY` (`dumpsys activity
+exit-info`). No fue un cuelgue.
+
+**Resultados**, con `A` = el APK de las 18:15 (el artículo en su búfer) y
+`SLA`/`B0` = la app como estaba antes:
+
+| Experimento | Instrumento | Antes (SLA/B0) | Artículo en búfer (A) | Otras |
+|---|---|---|---|---|
+| 8 (caliente, sonda, La flor/El envido) | sonda rota / sondas | 1/13 | 6/65 | sin sombra 5/30 · papel en capa 4/29 · ejercicio en capa 4/59 |
+| 9 (caliente, sonda + caminos) | sonda | 17/33 (52%) | 3/23 (13%) | ejercicio en capa 14/30 (47%) |
+| 9 | consistencia al scrollear | 196/1847 (10,6%) | 25/1310 (1,9%) | ejercicio en capa 128/1383 (9,3%) |
+| 10 (FRÍO, sonda + caminos, 12 arranques) | sonda | 34/102 (33%) | 10/111 (9%) | — |
+| 10 | consistencia al scrollear | 262/2613 (10,0%) | 29/2966 (1,0%) | — |
+
+**Lo que dicen, con escepticismo:**
+
+- **Los instrumentos dicen lo contrario de lo que ve Santiago.** Todos dan
+  menos basura con el artículo en su búfer: los 4×4, la sonda (quieta) y la
+  consistencia (scrolleando), en caliente y en frío.
+- **Sólo hay un punto ciego que explique las dos cosas: basura DETERMINISTA**,
+  la que sale igual cada vez que se dibuja ese lugar, como la del menú del
+  10/9. La sonda la compara contra un redibujado que la vuelve a hacer igual,
+  y la consistencia la ve moverse con el contenido. Ninguna de las dos la
+  cuenta.
+- **El ejercicio en su propia capa no sirve**: igual que la app de antes, en
+  los dos instrumentos.
+- **La basura se ACUMULA en una lección**: en la app de antes, 14% de sondas
+  rotas en los primeros 10 s, 56% de 10 a 30 s y 70% después.
+
+**Experimento 11** (caliente, scrolleando con caminos, consistencia al
+scrollear; tramos de 2 min):
+
+| Rama | Pares con basura / pares |
+|---|---|
+| A (el artículo en su búfer) | 3/953 (0,3%) |
+| la app de antes | 255/1206 (21%) |
+| el papel en su búfer (`LPP`) | 1/937 (0,1%) |
+| toda la página de la lección en su búfer (`LW`) | 0/1567 (0%) |
+| A + cartas sin sombra | 229/592 (39%) |
+
+Ojo: cada rama quedó casi siempre en UNA lección (el jugador se queda en una
+por tramo). Por eso esto se repitió con un barrido.
+
+**El barrido A/B** (`ab-barrido.mjs`, en el temporal de la sesión).
+
+- **Cómo:** recorre la lección deslizando por el centro y, en cada parada,
+  compara lo que quedó en pantalla contra dos dibujos frescos.
+- **Lo primero que encontró**, comparando A contra la app de antes, fue una
+  "diferencia determinista" de A. Mirada, era una columna de 1 px en el BORDE
+  DERECHO DEL PAPEL, que con A sale apenas más clara (el suavizado del
+  recorte). No es basura.
+- **Lo que hace bien:** mide lo que QUEDA EN PANTALLA después de scrollear,
+  que es lo que describe Santiago.
+- **Corrido base por base, una después de otra, el estado del teléfono se
+  mezcla con la base:** en un tramo de La muestra, también los dibujos
+  frescos salían rotos (hasta 856 px), cualquiera fuera la base. Por eso la
+  versión final INTERCALA: una base por parada, puesta antes de cada
+  deslizamiento.
+
+| Paradas con basura en pantalla | La app de antes | A | Papel en búfer (`LPP`) | Página en búfer (`LW`) |
+|---|---|---|---|---|
+| Experimento 13 (dos bases, una después de otra) | 36/60 | 19/60 | — | — |
+| Experimento 14 (cuatro, una después de otra) | 19/30 | 8/30 | **5/30** | 16/30 |
+| **Experimento 15 (INTERCALADO)** | 13/24 (54%) | 9/24 (38%) | **5/24 (21%)** | 14/24 (58%) |
+
+**Lo que dicen:**
+
+- **La app de antes queda con basura en pantalla en más de la mitad de las
+  paradas.**
+- **A la baja, pero en El envido sale igual o peor** (13: 11/20 contra 8/20).
+  Cuadra con lo que vio Santiago: no es la solución.
+- **`LPP` es lo único que baja de forma consistente** en los tres
+  instrumentos.
+- **`LW` es una trampa:** da 0 en la consistencia (no cambia entre cuadros) y
+  58% en lo que queda en pantalla. Su basura queda pegada y se mueve con el
+  contenido.
+
+**A la vista** (en la compu, 360 y 1366):
+
+- `LW` no cambia nada (≤ 1/255).
+- `LPP` cambia sólo el borde roto del papel (el suavizado del recorte): 6.367
+  píxeles en el contorno, hasta 46/255.
+- A le cambia el suavizado al texto de El envido (hasta 204/255).
+
+**Experimento 16: arranques en frío, la app de antes contra `LPP`** (12
+vueltas, sonda y caminos):
+
+| | La app de antes | `LPP` |
+|---|---|---|
+| Consistencia al scrollear | 407/2265 (18%) | **7/3116 (0,2%)** |
+| Sonda (quieta) | 37/78 (47%), mediana 45 px | 44/105 (42%), **mediana 421 px** |
+| Sondas con basura hecha por la propia sonda | 4 | **64** |
+
+**Mirada a ojo, la basura de `LPP` es HORRIBLE:** filas de bloques negros que
+tachan "TU MANO", y renglones de texto llenos de cuadraditos de colores.
+Queda pegada y se mueve con el contenido, y por eso la consistencia la daba
+"limpia". **Descartado.**
+
+**La regla que sale de esto:** envolver zonas GRANDES de una página que
+scrollea en un búfer (el artículo, el papel, la página entera) vuelve la
+basura más pegajosa y a veces más fea, aunque algún instrumento diga que baja.
+Es lo contrario de la mesa (una escena fija), donde el grupo grande protegía.
+**Hay que MIRAR las imágenes de cada instrumento:** cada uno tiene un punto
+ciego, y dos de las tres "curas" de esta tanda eran puntos ciegos.
+
+**Experimento 18: sacarle al dibujo lo caro** (barrido intercalado, sobre la
+app de antes):
+
+| Base | Paradas con basura en pantalla | Tamaño (mediana) |
+|---|---|---|
+| la app de antes | 11/21 (52%) | 517 px |
+| el papel sin sus degradados | 12/26 (46%) | 128 px |
+| el papel sin el recorte | 14/25 (56%) | **4778 px** (el recorte protege) |
+| las cartas con una sola sombra simple | 18/24 (75%) | peor |
+
+Ninguna cura.
+
+### Cómo queda (noche del 28/10)
+
+- **Aprender está EXACTAMENTE como en el commit de Santiago.** Se sacó la
+  regla del artículo en su búfer, y también el gancho `data-leccion` que la
+  ataba: `git diff` de `app/globals.css` y `app/aprender/[leccion]/page.tsx`
+  vacío.
+- **El teléfono:** se compiló e instaló (`install -r`) un APK desde el árbol,
+  o sea con Aprender como estaba.
+- **No hay arreglo todavía.** En el barrido intercalado, la app de antes deja
+  basura en pantalla en ~50% de las paradas después de scrollear, y todo lo
+  probado queda igual, peor, o baja la frecuencia empeorando la forma.
+- **Lo que sí queda, para la próxima:**
+  - la sonda (`jugar-aprender.mjs --sonda`), con sus trampas resueltas;
+  - `--caminos`;
+  - `herramientas/consistencia.mjs`;
+  - el barrido intercalado. Éste vive en el temporal de la sesión: es el
+    instrumento más cercano a lo que ve Santiago, y la próxima habría que
+    pasarlo a `herramientas/`.
+
+**Ideas sin probar, en orden:**
+
+1. Partir la lección en VARIOS búferes medianos (cada sección o cada figura
+   con cartas en su capa). Ni el artículo entero, que es demasiado grande, ni
+   cada carta, que es demasiado chico.
+2. Que el texto y las cartas no compartan mosaico: las figuras con cartas en
+   su propia capa.
+3. Medir cuánto de esto existe sin la sonda ni el barrido estresando el
+   redibujado: un jugador que sólo scrollea y responde, y basura contada
+   únicamente con el detector de 4×4 y la consistencia, mirando las imágenes.
+
+**Revisión de seguridad de esta tanda** (`security-review` sobre la sonda, los
+caminos, `consistencia.mjs` y lo agregado a `medir-celular` y
+`arranques-en-frio`): **sin hallazgos de 8/10 o más.**
+
+- A `adb shell` sólo le llegan texto fijo y números (`Math.round`).
+- Los nombres de archivo que salen de la página se limpian con `/[^\w-]/g`.
+- No hay `eval`.
+- No se abre ningún puerto.
+- Todo se escribe en `capturas/`, que está ignorada.
+
+Dos detalles que marcó se cerraron igual, porque cuestan una línea:
+
+- **La tecla Atrás ante un anuncio** ahora exige también que el FOCO sea del
+  anuncio, para que nunca cierre una cortina del sistema.
+- **Los enlaces de la lista blanca** se comparan también por ORIGEN, no sólo
+  por ruta.
+
+`09-web-security` y `17-mobile-security` no hacen falta: la app quedó
+idéntica al commit. **Barrido de datos sensibles** con `/usr/bin/grep` sobre
+el diff y los tres archivos nuevos: limpio.
+
+- No aparece el número de serie del teléfono, que sí sale en los registros de
+  `celular-usb.mjs` dentro del temporal.
+- La única coincidencia es una mención vieja a un usuario de GitHub, de la entrada
+  del 21–23/10.
+
+**Archivos tocados en esta sesión, sin commitear:**
+
+- `Historial.md`;
+- `herramientas/medir-celular.mjs` y `herramientas/arranques-en-frio.mjs`
+  (agregados);
+- `herramientas/jugar-aprender.mjs`, `herramientas/mirar-aprender.mjs` y
+  `herramientas/consistencia.mjs` (nuevos).
+
+La app (`app/`, `components/`) quedó idéntica al commit. Tests 363/363, `tsc`
+limpio, `npm run build` limpio.
+
+### Tercera tanda (misma noche): las cartas fuera de los mosaicos del texto
+
+**El barrido pasó a `herramientas/barrido-aprender.mjs`.**
+
+- Intercala las variantes, una por parada.
+- Pide "lo que hay" con el puntito.
+- Dibuja fresco dos veces, y lo guarda todo en `CARPETA/barrido/`.
+- `--resumen` arma la tabla.
+
+**Experimento 19** (sobre la app tal cual, cinco variantes intercaladas):
+
+| Variante | Paradas rotas (primer método) |
+|---|---|
+| la app tal cual | 12/27 (44%) |
+| cada hijo del artículo en su búfer (`LG`) | 20/28 (71%) |
+| figuras con cartas y ejercicio en búfer (`FIGO`) | 13/26 (50%) |
+| figuras con cartas y ejercicio en su CAPA (`FIGC`) | 0/27 |
+| cada carta en su CAPA (`CARTAC`) | 0/26 |
+
+**El 0 tenía un punto ciego**, y se encontró antes de creerlo. El dibujo fresco
+del barrido le cambiaba el fondo sólo al artículo, y eso NO vuelve a dibujar
+lo que está en su propia capa. Ahora el fondo fresco va también en las
+figuras, el ejercicio y cada carta (`metodo: 2` en `barrido.jsonl`; el
+resumen cuenta sólo ésas).
+
+**Experimento 20** (el método corregido, tres variantes intercaladas, 48
+paradas cada una):
+
+| Variante | Rota en pantalla | El propio redibujado salió roto | Alguna de las dos |
+|---|---|---|---|
+| la app tal cual | 25/48 (52%), mediana 171 px | 16 | **33/48 (69%)** |
+| `FIGC` | 6/48 (13%), mediana 47 px | 12 | 13/48 (27%) |
+| **`CARTAC`** | **2/48 (4%)**, mediana 58 px | 8 | **8/48 (17%)** |
+
+- **Otro punto ciego que hubo que mirar.** En las dos paradas "rotas" de
+  `CARTAC`, lo que había Y el dibujo fresco tenían basura sobre los palos de
+  espada, en lugares distintos. El barrido cuenta eso como "el redibujado
+  salió roto" y no como "en pantalla". Por eso la columna "alguna de las dos"
+  es la honesta: `CARTAC` igual baja ~4 veces.
+- **A la vista, en la compu, las capas cambian el suavizado de los números de
+  las cartas** (salen apenas más finos; hasta 204/255 en algunos píxeles). En
+  Android el texto ya va en escala de grises: hay que comparar con capturas
+  DEL TELÉFONO antes de aplicar.
+
+**Experimento 21: arranques en frío, la app tal cual contra `CARTAC`** (12
+vueltas, sonda corregida, caminos, scroll):
+
+| | La app tal cual | Cada carta en su capa |
+|---|---|---|
+| Sonda: alguna basura (pantalla o redibujado) | 50/91 (55%) | **17/101 (17%)** |
+| Sonda: rota en pantalla | 39 | **4** |
+| Al scrollear (consistencia) | 233/2585 (9%) | **1/2657 (0,04%)** |
+
+**Experimento 22: ¿se ve distinto EN EL TELÉFONO?** (`vista-ab.mjs`, en el
+temporal; 16 paradas en La flor y El envido).
+
+- **Cómo:** en cada parada, dos dibujos frescos sin la regla y dos con la
+  regla.
+- **Qué cuenta:** sólo lo que cambia de forma estable, es decir, igual en los
+  dos frescos de cada lado.
+- **Resultado:** cambian de 0 a 299 píxeles por pantalla (hasta 208/255).
+  Mirados a 3×, no se ve ninguna diferencia: es el suavizado de los bordes de
+  las cartas, que en su capa se alinean a píxel entero.
+
+### El arreglo aplicado (tercera tanda)
+
+- **`app/globals.css`:** `[data-leccion] .carta { will-change: transform; }`,
+  con la tabla de números y lo que no sirvió.
+- **`app/aprender/[leccion]/page.tsx`:** vuelve el gancho `data-leccion`.
+- **`herramientas/mirar-aprender.mjs`:**
+  - `ARREGLO` exige `will-change: transform` en CADA carta de cada lección
+    que tenga cartas (no en el selector, que sin el gancho no encontraría
+    nada y pasaría);
+  - "Puntos y partida" no tiene cartas.
+- **`herramientas/medir-celular.mjs`:** ramas `FIGC`, `CARTAC` y `SCARTAC`
+  (la de antes, para comparar contra el APK).
+
+**Prueba de que no rompe nada:**
+
+- **`mirar-aprender --comparar`:**
+  - portada, Jugar, la mesa (reparto con semilla fija), la Gira, el Anotador,
+    la lista de Aprender y los dos legales tienen **0 cambios, ruido 0**;
+  - en cada lección cambia sólo `will-change`, tantas veces como cartas tiene
+    (10, 7, 22, 2, 27, 22, 5, y 0 en Puntos y partida).
+- **`--css`:** una regla nueva, `[data-leccion] .carta{will-change:transform}`,
+  y ninguna se fue.
+- **Sabotaje:** `--volcar` sobre el build de antes da FALLA en las 7 lecciones
+  con cartas.
+- **Los guardianes de siempre, TODO OK:** `mirar-mesa`, `mirar-mesa-nueva`,
+  `mirar-web`, `mirar-app-compilada` y `mirar-carga`.
+- `npm test` 363/363 y `tsc` limpio. `next-env.d.ts` volvió como estaba.
+- **`npm run build` y el APK** dejan la regla en el CSS, y `data-leccion` sólo
+  en los 8 HTML de las lecciones.
+- **El APK con el arreglo quedó instalado** (`celular-usb.mjs --apk`,
+  `install -r`).
+
+**Experimento 23: el APK instalado contra la rama que le saca las capas**
+(`SCARTAC`), en 12 arranques en frío con sonda, caminos y scroll. La rama
+aplicó: `getComputedStyle` desde el teléfono.
+
+| | Sin las capas (como estaba) | **El APK con cada carta en su capa** |
+|---|---|---|
+| Sonda: alguna basura | 54/102 (53%) | **1/107 (1%)** |
+| Sonda: rota en pantalla | 41 | **0** |
+| Al scrollear (consistencia) | 299/2701 (11%) | **0/3114** |
+
+**Revisión de seguridad de la tercera tanda** (`security-review` sobre el
+gancho, la regla y `barrido-aprender.mjs`): **sin hallazgos de 8/10 o más.**
+
+- `data-leccion` sale de la lista fija de lecciones, y React escapa los
+  atributos.
+- La regla CSS no trae `url()`, `@import` ni pedidos.
+- La CSP, la config, Capacitor y `android/` están intactos.
+- A `adb shell` sólo le llegan constantes.
+- El cerrojo va antes de cada deslizamiento y falla cerrado.
+
+Dos detalles se cerraron igual:
+
+- las variantes se validan con `Object.hasOwn`;
+- el cerrojo de `--liviano` lee el PID de la última línea, aunque falte la
+  otra.
+
+`09-web-security`: limpio. `17-mobile-security`: no hace falta, porque no se
+tocó nada nativo.
+
+### Estado al cerrar la tercera tanda
+
+- **Arreglo aplicado y verificado en el APK:** cada carta de la lección en su
+  propia capa.
+- **No es cero en todos los instrumentos:** el barrido con estrés todavía
+  marcó 8 de 48 paradas (17%) con alguna basura, contra 33 de 48 como estaba.
+  Pero en el uso más parecido al de Santiago (arranques en frío, caminos,
+  scroll) quedó en 1 de 107 sondas y 0 de 3114 pares al scrollear.
+- **Pendiente:**
+  1. Que Santiago lo use y diga si los sigue viendo.
+  2. Si quedan, la próxima candidata es `FIGC` + `CARTAC` (también las
+     figuras y el ejercicio en su capa), midiéndola con el barrido y MIRANDO
+     las imágenes.
+
+**Archivos tocados, sin commitear:**
+
+- **App:** `app/aprender/[leccion]/page.tsx` (el gancho) y `app/globals.css`
+  (la regla).
+- **Herramientas nuevas:** `herramientas/jugar-aprender.mjs`,
+  `herramientas/mirar-aprender.mjs`, `herramientas/consistencia.mjs` y
+  `herramientas/barrido-aprender.mjs`.
+- **Herramientas con agregados:** `herramientas/medir-celular.mjs` y
+  `herramientas/arranques-en-frio.mjs`.
+- `Historial.md`.
+
+### Resumen de la primera tanda (QUEDÓ INVALIDADO, ver la corrección de arriba)
+
+**El arreglo** (`app/globals.css`, atado a las lecciones con un gancho nuevo,
+`data-leccion`, que pone `app/aprender/[leccion]/page.tsx`):
+
+```css
+[data-leccion] article.prosa { opacity: 0.999; }
+```
+
+Pone el artículo de la lección en su propio búfer.
+
+| Arranques en frío, 8 vueltas de 2 min por rama | Bloques nuevos / cuadros | c/100 |
+|---|---|---|
+| Como estaba | 49 / 12116 | 0,40 |
+| Cada hijo del artículo en su búfer (`LG`) | 24 / 12061 | 0,20 |
+| **El artículo entero en su búfer (`LA`, lo aplicado)** | **6 / 11805** | **0,05** |
+
+**Unas 8 veces menos, no cero.** Igual que todos los arreglos de esta familia,
+baja la basura y no la apaga.
+
+**Lo que se aprendió:**
+
+- **La basura de Aprender sale sobre todo RECIÉN ABIERTA LA APP**: ~4 veces más
+  que con la app caliente. Lo sospechó Santiago.
+- **Cae en cualquier parte del contenido**: párrafos, figuras con cartas, el
+  ejercicio.
+- **Queda PEGADA en su mosaico mientras se scrollea.**
+- **Lo que curó otras pantallas acá no sirve, o empeora:**
+  - la opacidad por carta del menú da el doble;
+  - sacar el recorte del papel da una ráfaga peor.
+
+**No se rompió nada afuera de las lecciones. Medido, no prometido:**
+
+- **`mirar-aprender.mjs --comparar`**: los estilos calculados de TODOS los
+  elementos de la portada, Jugar, la mesa, la Gira, el Anotador, la lista de
+  Aprender y los legales son idénticos antes y después.
+  - Ruido 0, con la semilla del azar fija.
+  - En cada lección cambia UN elemento y UNA propiedad: la `opacity` del
+    artículo.
+- **`--css`**: una sola regla nueva en el CSS compilado, atada a
+  `[data-leccion]`; ninguna vieja se fue.
+- **Los guardianes de siempre dan TODO OK**, y `npm test` da 363/363.
+- **A la vista no cambia**: capturas DEL TELÉFONO con la página quieta, con y
+  sin el arreglo, difieren a lo sumo 4/255.
+
+**En el teléfono queda instalado el APK con el arreglo** (instalado a las
+15:31 con `install -r`). Se midió muy poco sobre él, y con trampas: ver
+"Sobre el APK instalado".
+
+---
+
+El detalle, en el orden en que pasó:
+
+### Lo que dijo Santiago
+
+- **Hay cuadraditos de píxeles en los ejercicios de Aprender.** Los ve:
+  - sobre las cartas y sobre los botones de respuesta;
+  - al llegar al ejercicio y al tocar una respuesta;
+  - hoy, quietos.
+- No sabe desde cuándo están.
+- Pidió el método de siempre: antecedentes, hipótesis, medir con el cable,
+  arreglar.
+- **"NO TOQUES NADA MÁS que no sea la sección de aprender"**: un arreglo que
+  rompa la mesa es peor que el bug.
+- Las reglas para usar el teléfono:
+  - no salir de la app ni capturar nada que no sea la app;
+  - no dejarlo sin tocar, porque se apaga a los 5 min y él no lo puede volver
+    a prender;
+  - se puede reinstalar;
+  - el progreso de Aprender puede quedar como quede.
+- La tasa de cuadros tiene que alcanzar para cazar parpadeos.
+- Ya con la medición andando, pidió **medir también saliendo y entrando de la
+  app**, para ver si es porque carga mal al principio.
+
+### Lo que se sabía antes de tocar nada
+
+**El teléfono, leído por adb sin tocarlo:**
+
+- la app se instaló hoy a las 12:56, desde el árbol con la música;
+- se apaga a los 5 min;
+- **el WebView es el 156.0.8078.47, actualizado el 24/10.** Todo lo medido
+  hasta el 11/10 fue con el 153.
+
+**Ninguno de los arreglos de antes llega a una lección:**
+
+- ni `.pantalla-fija .carta`, ni `.escena > *`, ni `[data-mano]`;
+- no hay `will-change`, `filter`, `backdrop-filter` ni `text-shadow`.
+
+**Lo que tiene Aprender de distinto es el papel (`PanelPapel`)**, que envuelve
+la lección entera, ejercicio incluido:
+
+- **`shadow-xl shadow-black/40`**: dos sombras CON desenfoque, la única que
+  queda en Aprender. El `clip-path` del mismo panel la recorta entera, así que
+  **no se ve, pero se dibuja**. Es la familia del 8/10.
+- **El último `clip-path` del proyecto**: un polígono cóncavo de 12 puntos.
+
+**Al tocar una respuesta pasan tres cosas:**
+
+1. 3 o 4 botones cambian de color durante 150 ms (`transition-colors`);
+2. aparece la explicación con `anim-pop`, una capa de 140 ms;
+3. todo lo de abajo se corre.
+
+**La muestra va `rotate-90`** en 6 de los 12 ejercicios.
+
+**`PanelPapel` y `.prosa` también los usan las páginas legales.** Un arreglo
+sólo para Aprender necesita un gancho propio.
+
+### Las hipótesis, con lo que predice cada una (fijadas ANTES de medir)
+
+| | Hipótesis | Predice | Rama |
+|---|---|---|---|
+| H1 | La sombra desenfocada (e invisible) del papel enferma los mosaicos del ejercicio | nacen 0,5–1,5 s después de responder, en cartas y botones | `LS0`: `.papel {box-shadow:none}` |
+| H2 | La máscara del `clip-path` cóncavo, más la capa de `anim-pop` adentro | nacen sobre todo al aparecer la explicación | `LK0`: `.papel {clip-path:none}` |
+| H3 | Mosaico viejo de la pantalla anterior (el menú del 10/9) | ya están al llegar, con el color de la pantalla de antes | `LO`: `opacity .999` en cada carta |
+| H4 | El toque dispara; otra cosa multiplica | `LM0` baja poco y `LC1` mucho | `LM0`: sin transiciones · `LC1`: el ejercicio en su capa |
+| H5 | El WebView 156 | — | no se puede volver atrás |
+
+**El criterio**, el de siempre:
+
+- una rama lleva el efecto si da ≤ 1/3 de los bloques nuevos de A en ≥ 3 tramos;
+- no lo lleva si queda dentro de ±30%.
+
+### Las herramientas
+
+**`herramientas/jugar-aprender.mjs` (nuevo): el jugador de Aprender.**
+
+- **Lista BLANCA de toques:**
+  - la puerta "Aprender a jugar";
+  - las lecciones de la lista;
+  - las respuestas;
+  - "Probar de nuevo";
+  - anterior/siguiente si van a otra lección;
+  - la flecha de la barra hacia la lista o la portada.
+- **El cerrojo antes de cada toque y cada deslizamiento.** Pide la actividad, la
+  pantalla prendida **y el foco de la ventana**: lo último agarra la cortina de
+  notificaciones, que `topResumedActivity` deja pasar.
+- **Antes de tocar, vuelve a preguntar qué hay en ese punto.**
+- **Los deslizamientos van por el centro.**
+- **`--latido`** para los ratos sin medir.
+
+**`medir-celular.mjs`, sólo agregados:**
+
+- el scroll de cada cuadro;
+- `ZONAS_APRENDER` en coordenadas del documento;
+- eventos de la lección (`explicacion`, `explicacion-se-va`, `scroll`,
+  `scroll-quieto`);
+- los toques del ejercicio, que salen como `ejercicio>…`;
+- las ramas `L*`;
+- `--pixeles --ruta aprender`:
+  - la grilla de 4 pegada al documento, con la fase sacada del scroll de cada
+    cuadro;
+  - los "nacen" en coordenadas del documento;
+  - el color de cada bloque contra la pantalla de la que se venía;
+  - la tasa de cuadros.
+- **`--liviano`:** el cerrojo y el PID se preguntan sin frenar, y no se mide
+  memoria, hilos ni temperatura. El bucle de la sesión frenaba ~250 ms por
+  segundo en dos llamadas síncronas a adb, más un `top` de más de 1 s cada 15
+  s, y mientras tanto no se confirmaba el cuadro, así que el teléfono no
+  mandaba el siguiente.
+
+**`arranques-en-frio.mjs --aprender`:** lo mismo que antes, pero con el jugador
+de Aprender y `--liviano`.
+
+**Calibración del detector sobre papel.** `bloquesPlanosDe` estaba calibrado
+sólo en la mesa.
+
+- Se lo corrió sobre 144 capturas limpias de la compu: Playwright a 360×800,
+  DPR 2, las 8 lecciones, cada ejercicio sin responder y respondido, en tres
+  scrolls distintos, y en PNG y en JPEG 90.
+- **Resultado: 0 bloques, control 0.** No confunde papel, letras ni cartas con
+  basura.
+
+**Dos tropiezos del jugador, arreglados en el momento:**
+
+1. Se quedó oscilando con deslizamientos de 14 px, que no pasan el umbral del
+   toque y no mueven nada. Ahora el mínimo es 90 px CSS.
+2. "Irse" bajaba hasta "siguiente", y la vuelta siguiente volvía a elegir el
+   ejercicio: se quedó 6 min en La baraja. Ahora hay una marca `saliendo`.
+
+**Dos trampas del análisis, encontradas mirando los bloques ampliados:**
+
+1. **El filo de la espada.** El bloque celeste que se repetía en Jerarquía,
+   rgb(112,153,194), siempre en el mismo lugar del documento, es el filo
+   claro de la hoja (`--color-espada-luz` al 95%) en las cartas GRANDES del
+   cuerpo de la lección.
+   - La calibración sobre las 8 lecciones ENTERAS (271 capturas) encontró dos
+     lugares que engañan al detector, y los dos son ése.
+   - `esFiloDeEspada` los descarta en `--ruta aprender`.
+2. **"Nacen" con la pantalla quieta.** Quieta, la página no manda cuadros:
+   un bloque pegado que seguía ahí después de 2 s sin cuadros contaba como
+   nacido de nuevo.
+   - En Aprender, ahora "nace" quiere decir que no estaba en el cuadro anterior
+     ni en el último segundo.
+   - La clave lleva la lección.
+
+**Un tropiezo propio:** un `pkill -f` cuyo texto estaba en mi propio comando
+se mató a sí mismo. El Historial ya lo avisaba (8/10). Sólo se llevó el guion
+que esperaba para arrancar un experimento.
+
+**Un error mío, corregido antes de usarlo:** la primera calibración en la
+compu no esperaba a que se fuera la pantalla de carga del build de la app, y
+fotografiaba la pantalla de carga. Se rehízo esperando a que desaparezca
+`[data-pantalla-carga]`, como pide el CLAUDE.md.
+
+### La GPU (para H5)
+
+Por CDP (`SystemInfo.getInfo`), con el WebView 156:
+
+- Mali-G52 MC2, driver 49.1;
+- **`skiaBackendType = GaneshVulkan`**, `skia_graphite: disabled_off`.
+
+Es el mismo camino de dibujo de antes. La actualización no cambió el motor.
+
+### Experimento 1: la línea de base (A, la app tal cual)
+
+**En caliente** (`sesion-2026-10-28-16-21`), 9 min con `--dedo`, por La baraja
+y Jerarquía:
+
+| | Cuadros | Sucios | Nacen | c/100 | Dónde |
+|---|---|---|---|---|---|
+| A | 3781 | 9 (0,2%) | 2 | 0,05 | ejercicio 1 · papel 1 |
+
+- **El del ejercicio** es un cuadradito oliva de 4×4 pegado a la esquina de un
+  botón.
+  - Nace a los ~160 ms de aparecer la explicación, o sea al terminar el
+    `anim-pop` (140 ms), ~400 ms después del dedo.
+  - Dura 1–2 cuadros: el botón, que se pone rojo, lo tapa.
+- **El del papel** son dos cuadraditos entre las letras de "trata la
+  lección". Quedan PEGADOS al contenido mientras se scrollea, 8 cuadros
+  seguidos.
+
+**Arranques en frío**: 6 vueltas de 2 min, con `force-stop`, abrir, y el jugador
+entra por la portada.
+
+| Vuelta | Cuadros | Sucios | Nacen |
+|---|---|---|---|
+| A-1 | 1372 | 15 | 4 |
+| A-2 | 1177 | 0 | 0 |
+| A-3 | 1180 | 3 | 3 |
+| A-4 | 1497 | 20 | 2 |
+| A-5 | 897 | 0 | 0 |
+| A-6 | 1223 | 0 | 0 |
+| **Total** | **7346** | **38 (0,5%)** | **9 (0,12 c/100)** |
+
+- **En frío sale ~2 veces más que en caliente**, y todo en los primeros 30 s
+  después de llegar a la lección: 0–10 s n0,1 · 10–30 s n0,2 · 30–90 s 0.
+- **7 de los 9 cayeron en La muestra** (la primera base no pasó por ahí).
+- **Ubicados contra las cajas de las cartas, caen en el HUECO ENTRE DOS CARTAS
+  VECINAS**, por ejemplo x=206 CSS entre una carta que termina en 206 y otra
+  que empieza en 212. Ahí se pisan las sombras duras de las dos. Los colores:
+  marrón oscuro, gris verdoso, rojizo.
+- **La tasa de cuadros alcanza:**
+  - mediana 19–20 ms entre cuadros;
+  - p90 66 ms;
+  - ~29 cuadros por segundo en movimiento (el 11/10 eran ~30).
+
+  Un parpadeo de 200 ms deja 6 o 7 cuadros.
+
+**De ahí sale H6: la sombra dura de las cartas.**
+
+- `--sombra-carta` son 25 capas de `box-shadow` de radio 0, cada una recortada
+  por fuera de la carta (redondeada).
+- En el menú (10/9) las cartas tienen `opacity .999`, y en la mesa la tiene el
+  grupo (`.escena > *`). En las lecciones no hay nada.
+- **Ramas nuevas:**
+  - `LSC0`: las cartas sin sombra, sólo para medir;
+  - `LO`: cada carta en su búfer, la cura del menú.
+
+### Una trampa más del conteo: el mismo bloque, contado cada vez que vuelve
+
+**Lo que pasaba.** Mirando la lista de nacimientos, el MISMO punto del
+documento contaba varias veces: El envido (164, 3476) contó 6, La mano
+(246, 2196) contó 5. La basura queda pegada en su mosaico; al scrollear sale
+de la pantalla y vuelve a entrar igual.
+
+**Cómo se cuenta ahora.** En Aprender, "nace" = un lugar del documento con
+basura que no se había visto **en esta visita** a la lección. Cada llegada
+es una visita nueva, también lección → lista → la misma lección. Es una
+cuenta de LUGARES distintos con basura; si un mosaico se arregla y se vuelve a
+romper en el mismo lugar en la misma visita, cuenta una vez (por lo bajo).
+
+**Y la lección pesa más que la rama.** En un mismo experimento, un tramo en
+El envido dio 29 y otros dieron 0. Desde ahora el informe da también
+**nacen / cuadros por lección y rama**, para comparar adentro de cada
+lección.
+
+### Experimento 2: A, `LS0` (papel sin sombra), `LK0` (papel sin recorte)
+
+`sesion-2026-10-28-16-43`, en caliente, ~28 min, jugador con `--dedo
+--scroll`, cuadrado latino de tramos de 3 min (A LS0 LK0 / LS0 LK0 A / LK0 A
+LS0). 24.726 cuadros, ~32 por segundo en movimiento. Las dos ramas aplicaron
+(`getComputedStyle` de `.papel` desde el teléfono: `box-shadow: none`,
+`clip-path: none`).
+
+| Rama | Tramos (nacen) | Nacen / cuadros | c/100 |
+|---|---|---|---|
+| A | 2 · 4 · 6 | 12 / 8939 | 0,13 |
+| LS0 | 0 · 13 · 1 | 14 / 6820 | 0,21 |
+| LK0 | 0 · 0 · 29 | 29 / 8429 | 0,34 |
+
+**Veredicto, con el criterio fijado antes:**
+
+- **H1 REFUTADA.** Sacarle al papel su sombra desenfocada no baja nada: da
+  igual o más que A.
+- **H2 REFUTADA como causa.** Sin el recorte no baja. En dos tramos da 0, pero
+  en el tercero hay una ráfaga de 29 en El envido, casi todos casi negros (el
+  color de la noche del fondo) sobre el papel.
+  - Lo más probable es que el recorte proteja, como el grupo con opacidad de
+    la mesa (11/10: "una textura grande que envuelve la zona protege").
+  - No se toca.
+- **El ruido es grande:** la basura sale en ráfagas, y por lección. Con tramos
+  de 3 min por varias lecciones, la diferencia entre tramos de la MISMA rama es
+  de 0 a 13.
+
+### Experimento 3: A, `LO` (cada carta en su búfer), `LSC0` (cartas sin sombra)
+
+`sesion-2026-10-28-17-11`, en caliente, ~28 min, `--dedo --scroll
+--lecciones la-muestra,el-envido,la-flor,el-truco`, el mismo cuadrado latino.
+
+| Lección | A | LO | LSC0 |
+|---|---|---|---|
+| El envido | 5 / 1106 (0,45) | — | — |
+| La flor | 2 / 1394 (0,14) | 8 / 1101 (0,73) | 6 / 1364 (0,44) |
+| La muestra | 1 / 6618 (0,02) | 8 / 6243 (0,13) | 4 / 8433 (0,05) |
+| **Total** | **8 / 9118 (0,09)** | **16 / 7344 (0,22)** | **10 / 9797 (0,10)** |
+
+**Veredicto:**
+
+- **H6 REFUTADA:** sin la sombra de las cartas da lo mismo que A.
+- **`LO` no cura: da el DOBLE**, en las dos lecciones donde se puede comparar.
+  - Es lo mismo que pasó en la mesa el 11/10 (PC, ~8 veces peor): lo que curó
+    el menú el 10/9 enferma otra pantalla.
+  - Con esto cae también la cura natural de H3.
+
+**Lo que dicen los lugares.** Se miró qué hay en cada punto con basura (en la
+compu, mismo ancho):
+
+- párrafos de texto;
+- las figuras con cartas (`ManoConMuestra`);
+- el ejercicio (cartas, botones);
+- ninguno adentro de una tabla que scrollee.
+
+**No hay una pieza culpable: cae en cualquier parte del contenido.** Eso
+apunta a la familia de cura del mapa (8/9) y de la mesa (`.escena > *`):
+partir el rasterizado en pasadas, una por cada hijo del dibujo. Ramas nuevas:
+
+- **`LG`**: cada hijo del `article.prosa` con `opacity .999`.
+  - Ojo, en la compu: le cambia la opacidad a los `h3` (que tienen `.85`), así
+    que La flor y El envido se ven distintos en los subtítulos (hasta 110/255).
+  - Si gana, el arreglo final los deja afuera.
+- **`LA`**: el artículo entero en un búfer.
+
+### Experimento 4: arranques en frío, A / `LG` / `LA`
+
+12 vueltas de 2 min (`arranques-en-frio.mjs --aprender --ramas A,LG,LA --scroll
+--lecciones la-muestra,el-envido,la-mano,el-truco`), una rama por vuelta.
+Las dos ramas aplicaron: `getComputedStyle` desde el teléfono da `article.prosa
+> p opacity=0.999` con `LG`, y `article.prosa opacity=0.999` con `LA`.
+
+**En frío, A ensucia ~4 veces más que en caliente**: 0,40 cada 100 cuadros,
+contra 0,09–0,13. Santiago lo había sospechado ("capaz que es porque carga mal
+al principio").
+
+| Rama | Por vuelta (nacen) | Nacen / cuadros | c/100 |
+|---|---|---|---|
+| A | 10 · 8 · 3 · 4 | 25 / 6198 | 0,40 |
+| `LG` | 3 · 2 · 0 · 2 | 7 / 6149 | 0,11 |
+| **`LA`** | **1 · 0 · 0 · 1** | **2 / 5555** | **0,04** |
+
+**Veredicto: `LA` lleva el efecto.** Las 4 vueltas quedan en ≤ 1/3 del
+promedio de A, con unas 10 veces menos en total. `LG` también baja (~3,6
+veces), pero menos, y le cambia la opacidad a los `h3`.
+
+**En la compu, `LA` cambia un poco el suavizado del texto de El envido a 360
+de ancho**: las letras quedan apenas más gruesas.
+
+- Es la única lección donde pasa. En las otras, la diferencia es de 1–7/255 en
+  unos pocos cientos de valores.
+- Probablemente es el texto dentro de un búfer con transparencia: pierde el
+  suavizado de subpíxel de la compu, que en Android no se usa.
+- Por eso la prueba visual buena se hace sobre capturas DEL TELÉFONO (ver
+  abajo).
+
+### Experimento 5: lo mismo en otro orden (LA, A, LG), para confirmar
+
+`arranques-en-frio.mjs --aprender --vueltas 12 --ramas LA,A,LG --scroll
+--lecciones la-muestra,el-envido,la-mano,el-truco,la-flor`.
+
+| Rama | Por vuelta (nacen) | Nacen / cuadros | c/100 |
+|---|---|---|---|
+| **LA** | **2 · 2 · 0 · 0** | **4 / 6250** | **0,06** |
+| A | 4 · 4 · 12 · 4 | 24 / 5918 | 0,41 |
+| LG | 4 · 1 · 7 · 5 | 17 / 5912 | 0,29 |
+
+**Confirmado: `LA` lleva el efecto otra vez**, con otro orden y una lección
+más. Por lección, las dos tandas juntas (A · LG · LA, c/100):
+
+- **La muestra:** 0,34 · 0,16 · 0,04.
+- **La mano:** 0,39 · 0,29 · 0,08.
+- **El envido:** 0,74 · — · 0,00.
+
+### El arreglo aplicado, y por qué ése
+
+**`LA`, y no `LG`:**
+
+- baja el doble que `LG`;
+- es una sola regla;
+- no le toca la opacidad a los `h3`, que con `LG` cambiaba.
+
+**El gancho, `data-leccion={slug}` en `app/aprender/[leccion]/page.tsx`:**
+
+- `PanelPapel` y `.prosa` también los usan los legales, y Santiago pidió no
+  tocar nada fuera de Aprender;
+- no se tocó `PanelPapel`, ni `Carta.tsx`, ni ninguna regla existente.
+
+**El minificador de Tailwind junta la regla nueva con la del menú**
+(`.pantalla-fija .carta,.pantalla-fija .marca,[data-leccion]
+article.prosa{opacity:.999}`), porque tienen la misma declaración. Es
+equivalente; `mirar-aprender --css` compara selector por selector por eso.
+
+### Cómo se probó que no rompe nada (`herramientas/mirar-aprender.mjs`, nuevo)
+
+**`--volcar`** recorre con Playwright, a 360×800 y DPR 2:
+
+- portada, Jugar, la mesa, la Gira, el Anotador, la lista de Aprender, los dos
+  legales y las 8 lecciones;
+- de cada elemento guarda TODOS sus estilos calculados.
+
+Se hicieron dos volcados del build de antes (una copia del `out-app/` de las
+12:56) y uno del de después.
+
+**Dos ruidos que se sacaron antes de creerle:**
+
+1. **Chromium no lista las propiedades en el mismo orden en cada carga.** El
+   hash de la lista tal cual daba "cambió" con estilos idénticos. Ahora se
+   ordenan.
+2. **La mesa reparte al azar.** Ahora `Math.random` va con semilla fija en
+   cada documento.
+
+**Resultado:**
+
+- ruido 0 en todas las pantallas;
+- **0 cambios** en todas las que no son lecciones;
+- en cada lección, 1 elemento y 1 propiedad (`opacity` del artículo).
+
+**`--css`:** una regla nueva (`[data-leccion] article.prosa{opacity:.999}`) y
+ninguna se fue.
+
+**Los sabotajes, los dos dan FALLA:**
+
+- `--volcar` sobre el build de antes: las 8 lecciones "sin el arreglo puesto";
+- `--css` con una regla para `.escena` metida a mano: "no es sólo de las
+  lecciones".
+
+**Los guardianes de siempre, TODO OK:**
+
+- `mirar-mesa`, en sus tamaños;
+- `mirar-mesa-nueva`;
+- `mirar-app-compilada` y `mirar-carga`, sobre el build de la app;
+- `mirar-web`.
+
+`npm test` da 363/363 y `tsc` sale limpio. `next dev` reescribió
+`next-env.d.ts` y se dejó como estaba. `npm run build` deja la regla en el CSS
+y `data-leccion` sólo en los 8 HTML de las lecciones.
+
+### Sobre el APK instalado
+
+**Qué hay en el teléfono.** Se compiló a las 15:07 (`celular-usb.mjs
+--compilar`) y se instaló a las 15:31 con `--instalar` (`install -r`, sin
+borrar nada; MIUI no pidió confirmar).
+
+**Se miró en una sesión de 4 min** (`sesion-2026-10-28-18-31`), la primera
+después de instalar, que es lo peor (todo se compila de cero):
+
+- **La prueba visual en el teléfono** (`captura-ab.mjs`, en el temporal): con
+  la página quieta, una captura con el arreglo y otra sin él, pegadas.
+  - Las dos de La muestra con el scroll en 3995 difieren **a lo sumo 4/255**.
+  - Las que dieron más (hasta 226) son capturas que el jugador movió en el
+    medio: se ve el texto corrido.
+- **El conteo sobre el APK salió 12 bloques nuevos en 2607 cuadros**, pero no
+  sirve para juzgar el arreglo:
+  - **6 nacieron mientras corría la prueba visual**, que le SACA el arreglo un
+    instante en cada captura y obliga a rasterizar todo de nuevo;
+  - **los otros 6 son 3**, al llegar a La flor (arriba de todo, sobre el
+    papel). El primer cuadro de la página nueva quedó atribuido a El envido
+    por el desfase del muestreo (500 ms), y por eso contaron dos veces. Es un
+    defecto del análisis: está en pendientes.
+
+  O sea: **con el arreglo todavía sale alguno al llegar a una lección recién
+  instalada.** Cuadra con "8 veces menos, no cero".
+
+**La medición en frío del APK contra la rama `SLA`** (la lección sin el búfer,
+como el `SC1` de la mesa) quedó armada y no se corrió: Santiago desconectó el
+teléfono.
+
+### Todo lo probado contra los píxeles de Aprender, el 28/10
+
+| Qué | Resultado | Veredicto |
+|---|---|---|
+| H5: el WebView 156 cambió el camino de dibujo | sigue Ganesh sobre Vulkan, Graphite apagado | no cambió el motor |
+| H1, `LS0`: el papel sin su sombra desenfocada (invisible) | 14 / 6820 contra A 12 / 8939 (caliente) | no es |
+| H2, `LK0`: el papel sin su `clip-path` | 0 · 0 · 29 (una ráfaga) | no es; el recorte probablemente protege |
+| H3, `LO`: cada carta en su búfer (la cura del menú) | 16 / 7344 contra A 8 / 9118 | el DOBLE |
+| H6, `LSC0`: las cartas sin sombra | 10 / 9797 contra A 8 / 9118 | no es |
+| `LG`: cada hijo del artículo en su búfer | 24 / 12061 contra A 49 / 12116 (frío) | baja ~2 veces |
+| **`LA`: el artículo entero en su búfer** | **6 / 11805** contra A 49 / 12116 (frío) | **~8 veces menos: aplicado** |
+| `LM0` (sin transiciones) y `LC1` (el ejercicio en su capa) | — | no se llegaron a medir |
+
+### Revisión de seguridad
+
+**`security-review`, sólo sobre lo de esta sesión: sin hallazgos.** Ninguno
+llegó a 8/10. Se miró:
+
+- **la web:** `data-leccion={slug}` sale de la lista fija de lecciones y React
+  escapa los atributos. La regla CSS no trae `url()`, `@import` ni peticiones.
+- **los procesos nuevos:**
+  - el `spawn` de `--liviano` lleva una línea fija (con la constante del
+    paquete);
+  - `jugar-aprender` sólo le pasa a `adb shell input` números
+    (`String(Math.round(…))`), nunca texto de la página;
+  - `arranques-en-frio` pasa `--lecciones` como argumento, sin shell, y el
+    jugador lo valida con `/^[a-z-]+$/`.
+- **los archivos:**
+  - `--solo-tramos` va al nombre de un archivo limpio con `/[^\w-]/g`;
+  - todo se escribe en `capturas/`, que está ignorada;
+  - las notas del jugador van en una sola línea, así que un texto de la página
+    no puede ser otra orden de `control.txt`.
+- **la red:** no hay oyentes nuevos. Los dos clientes usan el puente de
+  siempre, atado a una IP.
+
+Quedó por debajo del umbral (2/10): `tocar()` no limita las coordenadas al
+rectángulo del WebView, como sí hace `deslizar()`. El cerrojo igual verifica
+actividad, pantalla y foco antes de cada toque.
+
+**`09-web-security`: limpio.**
+
+- Las líneas nuevas de la app no tienen `url()`, `@import`, URLs,
+  `innerHTML`, `eval` ni `javascript:`.
+- No hay rutas nuevas en `app/`.
+- `layout.tsx` (la CSP), `next.config.ts`, `capacitor.config.ts` y `android/`
+  están intactos.
+
+**`17-mobile-security`: no se corrió.** No se tocó nada nativo; el APK cambia
+sólo en el CSS y el HTML de las lecciones.
+
+**Barrido de datos sensibles**, con `/usr/bin/grep`, sobre el diff y los dos
+archivos nuevos:
+
+- sin rutas de la máquina, IPs, correos, número de serie del teléfono, claves
+  ni IDs de AdMob;
+- las coincidencias con el usuario de Windows son todas "Santiago", el nombre
+  de pila que el Historial commiteado ya usa 150 veces.
+
+Las sesiones, los videos y las fotos quedan en `capturas/`, que está ignorada.
+Los guiones de un solo uso (`latido.sh`, `rotador.sh`, `experimento*.sh`,
+`captura-ab.mjs`, `exposicion.mjs`, las calibraciones) quedaron en el temporal
+de la sesión.
+
+**Ojo, de antes:** el diff del Historial que sigue sin commitear (la entrada
+del 21/23) menciona el copyright con un usuario de GitHub de `partida.ts`. No es de
+esta sesión. Santiago decide si eso tiene que estar.
+
+### Archivos tocados, sin commitear
+
+- **App:** `app/aprender/[leccion]/page.tsx` (el gancho) y `app/globals.css`
+  (la regla, con su tabla).
+- **Herramientas nuevas:** `herramientas/jugar-aprender.mjs` y
+  `herramientas/mirar-aprender.mjs`.
+- **Herramientas cambiadas** (sólo agregados):
+  - `herramientas/medir-celular.mjs`: `--liviano`, `--ruta aprender`,
+    `--solo-tramos`, las ramas `L*` y `SLA`, y los eventos de Aprender;
+  - `herramientas/arranques-en-frio.mjs`: `--aprender`, y le pasa `--scroll` y
+    `--lecciones` al jugador.
+- `Historial.md`.
+
+### Pendiente, en orden
+
+1. **Medir el APK instalado contra `SLA` en frío:**
+   `arranques-en-frio.mjs --aprender --vueltas 12 --ramas A,SLA --scroll
+   --lecciones la-muestra,el-envido,la-mano,el-truco,la-flor`. Criterio, fijado
+   de antemano: A ≤ 1/3 de `SLA`.
+2. **El resto que queda: `LC1` y `LM0`, sobre el APK.** Los dos siguen
+   midiéndose como ramas.
+3. **El análisis atribuye mal el primer cuadro de una página nueva** (el
+   muestreo de 500 ms todavía tiene la ruta vieja), y cuenta dos veces lo que
+   ya estaba al llegar. La salida es ruta POR CUADRO: se podría sacar del
+   evento `navegado`, que tiene hora exacta.
+4. Lo que ya estaba pendiente de antes: las historias de los personajes, y la
+   OG image y las tablets de la marca.
+
+### Ramas y herramientas, para la próxima
+
+```bash
+node herramientas/medir-celular.mjs --sesion 27 --jpeg 90 --liviano
+node herramientas/jugar-aprender.mjs 27 LOG --dedo --scroll --lecciones la-muestra,el-envido --control CARPETA/control.txt
+node herramientas/arranques-en-frio.mjs --aprender --vueltas 12 --minutos 2 --ramas A,SLA --scroll
+node herramientas/medir-celular.mjs --pixeles CARPETA --cada 1 --ruta aprender [--solo-tramos A-1,LO-1]
+node herramientas/mirar-aprender.mjs --volcar CARPETA [--base URL]   # dos veces el de antes, una el de después
+node herramientas/mirar-aprender.mjs --comparar ANTES ANTES2 DESPUES
+node herramientas/mirar-aprender.mjs --css VIEJO.css NUEVO.css
+```
+
+**Trampas que costaron tiempo:**
+
+- **Contar 28 min del jugador que scrollea son ~25.000 cuadros**, y lleva casi
+  lo mismo que grabarlos. Se cuenta en paralelo con `--solo-tramos`.
+  - Ojo: un tramo que todavía se está grabando sale contado a medias.
+- **Dos veces un `pkill -f`** (o un patrón) que coincidía con mi propio
+  comando. Para matar algo, se busca el PID con un patrón que no aparezca
+  literal en el comando: `LS[C]0` en vez de `LSC0`.
+
+---
+
+## 2026-10-21 y 23 — El juego suena: música por sección, las voces del rival, y la mezcla
+
+### Resumen, para el que llega
+
+**Desde hoy el juego suena.** Hay música de fondo en toda la app, y en la mesa
+**el rival canta con su voz**. Lo que se tocó, en dos días:
+
+- **21/10:** se rehicieron dos voces de mujer que Santiago borró. Se hizo la
+  cata de música (por código contra IA), Santiago la aprobó entera, y entró la
+  música al juego.
+- **23/10:** Santiago pidió **música distinta según lo que se esté haciendo,
+  bien mezclada, bien suave, y las voces en la mesa**. Se rehizo el motor de
+  sonido (`lib/audio.ts`) y se publicaron las 532 voces.
+
+**Las voces entran SIN la revisión una por una que Santiago tiene pendiente**:
+lo pidió así para probar en el teléfono. Para sacar una toma, se borra de
+`audio-fuente/voces/<id>/` y se corre `node herramientas/publicar-voces.mjs`.
+
+### Lo que suena y dónde (`lib/audio.ts`)
+
+| Sección | Rutas | Temas | Nivel |
+|---|---|---|---|
+| menús | `/`, `/jugar`, legales, 404 | los dos tango milonga (aire de café) | 1 |
+| mesa | `/jugar/mesa` | las dos milongas + la hecha por código | **0,75** |
+| gira | `/jugar/gira` | los dos candombes | 1 |
+| aprender | `/aprender/*` | por código, una milonga, un tango | **0,7** |
+| anotador | `/anotador` | **nada**: se usa jugando con gente de verdad | — |
+
+**Las transiciones:**
+
+- **Al cambiar de sección**, el tema se cruza con uno de la sección nueva en
+  `CAMBIO` = 2,5 s.
+- **Dentro de una sección**, los temas se encadenan al azar (sin repetir el
+  último) con un cruce de `CRUCE` = 5 s.
+- **Al arrancar, y al volver de un silencio**, hay un fundido de entrada de
+  `ENTRADA` = 3 s.
+- **Al anotador**, se apaga en 2,5 s; si volvés antes, vuelve a subir.
+
+Todos los cruces son de **igual potencia** (seno y coseno), así que a mitad de
+camino no hay pozo. En línea recta se perdían 3 dB.
+
+**La mezcla** (Santiago: "la idea es que se escuchen los cantos, no la música"):
+
+1. **Los temas, parejos:** todos a **-23 LUFS** (`publicar-musica.mjs`, en
+   modo lineal). Antes iban de -14,8 a -16,7: "algunas arrancan muy fuerte".
+2. **La barra de Música arranca en 30** (antes 60), y es lineal en amplitud:
+   ~10 dB menos.
+3. **En la mesa y en Aprender**, el nivel de la sección la baja un poco más.
+4. **Mientras habla un rival, la música se agacha a 0,35** (unos 9 dB menos):
+   baja en ~40 ms y vuelve despacio (~350 ms) cuando termina.
+
+En la mesa, en reposo, la música queda unos 16 dB debajo de las voces.
+
+**Cuándo se calla:**
+
+- **Todo:** con la pantalla oculta (`visibilitychange`, y además
+  `pause`/`resume` de Capacitor) o con **un anuncio delante**
+  (`gestor.anuncioEnPantalla()`, nuevo).
+- **Sólo la música:** con su barra en 0, para no gastar batería, o en el
+  anotador.
+
+### Las voces en la mesa
+
+- **El motor marca cada canto con su voz:** `Evento.voz?: ClaveVoz`, con
+  `CLAVES_VOZ`, las 14, en `lib/motor/partida.ts`. Es un campo opcional: no
+  cambia ninguna regla. Los números del tanto y lo del sistema no llevan.
+- **La mesa** (`app/jugar/mesa/page.tsx`) reproduce los eventos nuevos con
+  `quien === "rival"`. Los tuyos no suenan, como se decidió el 19/10. Cuenta lo
+  ya oído y se reinicia cuando los eventos vuelven a cero en cada mano.
+- **`cantar()` elige al azar entre las tomas** del canto. Si el bot dice varias
+  cosas seguidas ("¡Quiero!" y "Son buenas"), van en fila con 0,12 s entre
+  una y otra. Se guardan como mucho 3 y los viejos se descartan.
+- **Hay una marca "ocupado" que se pone ANTES de esperar la carga.** Sin ella,
+  dos cantos seguidos con el primero todavía cargando sonaban encimados.
+- **Las voces del rival se precargan** al sentarse a la mesa: 28 archivos.
+
+### Las voces publicadas (`herramientas/publicar-voces.mjs` → `public/audio/voces/`, `lib/voces.ts`)
+
+- **532 archivos de los 19 rivales**, ~5,1 MB: las tomas buenas que siguen en
+  `audio-fuente/voces/`.
+- **Dos cantos van con su dudosa**, porque no tenían ninguna toma buena:
+  - Don Aparicio, "¡Falta envido!" (Whisper oyó "Falta envío");
+  - La China, "¡Con flor envido!" ("Con flor en vidio").
+
+  Quedan listadas en el encabezado de `lib/voces.ts`.
+- Se copian sin volver a codificar (`-c copy`) y sin metadatos (`+bitexact`).
+- La carpeta se rehace entera cada vez, igual que `public/escenas/`.
+
+### Las voces rehechas (21/10)
+
+**Santiago borró dos voces de mujer.**
+
+- **La China y La Pocha (primera vuelta).** Eran "muy calmadas, parecía que
+  estaban susurrando". **El error fue de la descripción:** el carácter
+  ("callada", "no se apura") se puso como volumen ("voz baja y suave"). Se
+  rehicieron pidiendo voz que se hace oír en la mesa.
+- **La Pocha (segunda vuelta).** Salió "media robótica y muy aguda": 233 Hz,
+  para una señora de 68. **El error fue pedir "fuerte":** sube el tono a todas
+  las candidatas (233 a 271 Hz). La tercera vez se pidió "grave y firme", y
+  quedó la semilla 2006: 176 Hz.
+
+**Lo que quedó en el generador:**
+
+- **`--candidatas N`** (`generar-voces.mjs`) hace N versiones de una voz y las
+  puntúa:
+  - el tono (F0);
+  - cuánto se mueve el tono en semitonos (una voz que no sube ni baja suena a
+    robot: La Pocha 2006 da 3,8 st, la más plana 2,1);
+  - a qué rival se parece más.
+
+  La página de escucha las muestra en "Otras voces que se probaron", con la
+  que se usa marcada.
+- **El campo `como`** del reparto: cómo dice la frase larga.
+
+**Se midió y NO sirvió** para detectar "suena calmada":
+
+- la fracción sonora del habla (la La China borrada dio 0,83, igual que las
+  que gustaron);
+- el alpha ratio, o sea la inclinación del espectro: -14,7 contra -13,6 de La
+  Porota.
+
+Eso no se puede medir bien: lo decide el oído.
+
+### La música (21/10)
+
+- **La cata:**
+  - una milonga **hecha por código** (`herramientas/musica/sintetizada.mjs`:
+    guitarra con Karplus-Strong, bombo, chasquido y un bandoneón con
+    lengüetas, todo nuestro, determinista);
+  - seis temas de **IA** (`herramientas/musica/con-ia.py`): milonga, candombe
+    y tango milonga, dos semillas cada uno.
+
+  Santiago: "la música está bien". Entraron los siete.
+- **ACE-Step 1.5 (MIT)** vive en `~/herramientas-audio/ace-step`:
+  - versión v0.1.8 y modelo `ACE-Step/Ace-Step1.5` fijado en el commit
+    `19671f4`, con el planificador de 1,7B y el backend `pt`;
+  - 6 temas de 60 s en ~6 minutos.
+- **Su riesgo:** carga con `trust_remote_code=True`. **Mitigado:**
+  - los dos .py del DiT se reemplazaron por los de GitHub v0.1.8 (iguales
+    byte a byte, comprobado);
+  - el planificador y el codificador de texto no traen .py ni `auto_map`;
+  - se corre con `HF_HUB_OFFLINE=1`.
+- **Que no tienen voz** se comprobó con Whisper: sólo inventó frases ("Thank
+  you", "Suscribite al canal"). Y con la milonga por código, que seguro no
+  tiene voz, inventa lo mismo.
+- **`herramientas/publicar-musica.mjs`** pasa las fuentes de
+  `audio-fuente/musica/cata/` a `public/audio/musica/*.m4a` (AAC de 80 kbps,
+  estéreo, `faststart`) y escribe `lib/musica.ts`. Son ~4 MB. Correrlo de
+  nuevo da los mismos archivos byte a byte.
+
+### Otros cambios
+
+- **`lib/sonido.ts`:** la barra de Música arranca en 30. Al guardar, despacha
+  `EVENTO_SONIDO` con los ajustes ya saneados adentro, para que el cambio valga
+  aunque no se pueda guardar (modo privado). `sonidoDelAviso()` los vuelve a
+  sanear.
+- **`lib/anuncios.ts`:** `anuncioEnPantalla()`.
+- **`lib/entradas-unicas.test.ts`:** excepción para `lib/audio.ts`. Sólo
+  reconoce rutas para elegir la música; no entra a nada.
+- **`components/MenuAjustes.tsx`:** el texto dice que suena la música (y ahora
+  también las voces).
+- **`public/_headers`:** `/audio/*` en caché una semana, sin `immutable`.
+- **Un ayudante para Playwright**, `window.__trucoMusica`, sólo en `next dev`
+  (`NODE_ENV !== "production"`). Se comprobó que no está ni en `out/` ni en
+  `out-app/`.
+
+### Cómo se probó
+
+- **`npm test` 354/354**, con 15 tests nuevos entre los dos días (de 339 a
+  354), y `tsc` limpio.
+  - Uno juega **400 partidas al azar** y verifica que cada canto lleve su voz
+    y su texto, que ningún número lleve voz y que salgan las 14.
+  - **Saboteados diez veces**, y los diez los agarró un test: el aviso que no
+    sale, el aviso sin sanear, el barajado que repite, el cruce en línea recta,
+    el anuncio que nunca está, el mazo con la voz del quiero, un número con
+    voz, la flor sin voz, el anotador con música y la mesa fuerte.
+- **Playwright sobre `next dev`, con el ayudante:**
+  - portada → Aprender cruza;
+  - en el anotador se apaga y queda en silencio;
+  - atrás, vuelve a entrar de a poco;
+  - en la gira suena candombe y cruza al otro;
+  - con la pantalla oculta se suspende todo;
+  - con la barra en 0 se para, y en 60 vuelve.
+  - **Contra La Porota:** se precargan sus 28 voces, canta envido, suena
+    `la-coca/envido-1.m4a`, la música baja a 0,35 y después vuelve a 1.
+- **La app compilada** (`build:app` + `servir:app`, espiando el
+  `AudioContext` desde afuera):
+  - la portada con tango, la mesa (con barra final) con milonga;
+  - las voces de La Porota precargadas, y su voz suena;
+  - **sin violaciones de la CSP**.
+
+  `mirar-app-compilada` y `mirar-carga` dan TODO OK.
+- **`mirar-web`: TODO OK.**
+- **Peso:** el audio son 9,1 MB (música 4 y voces 5,1). Si se quedara una
+  sola toma por canto, las voces bajarían a 2,6 MB.
+- **`next-env.d.ts` se devolvió al del último commit** (`git show
+  HEAD:next-env.d.ts`): la copia en el scratchpad se había borrado entre
+  sesiones.
+
+### Seguridad
+
+- **`security-review`** sobre los cambios de cada día: **sin hallazgos**.
+  - Las rutas de audio son literales y generadas, como `lib/escenas.ts`.
+  - El rival se valida con `Object.hasOwn(VOCES, …)`.
+  - `?rival=` pasa por `buscarPersonalidad`, que cae en Luquita si no conoce
+    el id.
+  - Lo que sale de `localStorage` se sanea.
+  - No hay sumideros de HTML ni `eval`.
+- **`09-web-security`:** el build de la web no trae el ayudante ni AdMob, y la
+  CSP queda igual (el audio cae en `default-src 'self'`). Sin hallazgos.
+- **`17-mobile-security`:** no se tocó nada nativo (manifest, Capacitor,
+  permisos, origen). `@capacitor/app` ya estaba declarado. Los permisos del
+  APK compilado están más abajo, en "Estado al cerrar".
+- **Fugas** (`/usr/bin/grep`, también sobre lo ignorado):
+  - los archivos nuevos están limpios;
+  - los 539 `.m4a` no llevan etiqueta de codificador ni metadatos;
+  - el "Copyright … fodo24yt-maker" de `partida.ts` ya estaba en el commit y
+    en el `LICENSE`.
+
+### Estado al cerrar
+
+- **El APK de depuración quedó compilado acá** (`celular-usb.mjs --compilar`,
+  21 MB). Lleva los 539 audios (532 voces y 7 temas, 9,1 MB comprimidos).
+  - El de antes pesaba 14,7 MB: el de Play va a crecer más o menos lo mismo,
+    de ~6,8 a ~16 MB.
+- **Permisos del APK** (`aapt2 dump permissions`): los de siempre, todos de
+  AdMob y Capacitor (internet, estado de red, el ID de publicidad y los de
+  AdServices). `android/` no cambió respecto del último commit: el sonido no
+  pide ningún permiso.
+- **Sin commitear.** La parte del 21/10 ya la commiteó Santiago; esto es lo del
+  23/10.
+
+### Pendiente
+
+1. **Que Santiago pruebe en el teléfono** (`node herramientas/celular-usb.mjs
+   --apk`) y diga:
+   - si la música está bien de volumen contra los cantos;
+   - si cada sección tiene lo que tiene que tener.
+
+   Todo se ajusta en `AMBIENTES_MUSICALES` y `AGACHADA` (`lib/audio.ts`) y en
+   `SONIDO_POR_DEFECTO` (`lib/sonido.ts`).
+2. **Que escuche las voces una por una** y borre las que no.
+   - Después: `node herramientas/publicar-voces.mjs`.
+   - Atención a las 2 dudosas en uso.
+3. **Decidir si van 1 o 2 tomas por canto** (2,6 MB contra 5,1 MB).
+4. **Los efectos** (repartir, tirar carta…) siguen sin hacerse. La barra de
+   Efectos todavía no mueve nada.
+5. **Guardar las referencias de las 19 voces** fuera de esta PC: sigue
+   pendiente del 19/10.
+
+---
+
 ## 2026-10-19 — El sonido: las voces se generan acá, la cata, y los 19 rivales
 
 > **La sesión tuvo dos partes.** Primero la cata (todo lo de abajo, hasta

@@ -31,8 +31,11 @@ export default async function PaginaLeccion({ params }: Props) {
   const siguiente = LECCIONES[indice + 1];
   const { Contenido } = leccion;
 
+  /* `data-leccion` ata a las lecciones el arreglo de los cuadraditos de
+     píxeles (`app/globals.css`, 28/10/2026): `PanelPapel` y `.prosa` también
+     los usan los legales, y el arreglo es sólo de Aprender. */
   return (
-    <div className="mx-auto max-w-3xl px-3 py-[clamp(0.75rem,3vh,3rem)] sm:px-4">
+    <div data-leccion={slug} className="mx-auto max-w-3xl px-3 py-[clamp(0.75rem,3vh,3rem)] sm:px-4">
       {/* El "volver" lo pone la barra de la app. Lo que sí se queda es el
           contador: no es navegación, es saber cuánto falta. */}
       <div className="mb-5 flex items-center justify-end font-[family-name:var(--font-ui)] text-sm">

@@ -11,17 +11,19 @@
  */
 
 export interface Tema {
+  /** El nombre con el que lo agrupa `AMBIENTES_MUSICALES` en `lib/audio.ts`. */
+  clave: string;
   archivo: string;
   /** Lo que dura, para saber cuándo cruzar al siguiente sin esperar a que cargue. */
   segundos: number;
 }
 
 export const TEMAS: readonly Tema[] = [
-  { archivo: "/audio/musica/por-codigo.m4a", segundos: 36.9 },
-  { archivo: "/audio/musica/milonga-1910.m4a", segundos: 60 },
-  { archivo: "/audio/musica/milonga-2110.m4a", segundos: 60 },
-  { archivo: "/audio/musica/candombe-1910.m4a", segundos: 60 },
-  { archivo: "/audio/musica/candombe-2110.m4a", segundos: 60 },
-  { archivo: "/audio/musica/tango-1910.m4a", segundos: 60 },
-  { archivo: "/audio/musica/tango-2110.m4a", segundos: 60 },
+  { clave: "por-codigo", archivo: "/audio/musica/por-codigo.m4a", segundos: 36.9 },
+  { clave: "milonga-1910", archivo: "/audio/musica/milonga-1910.m4a", segundos: 60 },
+  { clave: "milonga-2110", archivo: "/audio/musica/milonga-2110.m4a", segundos: 60 },
+  { clave: "candombe-1910", archivo: "/audio/musica/candombe-1910.m4a", segundos: 60 },
+  { clave: "candombe-2110", archivo: "/audio/musica/candombe-2110.m4a", segundos: 60 },
+  { clave: "tango-1910", archivo: "/audio/musica/tango-1910.m4a", segundos: 60 },
+  { clave: "tango-2110", archivo: "/audio/musica/tango-2110.m4a", segundos: 60 },
 ];

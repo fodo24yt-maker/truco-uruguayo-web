@@ -7,6 +7,9 @@ import assert from "node:assert/strict";
 
 import {
   type Baza,
+  CLAVES_VOZ,
+  type ClaveVoz,
+  type Evento,
   type Jugador,
   type Partida,
   type ResultadoBaza,
@@ -467,4 +470,53 @@ test("en la segunda baza el mazo sin cantos vale 1, sea mano o pie el que se va"
   }
   // Que el caso que importa —el MANO yéndose en la segunda— se haya probado
   assert.ok(seFue.mano > 0 && seFue.pie > 0, JSON.stringify(seFue));
+});
+
+// ── La voz de cada canto (23/10/2026) ─────────────────────────────────────
+
+/** Lo que tiene que decir el texto para cada voz: si no cuadran, sonaría otra cosa. */
+const TEXTO_DE_VOZ: Record<ClaveVoz, RegExp> = {
+  envido: /^¡Envido!$/,
+  "real-envido": /^¡Real envido!$/,
+  "falta-envido": /^¡Falta envido! \(\d+\)$/,
+  truco: /^¡truco!$/,
+  retruco: /^¡retruco!$/,
+  "vale-cuatro": /^¡vale cuatro!$/,
+  flor: /^¡Flor!$/,
+  "con-flor-envido": /^¡Con flor envido!$/,
+  "contraflor-al-resto": /^¡Contraflor al resto!$/,
+  quiero: /^¡Quiero!$/,
+  "no-quiero": /^No quiero$/,
+  "con-flor-me-achico": /^Con flor me achico$/,
+  mazo: /^Me voy al mazo$/,
+  "son-buenas": /^Son buenas$/,
+};
+
+test("cada canto sale con su voz, y los números y lo del sistema sin ninguna (400 partidas al azar)", () => {
+  const oidas = new Set<ClaveVoz>();
+  for (let semilla = 1; semilla <= 400; semilla++) {
+    const azar = azarFijo(semilla);
+    let p = nuevaPartida(azar);
+    for (let paso = 0; paso < 4000 && p.fase !== "partida-terminada"; paso++) {
+      if (p.fase === "mano-terminada") {
+        p = siguienteMano(p, azar);
+        continue;
+      }
+      const opciones = accionesPosibles(p, p.turno);
+      const antes = p.eventos.length;
+      p = aplicar(p, opciones[Math.floor(azar() * opciones.length)], p.turno);
+      for (const e of p.eventos.slice(antes) as Evento[]) {
+        if (e.quien === "sistema" || /^\d+$/.test(e.texto) || /^Flor: \d+$/.test(e.texto)) {
+          assert.equal(e.voz, undefined, `"${e.texto}" no tendría que tener voz`);
+          continue;
+        }
+        assert.ok(e.voz, `"${e.texto}" salió sin voz`);
+        assert.ok((CLAVES_VOZ as readonly string[]).includes(e.voz), `voz desconocida: ${e.voz}`);
+        assert.match(e.texto, TEXTO_DE_VOZ[e.voz], `la voz "${e.voz}" no corresponde a "${e.texto}"`);
+        oidas.add(e.voz);
+      }
+    }
+  }
+  // Que la prueba haya pasado por los catorce: si no, alguno quedó sin probar.
+  assert.deepEqual([...oidas].sort(), [...CLAVES_VOZ].sort());
 });

@@ -650,6 +650,43 @@ footer {
    Santiago lo vea roto en el teléfono. Si algún día se mide y resulta inerte
    acá, se saca: una regla que no hace nada es deuda. */
 
+/* ── LAS LECCIONES DE APRENDER: CADA CARTA EN SU PROPIA CAPA (28/10/2026) ──
+   Santiago veía cuadraditos en toda la lección, "scrolleando, al entrar y
+   recién abierta la app". Medido en el Redmi con el jugador de Aprender, y
+   con tres instrumentos que ven basura de CUALQUIER forma (no sólo los 4×4):
+   lo que queda en pantalla después de cada scroll, intercalando variantes
+   (`herramientas/barrido-aprender.mjs`); la sonda con la página quieta
+   (`jugar-aprender.mjs --sonda`); y los cuadros seguidos al scrollear
+   (`herramientas/consistencia.mjs`).
+
+                                          como estaba   cada carta en su capa
+     barrido, paradas con basura             33/48            8/48
+     arranques en frío, sonda               50/91           17/101
+     arranques en frío, al scrollear       233/2585          1/2657
+
+   Baja mucho, no a cero. Lo que se probó y NO sirvió está en `Historial.md`:
+   el artículo, el papel o la página entera en un búfer (la basura se vuelve
+   pegajosa y a veces horrible: filas de bloques negros sobre el texto),
+   cada hijo del artículo en su búfer, las cartas sin sombra o con una sola,
+   el papel sin degradados o sin recorte.
+
+   Por qué, lo más probable: las cartas (SVG con sombras de 25 capas) son lo
+   más caro de rasterizar, y rasterizadas en los mismos mosaicos que el texto
+   y el papel, al rehacer esos mosaicos la GPU de este teléfono deja basura.
+   En su capa, cada carta se dibuja aparte en una textura chica.
+
+   A la vista no cambia: en el teléfono, con y sin esto, sólo difiere el
+   suavizado de los bordes de las cartas (cada capa se alinea a píxel entero).
+
+   Atado a `[data-leccion]` (lo pone `app/aprender/[leccion]/page.tsx`) y a
+   nada más. `herramientas/mirar-aprender.mjs` falla si se pierde y comprueba
+   que ninguna otra pantalla cambie. OJO, NO GENERALIZAR: en el mapa de la
+   gira `will-change` empeoró (8/9) y en la mesa una capa por carta no mejoró
+   (11/10). Cada pantalla se mide en esa pantalla. */
+[data-leccion] .carta {
+  will-change: transform;
+}
+
 /* Cada departamento del mapa de la gira. Al pasar por encima se aclara apenas:
    alcanza para saber cuál vas a tocar, sin que el mapa parpadee.
 

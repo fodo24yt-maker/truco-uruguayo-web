@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { Candado } from "@/components/Candado";
 import { EntradaAnotador, useCandados } from "@/components/EntradaJuego";
 import { gestor } from "@/lib/anuncios";
+import { tocarEfecto } from "@/lib/audio";
 import { RUTA_ANOTADOR, portero } from "@/lib/entrada";
 import { seccionDe, type Seccion } from "@/lib/navegacion";
 import {
@@ -129,6 +130,8 @@ export function MenuAjustes() {
   const ruta = usePathname() ?? "/";
   const seccion = seccionDe(ruta);
   const cerrar = useRef<HTMLButtonElement>(null);
+  /** Cuándo sonó la última muestra de la barra de Efectos. */
+  const muestra = useRef(0);
   const [sonido, setSonido] = useState<Sonido>(SONIDO_POR_DEFECTO);
   const candados = useCandados();
   /* "Privacidad de los anuncios" existe sólo si Google lo exige: en Europa y
@@ -234,6 +237,7 @@ export function MenuAjustes() {
               ref={cerrar}
               type="button"
               onClick={() => setAbierto(false)}
+              data-sonido="volver"
               aria-label="Cerrar ajustes"
               className="rounded px-2 py-1.5 text-crema/80 transition-colors hover:bg-black/30 hover:text-crema"
             >
@@ -308,15 +312,14 @@ export function MenuAjustes() {
               {/* ── EL SONIDO ──────────────────────────────────────────────
                   Hasta el 10/9/2026 acá había un botón apagado que decía
                   "Próximamente". Desde entonces las barras andan y lo que
-                  mueven se guarda, y desde el 21/10/2026 SUENA LA MÚSICA
-                  (`lib/audio.ts`): mover la barra de Música o la general la
-                  cambia en el momento. Las voces y los efectos todavía no
-                  están en el juego: las voces están hechas, pero Santiago las
-                  está escuchando una por una antes de que entren.
+                  mueven se guarda. Desde el 21/10/2026 SUENA LA MÚSICA, desde
+                  el 23/10 LAS VOCES DE LOS RIVALES y desde el 25/10 LOS TOQUES
+                  DE LOS BOTONES (`lib/audio.ts`): mover una barra las cambia en
+                  el momento. Los efectos de la mesa —las cartas— todavía no.
 
                   Y POR ESO SE DICE EN PANTALLA QUÉ SUENA Y QUÉ NO. Sin esa
-                  línea, mover la barra de Voces y no escuchar nada no se lee
-                  como "todavía no están": se lee como que está roto. */}
+                  línea, jugar una partida y no oír las cartas no se lee como
+                  "todavía no están": se lee como que está roto. */}
               <section aria-labelledby="titulo-sonido" className="mt-5 border-t-2 border-crema/10 pt-4">
                 <h3
                   id="titulo-sonido"
@@ -325,8 +328,8 @@ export function MenuAjustes() {
                   Sonido
                 </h3>
                 <p className="mt-0.5 text-sm leading-snug text-crema/55">
-                  Por ahora suena la música; las voces y los efectos vienen después.
-                  Lo que elijas acá queda guardado.
+                  Suenan la música, las voces de los rivales y los botones; las
+                  cartas vienen después. Lo que elijas acá queda guardado.
                 </p>
 
                 {/* El interruptor general existe ADEMÁS del maestro porque bajar
@@ -398,9 +401,15 @@ export function MenuAjustes() {
                         max={100}
                         step={PASO}
                         value={sonido[barra]}
-                        onChange={(e) =>
-                          setSonido(guardarVolumen(barra, e.currentTarget.valueAsNumber))
-                        }
+                        onChange={(e) => {
+                          setSonido(guardarVolumen(barra, e.currentTarget.valueAsNumber));
+                          // La de Efectos se escucha mientras se mueve: un toque con el
+                          // volumen nuevo, uno por paso y no más de uno cada 90 ms.
+                          if (barra === "efectos" && performance.now() - muestra.current > 90) {
+                            muestra.current = performance.now();
+                            tocarEfecto("toque");
+                          }
+                        }}
                         className="h-9 w-full cursor-pointer accent-dorado"
                       />
                     </div>

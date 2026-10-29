@@ -141,6 +141,7 @@ function Contenido({ dialogo }: { dialogo: Dialogo }) {
             <button
               type="button"
               onClick={() => portero.cerrarDialogo()}
+              data-sonido="volver"
               className="rounded px-5 py-2.5 font-[family-name:var(--font-ui)] text-sm uppercase tracking-wide text-crema/60 transition-colors hover:bg-black/25 hover:text-crema"
             >
               Ahora no
