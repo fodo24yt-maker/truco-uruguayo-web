@@ -523,6 +523,14 @@ async function irse(e) {
 // ── El bucle ─────────────────────────────────────────────────────────────
 
 await conectar();
+/* El tutorial de la mesa (29/10/2026) sale la primera vez que se entra a
+   Jugar y es una hoja encima de todo: el jugador se trabaría. Se da por visto
+   y, si ya estaba abierto, se cierra con Escape, que es lo que hace el atrás
+   de Android. */
+await evaluar(`(() => {
+  try { localStorage.setItem("truco-uy:tutorial-mesa", JSON.stringify({ version: 1, visto: true })); } catch {}
+  if (document.querySelector("[data-tutorial]")) window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+})()`);
 const fin = Date.now() + minutos * 60000;
 let sinNada = 0;
 log(`jugador de Aprender: ${minutos} min${DEDO ? " · dedo" : ""}${RAPIDO ? " · rápido" : ""}`);

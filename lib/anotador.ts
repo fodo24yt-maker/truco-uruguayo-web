@@ -23,10 +23,22 @@
  *
  * Cada mitad son **tres grupos de cinco**, y cada grupo es el cuadradito de
  * toda la vida: arriba, derecha, abajo, izquierda y la diagonal.
+ *
+ * ── A 30 o a 40, desde el 1/11/2026 ───────────────────────────────────────
+ *
+ * Hay mesas que juegan a 40, y se elige tocando el número de arriba. A 40 son
+ * 20 malas y 20 buenas, o sea cuatro grupos por mitad: la raya sigue en la
+ * mitad justa. Por eso todo lo que depende de a cuánto se juega recibe la
+ * `meta`, y la de fábrica es 30: llamado sin ella, da lo mismo que antes.
  */
 
-/** A cuánto se juega. Es el truco uruguayo: 30, no 40. */
-export const META = 30;
+/** A cuánto se puede jugar. */
+export type Meta = 30 | 40;
+
+export const METAS: readonly Meta[] = [30, 40];
+
+/** A cuánto se juega si no se eligió otra cosa. Es el truco uruguayo: 30. */
+export const META: Meta = 30;
 
 /** Dónde se corta entre malas y buenas. La mitad justa. */
 export const MITAD = META / 2;
@@ -36,6 +48,28 @@ export const POR_GRUPO = 5;
 
 /** Cuántos grupos tiene cada mitad. Con 15 y grupos de 5, son tres. */
 export const GRUPOS_POR_MITAD = MITAD / POR_GRUPO;
+
+/** La mitad de una partida a `meta`: 15 a 30, 20 a 40. */
+export const mitadDe = (meta: Meta): number => meta / 2;
+
+/** Cuántos grupos tiene cada mitad: tres a 30, cuatro a 40. */
+export const gruposPorMitad = (meta: Meta): number => mitadDe(meta) / POR_GRUPO;
+
+/** Los grupos de la mitad más larga que existe: lo que tiene que entrar en el dibujo. */
+export const MAX_GRUPOS_POR_MITAD = Math.max(...METAS.map(gruposPorMitad));
+
+/** La otra: el número de arriba va y viene entre las dos. */
+export const otraMeta = (meta: Meta): Meta => (meta === 30 ? 40 : 30);
+
+/**
+ * Si se puede pasar a jugar a `nueva` con la cuenta como está.
+ *
+ * Bajar de 40 a 30 con alguien en 31 obligaría a recortarle los puntos que ya
+ * anotó, y eso no lo deshace nadie: mientras algún lado esté arriba de la
+ * nueva meta, no se cambia.
+ */
+export const puedeCambiarA = (cuenta: Cuenta, nueva: Meta): boolean =>
+  cuenta.nosotros <= nueva && cuenta.ellos <= nueva;
 
 export type Lado = "nosotros" | "ellos";
 
@@ -58,8 +92,8 @@ export const CUENTA_VACIA: Cuenta = { nosotros: 0, ellos: 0 };
  * allá el número es un resultado y acá es un dibujo, y el dibujo tiene 30
  * lugares.
  */
-export function sumar(cuenta: Cuenta, lado: Lado, cuánto: number): Cuenta {
-  const nuevo = Math.min(META, Math.max(0, cuenta[lado] + cuánto));
+export function sumar(cuenta: Cuenta, lado: Lado, cuánto: number, meta: Meta = META): Cuenta {
+  const nuevo = Math.min(meta, Math.max(0, cuenta[lado] + cuánto));
   return { ...cuenta, [lado]: nuevo };
 }
 
@@ -74,12 +108,13 @@ export function palitosDelGrupo(puntos: number, indice: number): number {
   return Math.max(0, Math.min(POR_GRUPO, puntos - indice * POR_GRUPO));
 }
 
-/** Los puntos que van en las malas: los primeros 15. */
-export const malasDe = (puntos: number): number => Math.min(MITAD, Math.max(0, puntos));
+/** Los puntos que van en las malas: los primeros 15 (20 a 40). */
+export const malasDe = (puntos: number, meta: Meta = META): number =>
+  Math.min(mitadDe(meta), Math.max(0, puntos));
 
-/** Los que van en las buenas: lo que pase de 15. */
-export const buenasDe = (puntos: number): number =>
-  Math.min(MITAD, Math.max(0, puntos - MITAD));
+/** Los que van en las buenas: lo que pase de 15 (de 20 a 40). */
+export const buenasDe = (puntos: number, meta: Meta = META): number =>
+  Math.min(mitadDe(meta), Math.max(0, puntos - mitadDe(meta)));
 
 /**
  * El renglón que va debajo del nombre: "7 malas", "1 buena".
@@ -92,17 +127,18 @@ export const buenasDe = (puntos: number): number =>
  * El singular importa: "1 malas" se lee como un error de programación, y esta
  * pantalla tiene que parecer un papel.
  */
-export function comoSeDice(puntos: number): string {
-  const enBuenas = puntos > MITAD;
-  const n = enBuenas ? puntos - MITAD : puntos;
+export function comoSeDice(puntos: number, meta: Meta = META): string {
+  const mitad = mitadDe(meta);
+  const enBuenas = puntos > mitad;
+  const n = enBuenas ? puntos - mitad : puntos;
   const palabra = enBuenas ? (n === 1 ? "buena" : "buenas") : n === 1 ? "mala" : "malas";
   return `${n} ${palabra}`;
 }
 
-/** Quién llegó a 30, o `null` si la partida sigue. */
-export function ganador(cuenta: Cuenta): Lado | null {
-  if (cuenta.nosotros >= META) return "nosotros";
-  if (cuenta.ellos >= META) return "ellos";
+/** Quién llegó a la meta, o `null` si la partida sigue. */
+export function ganador(cuenta: Cuenta, meta: Meta = META): Lado | null {
+  if (cuenta.nosotros >= meta) return "nosotros";
+  if (cuenta.ellos >= meta) return "ellos";
   return null;
 }
 
@@ -118,7 +154,12 @@ export function ganador(cuenta: Cuenta): Lado | null {
 
    Y se guarda, en vez de arrancar en cero cada vez, porque se juega con las
    cartas en la mano: la pantalla se apaga sola, alguien atiende un mensaje, y
-   volver y encontrar la tablita vacía es perder lo único que esto hace. */
+   volver y encontrar la tablita vacía es perder lo único que esto hace.
+
+   La meta va EN LA MISMA CLAVE que los puntos, `{ nosotros, ellos, meta }`, y
+   no aparte: los puntos se recortan al tope de la meta al leerlos, así que si
+   vivieran separados un 35 jugando a 40 podría volver como 30. Lo que guardó
+   alguien antes del 1/11/2026 no tiene `meta`, y eso se lee como 30. */
 
 const CLAVE = "truco-uy:anotador";
 
@@ -133,39 +174,100 @@ const CLAVE = "truco-uy:anotador";
  * Un número fuera de rango no descarta la cuenta entera: se recorta al rango,
  * que conserva la partida en curso. Lo que no es un número entero sí se
  * descarta, porque ahí no hay nada que conservar.
+ *
+ * El rango es el de la meta guardada al lado: hasta 40 si se jugaba a 40.
  */
 function sanear(crudo: unknown): Cuenta {
   if (typeof crudo !== "object" || crudo === null) return { ...CUENTA_VACIA };
   const d = crudo as Record<string, unknown>;
+  const tope = sanearMeta(crudo);
   const bien = (v: unknown): number => {
     if (typeof v !== "number" || !Number.isInteger(v)) return 0;
-    return Math.min(META, Math.max(0, v));
+    return Math.min(tope, Math.max(0, v));
   };
   return { nosotros: bien(d.nosotros), ellos: bien(d.ellos) };
 }
 
-/** Lee la cuenta guardada. Devuelve la vacía si no hay o si el navegador no deja. */
-export function leerCuenta(): Cuenta {
-  if (typeof window === "undefined") return { ...CUENTA_VACIA };
+/** La meta guardada. Sólo un `40` de verdad es 40; cualquier otra cosa, 30. */
+function sanearMeta(crudo: unknown): Meta {
+  if (typeof crudo !== "object" || crudo === null) return META;
+  return (crudo as Record<string, unknown>).meta === 40 ? 40 : META;
+}
+
+/** Lee la cuenta y la meta guardadas. Las de fábrica si no hay o si el navegador no deja. */
+export function leerAnotador(): { cuenta: Cuenta; meta: Meta } {
+  const vacío = { cuenta: { ...CUENTA_VACIA }, meta: META };
+  if (typeof window === "undefined") return vacío;
   try {
     const crudo = window.localStorage.getItem(CLAVE);
-    if (!crudo) return { ...CUENTA_VACIA };
-    return sanear(JSON.parse(crudo));
+    if (!crudo) return vacío;
+    const datos: unknown = JSON.parse(crudo);
+    return { cuenta: sanear(datos), meta: sanearMeta(datos) };
   } catch {
     // Modo privado, cuota llena, JSON corrupto: se sigue anotando igual
-    return { ...CUENTA_VACIA };
+    return vacío;
   }
 }
 
-/** Guarda la cuenta. Si el navegador no deja, se ignora en silencio. */
-export function guardarCuenta(cuenta: Cuenta): void {
+/** Guarda la cuenta y la meta. Si el navegador no deja, se ignora en silencio. */
+export function guardarAnotador(cuenta: Cuenta, meta: Meta): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(CLAVE, JSON.stringify(cuenta));
+    window.localStorage.setItem(
+      CLAVE,
+      JSON.stringify({ nosotros: cuenta.nosotros, ellos: cuenta.ellos, meta }),
+    );
   } catch {
     // Que no se pueda guardar no puede romper la cuenta que estás llevando
   }
 }
 
-/** Se exporta sólo para el test: es la puerta de entrada de datos ajenos. */
+/** Se exportan sólo para el test: son la puerta de entrada de datos ajenos. */
 export const _sanear = sanear;
+export const _sanearMeta = sanearMeta;
+
+/* ══ El cartelito de "tocá el número" ══════════════════════════════════════
+   Sale la primera vez que se entra al anotador y avisa que el 30 se toca para
+   pasar a 40. Hay que acordarse de una sola cosa: si ya salió.
+
+   Clave PROPIA, `truco-uy:anotador-aviso`, y el mismo patrón que
+   `lib/tutorial.ts`: lo único que cuenta como visto es un `true` de verdad, y
+   si el navegador no deja guardar queda visto en memoria por esta sesión, para
+   que no salga cada vez que se vuelve al anotador. Va aparte de la cuenta para
+   que empezar una cuenta nueva no lo vuelva a mostrar. Si alguien lo edita a
+   mano, lo peor que consigue es verlo otra vez, o no verlo. */
+
+const CLAVE_AVISO = "truco-uy:anotador-aviso";
+const VERSION_AVISO = 1;
+
+let avisoEnMemoria = false;
+
+/** ¿Ya salió alguna vez el cartelito? */
+export function avisoMetaVisto(): boolean {
+  if (avisoEnMemoria) return true;
+  if (typeof window === "undefined") return false;
+  try {
+    const crudo = window.localStorage.getItem(CLAVE_AVISO);
+    if (!crudo) return false;
+    const d: unknown = JSON.parse(crudo);
+    return typeof d === "object" && d !== null && (d as Record<string, unknown>).visto === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Lo marca como visto. Si no se puede guardar, queda en memoria. */
+export function marcarAvisoMeta(): void {
+  avisoEnMemoria = true;
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(CLAVE_AVISO, JSON.stringify({ version: VERSION_AVISO, visto: true }));
+  } catch {
+    // Cuota llena o modo privado: queda en memoria por esta sesión
+  }
+}
+
+/** Sólo para los tests: olvida lo que quedó en memoria. */
+export function _olvidarAviso(): void {
+  avisoEnMemoria = false;
+}

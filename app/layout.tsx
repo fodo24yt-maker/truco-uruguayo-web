@@ -8,6 +8,7 @@ import { Anuncios } from "@/components/Anuncios";
 import { DialogoDesbloqueo } from "@/components/DialogoDesbloqueo";
 import { Musica } from "@/components/Musica";
 import { PantallaCarga } from "@/components/PantallaCarga";
+import { TutorialMesa } from "@/components/TutorialMesa";
 import { NOMBRE_SITIO, URL_SITIO } from "@/lib/sitio";
 import "./globals.css";
 
@@ -179,6 +180,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             sigue de una pantalla a otra sin cortarse. Arranca con el primer
             toque; cómo suena está en `lib/audio.ts`. */}
         <Musica />
+
+        {/* El tutorial de la mesa (desde el 29/10/2026): sale la primera vez
+            que entrás a Jugar y se vuelve a ver desde Ajustes. Cerrado no
+            dibuja nada. Va acá, y no en `/jugar`, porque Ajustes lo abre desde
+            cualquier pantalla. */}
+        <TutorialMesa />
 
         {/* La pantalla de carga, SÓLO en la app. `NEXT_PUBLIC_DESTINO` se fija
             al compilar: en el HTML de la app viene puesta desde el primer

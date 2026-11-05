@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 // Se actualiza cada vez que una función nueva toque datos del usuario.
-const ULTIMA_ACTUALIZACION = "2 de octubre de 2026";
+const ULTIMA_ACTUALIZACION = "30 de octubre de 2026";
 
 export default function Privacidad() {
   return (
@@ -98,7 +98,8 @@ export default function Privacidad() {
             <strong>La cuenta del anotador</strong>: dos números, los puntos de
             cada lado de la tablita. Se guarda para que no se te pierda la
             cuenta si se apaga la pantalla en medio de una partida, y se borra
-            sola cuando apretás empezar de nuevo.
+            sola cuando apretás empezar de nuevo. Al lado guarda a cuánto se
+            juega (30 o 40) y si ya viste el aviso que explica cómo cambiarlo.
           </p>
           <p>
             <strong>Cómo jugás</strong>: los rivales de las últimas estrellas te
@@ -122,6 +123,10 @@ export default function Privacidad() {
             <strong>Los ejercicios de Aprender que acertaste</strong>: cuáles,
             nada más. Sirve para abrir la Gira nacional cuando los acertás
             todos.
+          </p>
+          <p>
+            <strong>Si ya viste cómo se usa la mesa</strong>: un sí o un no,
+            para que esa explicación salga sola una sola vez.
           </p>
           <p>
             Eso se guarda en el almacenamiento local de tu navegador

@@ -12,6 +12,223 @@
 
 ---
 
+## 2026-11-01 — El anotador a 30 o a 40, y el cartelito de la primera vez
+
+**El pedido.** Poder jugar a 30 o a 40 tocando el número que está entre
+"Nosotros" y "Ellos", y que la primera vez salga un cartelito con una flecha
+apuntando a ese número diciendo que se toca para cambiarlo. **Sin tocar nada
+de las otras secciones.**
+
+**Lo que decidió Santiago** (preguntado antes de arrancar):
+
+- **A 40 son 20 malas y 20 buenas**: cuatro cuadraditos por mitad en vez de
+  tres. La raya sigue en la mitad justa.
+- **De 40 a 30 no se pasa si alguien va arriba de 30.** La otra opción era
+  recortarle los puntos, y eso no lo deshace nadie.
+- **Privacidad lleva una frase más**, porque decía que el anotador guarda "dos
+  números" y ahora guarda también la meta y si viste el aviso.
+
+**Cómo quedó:**
+
+- **`lib/anotador.ts`**: todo lo que depende de a cuánto se juega (`sumar`,
+  `malasDe`, `buenasDe`, `comoSeDice`, `ganador`) recibe la `meta` con **30 de
+  fábrica**: llamado sin ella da exactamente lo mismo que antes, y por eso las
+  pruebas viejas no se tocaron. Nuevas: `mitadDe`, `gruposPorMitad`,
+  `otraMeta`, `puedeCambiarA`.
+- **La meta va en la MISMA clave `truco-uy:anotador`**, como
+  `{nosotros, ellos, meta}`. No es prolijidad: los puntos se recortan al tope
+  de la meta al leerlos, y si vivieran separados un 35 jugando a 40 podía
+  volver como 30. Lo guardado antes de hoy no tiene `meta` y se lee como 30.
+  Sólo un `40` número cuenta como 40 (`"40"`, `35`, basura → 30).
+- **El cartelito tiene clave propia, `truco-uy:anotador-aviso`**, copiando el
+  patrón de `lib/tutorial.ts`: sólo `visto: true` cuenta, y si el navegador no
+  deja guardar queda visto en memoria por la sesión. Va aparte para que
+  "empezar de nuevo" no lo vuelva a mostrar.
+- **`app/anotador/page.tsx`**: el `<p>` del número pasó a `<button>` con un
+  subrayado de puntitos para que se note tocable. Usa `aria-disabled` y no
+  `disabled`: trabado (alguien en 31 a 40) igual tiene que poder cerrar el
+  cartelito; lo que no hace es sonar (`data-sonido="no"`).
+- **El cartelito** (`AvisoMeta`) cuelga debajo del número, bordo y crema como
+  el botón "Borrar", con un piquito en SVG. Se cierra tocándolo o tocando el
+  número. Sin `filter`, sin `opacity`, sin animación: las prohibiciones de la
+  cabecera del archivo. "a 30 o a 40" va en `whitespace-nowrap` porque en la
+  primera captura el 40 quedaba solo en el renglón de abajo.
+- **Las semillas del dibujo**: `ESQUINAS` pasó de 12 a 16 grupos y la de Ellos
+  arranca en `2 * gruposPorMitad(meta)`, que a 30 es el 6 de siempre. Como cada
+  grupo sale de su propio índice, a 30 los palitos son los mismos.
+- "Empezar de nuevo" borra la cuenta y **deja la meta**: si jugaban a 40,
+  siguen a 40.
+
+**Verificado:**
+
+- `tsc` limpio; `npm test` 384/384 (12 pruebas nuevas en
+  `lib/anotador.test.ts`: a 40, el cambio trabado, la meta guardada con basura,
+  ida y vuelta por un `localStorage` de mentira, y el cartelito).
+- Playwright a 320×568, 360×800 y 1280×800 (script en el scratchpad, no en el
+  repo): 57 comprobaciones bien. La flecha cae centrada sobre el número; a 40
+  hay 8 cuadraditos por columna y no scrollea ni en la pantalla baja
+  (cuadraditos de 41 px ahí); 31 no gana a 40 y 40 sí; al recargar sigue a 40
+  con los puntos.
+- **Captura a 30, antes contra después, píxel por píxel**: lo único distinto
+  son 4 px de alto debajo del número, el subrayado. La tablita, idéntica.
+- `mirar-web.mjs`: TODO OK.
+- Revisión de seguridad (`security-review` y `09-web-security`): sin
+  hallazgos. Lo nuevo que sale de `localStorage` se valida campo por campo y no
+  se mezcla con nada.
+- En el teléfono no se miró.
+
+**Ojo:** toda herramienta que saque fotos del anotador con un perfil limpio va
+a ver el cartelito. Si hace falta la tablita sola, sembrar
+`truco-uy:anotador-aviso` = `{"version":1,"visto":true}`, igual que ya se
+hace con el tutorial de la mesa.
+
+---
+
+## 2026-10-29 — La sombra de la muestra acostada, y el tutorial de la mesa
+
+Santiago confirmó con el APK que **los píxeles de Aprender quedaron
+arreglados** (el arreglo del 28/10 lo commiteó él). Pidió dos cosas más, en
+este orden.
+
+### 1. La sombra de la muestra acostada (Aprender)
+
+**Lo que vio:** "las cartas que se suelen poner como muestra están acostadas y
+la sombra está estirada y sobrepasa la carta".
+
+**La causa.** Se miró en captura, no se adivinó: es geometría pura y no tiene
+nada que ver con el arreglo de los píxeles.
+
+- La muestra va `rotate-90`, y **el giro se lleva la sombra con la carta**.
+- La sombra de las cartas (`--sombra-carta`) cae 10 px abajo. Girada, caía
+  ~20 px **a la izquierda**: una mancha al costado y nada abajo. Al lado de la
+  carta parada de "Tiró", que sí la tiene abajo, se veía mal.
+
+**La cuenta.** `rotate: 90deg` lleva el (x,y) de adentro de la carta a (−y,x)
+en pantalla, así que:
+
+- la de siempre, (0,10), caía en (−10,0);
+- una sombra corrida en x, (10,0), cae en (0,10): abajo.
+
+**El arreglo:**
+
+- **`herramientas/sombras-duras.mjs`** genera `--sombra-carta-acostada`: la
+  misma receta de `carta` con `x` en lugar de `y`. Son 25 capas, así que el
+  costo de rasterizado es el mismo.
+- **Va atada a `[data-leccion]`, NO a `:root`.** Una variable en `:root` la
+  hereda cada elemento de cada pantalla, y `mirar-aprender --volcar` vuelca
+  también las `--*`: habría visto cambiar la mesa por algo que es de Aprender.
+  El `:root` generado quedó byte a byte igual.
+- **La regla**, en el bloque de las lecciones de `app/globals.css`:
+  `[data-leccion] .carta-acostada { box-shadow: var(--sombra-carta-acostada) }`.
+  Tiene especificidad (0,2,0), así que le gana a `.sombra-carta`.
+- **El gancho** es la clase `carta-acostada` en `Ejemplos.tsx`
+  (`ManoConMuestra`) y en `Ejercicio.tsx`, que sólo usan las lecciones.
+- **`mirar-aprender.mjs`:** `ARREGLO` pasó a una lista de comprobaciones con su
+  propia función. La nueva exige que cada capa del `box-shadow` calculado de
+  cada `.carta-acostada` esté corrida en x>0 y en y=0.
+  - Se probó que rechaza la sombra vieja y `none`, y que acepta la nueva.
+
+**Verificado:**
+
+- `mirar-aprender --comparar`, con dos volcados de antes y uno de después:
+  - **0 cambios en las 8 pantallas de afuera**, la mesa incluida;
+  - adentro de las lecciones sólo cambian la variable heredada y el
+    `box-shadow` de exactamente las 12 muestras acostadas (la-muestra 4,
+    el-envido 6, la-flor 1, el-truco 1).
+- `--css`: 2 reglas nuevas, las dos con `[data-leccion]`, y ninguna se fue.
+- El `will-change` de cada carta sigue en su lugar (lo comprueba el mismo
+  guardián).
+- **Capturas antes/después de las 12 muestras** a 360×800 DPR 2, más una en
+  PC: la mancha de la izquierda desaparece y la sombra cae abajo, igual que la
+  de las cartas de al lado.
+- `tsc` limpio y `npm test` 363/363.
+- En el teléfono no se miró: no estaba conectado.
+
+### 2. El tutorial de la mesa (EN CURSO: esperando el permiso de Santiago)
+
+**El pedido.** La primera vez que alguien toca Jugar, una pantalla con la
+imagen de una partida. Primero se ve todo, y con "Siguiente" va mostrando qué
+es cada cosa: tus cartas, cantar, responder, tu rival, cambiar de rival en
+partida rápida, el canto del rival, la muestra, el historial de cantos y el
+resto.
+
+**Lo que eligió Santiago:**
+
+- **La imagen es una FOTO de la mesa real**, horneada por una herramienta como
+  las texturas, en vez de rearmar la mesa a mano.
+- **Se vuelve a ver desde Ajustes.**
+
+**Por qué la foto (lo que se le planteó):**
+
+- `Mesa()` es una función enorme con estado: no se la puede dejar quieta en un
+  momento elegido sin tocarla.
+- Rearmarla con las mismas piezas era duplicar medio `page.tsx`, y se iba a ir
+  despegando de la mesa de verdad.
+- Además eran decenas de cartas con sombra en una hoja nueva, justo lo que le
+  cuesta al Mali.
+
+**`herramientas/generar-tutorial.mjs` (nuevo):**
+
+- Juega una partida de verdad en el build de la app, con `Math.random` con
+  semilla y un jugador de regla fija:
+  - canta envido al empezar cada mano, para que haya cosas dichas en el
+    diálogo;
+  - quiere todo lo que le cantan;
+  - tira la primera carta que puede;
+  - nunca se va al mazo.
+- Saca dos momentos:
+  - **A**, empieza una mano, te toca y hay puntos;
+  - **B**, te cantaron truco, con lo dicho antes.
+- **Mide las zonas** con los anclajes que la mesa ya tiene (`data-mano`,
+  `data-mesa`, `data-encima`, `data-dialogo`, `data-canto`, los `aria-label`
+  del marcador y de Ayudas).
+- **Escribe** `public/tutorial/{celular,pc}-{a,b}.webp` (42, 45, 54 y 59 KB) y
+  `lib/tutorial-fotos.ts`, generado.
+- **La partida sale IGUAL en cada corrida.** La semilla 1 llega a B en la
+  mano 1 y a A en la mano 7, en el celular y en la PC. Por eso
+  `--comprobar` puede volver a jugarla y avisar si la mesa se movió.
+- **Tres trampas de medición, vistas en las fotos y en las zonas:**
+  - el primer `role=status` de la columna del medallón son los tantos, no el
+    diálogo;
+  - los renglones del diálogo y el "Tu tanto" son bloques del ancho de la
+    columna, así que se mide el texto con un `Range`;
+  - las cartas del abanico van giradas y se salen de `.mano-abanico`, así que
+    se mide cada carta.
+
+**La pantalla (`components/TutorialMesa.tsx`, montada en `app/layout.tsx`):**
+
+- **Hoja opaca** con `role=dialog` y `aria-modal`, en `z-50`, como la de
+  Ajustes.
+- **La foto, lo apagado y el aro van en UN SVG** con el `viewBox` de la
+  pantalla de la foto, así que lo marcado cae justo encima de lo que marca.
+  - Lo apagado es un `path` con agujeros (`evenodd`), sin desenfoque.
+- **La tarjeta** va del lado de la zona con más mesa libre.
+- **Cuándo sale:**
+  - la primera vez que la ruta es `/jugar`, pero nunca debajo de la pantalla de
+    carga, que hace su ensayo pasando por `/jugar` con el perfil nuevo;
+  - mientras está la pantalla de carga, se espera.
+- **Queda visto** al cerrarlo de cualquier forma, en una clave propia
+  (`lib/tutorial.ts`, `truco-uy:tutorial-mesa`, saneada como
+  `lib/progreso.ts`).
+- **Un bug encontrado al probar:** el foco no llegaba a "Siguiente" porque la
+  tarjeta es `invisible` mientras se mide, y a un botón invisible no se le da
+  el foco. Ahora se enfoca recién cuando la tarjeta ya está en su lugar.
+
+**Probado con Playwright, perfil vacío, portada → Jugar** (360×760, 320×568 y
+1366×768): sale, el foco va a "Siguiente", "¡A jugar!" lo cierra y lo guarda, y
+al recargar no vuelve a salir.
+
+**Por la regla de CLAUDE.md hay sólo 3 pasos** (la mesa entera, tus cartas y la
+muestra), y se le mandaron las capturas a Santiago. **Falta, con su permiso:**
+
+- los pasos 4 a 12;
+- la línea en Ajustes y el párrafo en privacidad;
+- sembrar el visto en los guardianes que abren `/jugar` con el perfil vacío
+  (`mirar-carga`, `mirar-anuncios`, `mirar-web` y los jugadores del teléfono);
+- `mirar-tutorial.mjs`.
+
+---
+
 ## 2026-10-28 — Los píxeles de los ejercicios de Aprender
 
 > **CORRECCIÓN, MISMO DÍA A LA NOCHE (léase antes que el resumen de abajo).**

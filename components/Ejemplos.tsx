@@ -63,7 +63,7 @@ export function ManoConMuestra({
     <figure className="my-6">
       <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6">
         <div className="text-center">
-          <Carta carta={laMuestra} ancho={ancho} className="mx-auto rotate-90" />
+          <Carta carta={laMuestra} ancho={ancho} className="carta-acostada mx-auto rotate-90" />
           <p className="mt-4 font-[family-name:var(--font-ui)] text-[11px] uppercase tracking-widest text-tinta/60">
             muestra
           </p>

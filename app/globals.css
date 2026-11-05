@@ -448,6 +448,34 @@ footer {
     0px 3px 0 -7.8px rgba(0,0,0,0.170),
     inset 0 1px 0 rgba(255,255,255,0.28);
 }
+[data-leccion] {
+  --sombra-carta-acostada:
+    10px 0px 0 11.55px rgba(0,0,0,0.013),
+    10px 0px 0 10.05px rgba(0,0,0,0.008),
+    10px 0px 0 8.55px rgba(0,0,0,0.011),
+    10px 0px 0 7.05px rgba(0,0,0,0.016),
+    10px 0px 0 5.55px rgba(0,0,0,0.021),
+    10px 0px 0 4.05px rgba(0,0,0,0.027),
+    10px 0px 0 2.55px rgba(0,0,0,0.033),
+    10px 0px 0 1.05px rgba(0,0,0,0.039),
+    10px 0px 0 -0.45px rgba(0,0,0,0.045),
+    10px 0px 0 -1.95px rgba(0,0,0,0.050),
+    10px 0px 0 -3.45px rgba(0,0,0,0.054),
+    10px 0px 0 -4.95px rgba(0,0,0,0.055),
+    10px 0px 0 -6.45px rgba(0,0,0,0.055),
+    10px 0px 0 -7.95px rgba(0,0,0,0.052),
+    10px 0px 0 -9.45px rgba(0,0,0,0.047),
+    10px 0px 0 -10.95px rgba(0,0,0,0.040),
+    10px 0px 0 -12.45px rgba(0,0,0,0.033),
+    10px 0px 0 -13.95px rgba(0,0,0,0.026),
+    4px 0px 0 1.82px rgba(0,0,0,0.017),
+    4px 0px 0 0.32px rgba(0,0,0,0.031),
+    4px 0px 0 -1.18px rgba(0,0,0,0.062),
+    4px 0px 0 -2.68px rgba(0,0,0,0.099),
+    4px 0px 0 -4.18px rgba(0,0,0,0.126),
+    4px 0px 0 -5.68px rgba(0,0,0,0.128),
+    4px 0px 0 -7.18px rgba(0,0,0,0.101);
+}
 /* ── fin de lo generado por sombras-duras.mjs ── */
 
 /* Las que van por clase. La de la carta era `shadow-lg shadow-black/50` de
@@ -685,6 +713,17 @@ footer {
    (11/10). Cada pantalla se mide en esa pantalla. */
 [data-leccion] .carta {
   will-change: transform;
+}
+
+/* LA MUESTRA ACOSTADA (29/10/2026). Va `rotate-90`, y el giro se lleva la
+   sombra con la carta: la de siempre cae 10 px abajo, y girada caía ~20 px a
+   la IZQUIERDA, una mancha al costado ("estirada, se sale de la carta", lo vio
+   Santiago). `--sombra-carta-acostada` es la misma corrida en x, que girada
+   cae abajo; la genera `herramientas/sombras-duras.mjs`. OJO: con
+   `-rotate-90` caería ARRIBA. La clase la ponen `Ejemplos.tsx` y
+   `Ejercicio.tsx`, y `mirar-aprender.mjs` falla si se pierde. */
+[data-leccion] .carta-acostada {
+  box-shadow: var(--sombra-carta-acostada);
 }
 
 /* Cada departamento del mapa de la gira. Al pasar por encima se aclara apenas:

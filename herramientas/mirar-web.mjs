@@ -38,6 +38,15 @@ await mkdir(SALIDA, { recursive: true });
 const nav = await chromium.launch();
 let fallos = 0;
 
+/* Cada contexto, con el tutorial de la mesa ya visto. Sale la primera vez que
+   se entra a Jugar (29/10/2026) y es una hoja encima de todo: esto mira las
+   pantallas de abajo. El tutorial lo mira `mirar-tutorial.mjs`. */
+const contexto = async (opciones) => {
+  const ctx = await nav.newContext(opciones);
+  await ctx.addInitScript(() => localStorage.setItem("truco-uy:tutorial-mesa", JSON.stringify({ version: 1, visto: true })));
+  return ctx;
+};
+
 function falla(donde, que) {
   fallos++;
   console.log(`FALLA ${donde}  ${que}`);
@@ -121,7 +130,7 @@ console.log("el armazón de app:");
     });
 
   for (const [ancho, alto] of TAMANOS) {
-    const ctx = await nav.newContext({ viewport: { width: ancho, height: alto } });
+    const ctx = await contexto({ viewport: { width: ancho, height: alto } });
     const pag = await ctx.newPage();
     const etiqueta = `${ancho}x${alto}`;
     const antes = fallos;
@@ -199,7 +208,7 @@ console.log("\nel panel de ajustes:");
 {
   const DESTINOS = ["/aprender", "/jugar", "/anotador"];
   for (const [ancho, alto] of TAMANOS) {
-    const ctx = await nav.newContext({ viewport: { width: ancho, height: alto } });
+    const ctx = await contexto({ viewport: { width: ancho, height: alto } });
     const pag = await ctx.newPage();
     const etiqueta = `${ancho}x${alto}`;
     const antes = fallos;
@@ -283,7 +292,7 @@ console.log("\nel panel de ajustes:");
    tiene que seguir en 25 con el silencio puesto. */
 console.log("\nel volumen se guarda:");
 {
-  const ctx = await nav.newContext({ viewport: { width: 390, height: 844 } });
+  const ctx = await contexto({ viewport: { width: 390, height: 844 } });
   const pag = await ctx.newPage();
   const antes = fallos;
 
@@ -374,7 +383,7 @@ console.log("\naprender, en un celular:");
 {
   const RUTAS = ["/aprender", "/aprender/la-flor", "/legales/privacidad"];
   for (const [ancho, alto] of TAMANOS) {
-    const ctx = await nav.newContext({ viewport: { width: ancho, height: alto } });
+    const ctx = await contexto({ viewport: { width: ancho, height: alto } });
     const pag = await ctx.newPage();
     for (const ruta of RUTAS) {
       await abrir(pag, ruta);
@@ -418,7 +427,7 @@ console.log("\naprender, en un celular:");
    El progreso se siembra a mano en el `localStorage`, que es de donde sale. */
 console.log("\nla vitrina de trofeos:");
 for (const [ancho, alto] of TAMANOS) {
-  const ctx = await nav.newContext({ viewport: { width: ancho, height: alto } });
+  const ctx = await contexto({ viewport: { width: ancho, height: alto } });
   const pag = await ctx.newPage();
   const etiqueta = `${ancho}x${alto}`;
 
@@ -502,7 +511,7 @@ for (const [ancho, alto] of TAMANOS) {
    quiere, y a veces no tiene con qué. */
 console.log("\nsubir un canto que te subieron:");
 {
-  const ctx = await nav.newContext({ viewport: { width: 390, height: 844 } });
+  const ctx = await contexto({ viewport: { width: 390, height: 844 } });
   const pag = await ctx.newPage();
   let visto = 0;
 
@@ -564,7 +573,7 @@ console.log("\nsubir un canto que te subieron:");
    hacía invisible a la última baza. */
 console.log("\nlevantar la mesa al terminar la mano:");
 {
-  const ctx = await nav.newContext({ viewport: { width: 390, height: 844 } });
+  const ctx = await contexto({ viewport: { width: 390, height: 844 } });
   const pag = await ctx.newPage();
   let listo = false;
 
@@ -646,7 +655,7 @@ for (const [ancho, alto] of [
   [390, 844],
   [1440, 900],
 ]) {
-  const ctx = await nav.newContext({ viewport: { width: ancho, height: alto } });
+  const ctx = await contexto({ viewport: { width: ancho, height: alto } });
   const pag = await ctx.newPage();
   const etiqueta = `${ancho}x${alto}`;
   let visto = false;

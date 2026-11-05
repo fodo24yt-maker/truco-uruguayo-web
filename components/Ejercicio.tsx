@@ -93,7 +93,7 @@ export function Ejercicio({
         <div className="my-4 flex flex-wrap items-end justify-center gap-4 sm:gap-6">
           {laMuestra && (
             <div className="text-center">
-              <Carta carta={laMuestra} className="mx-auto w-[52px] rotate-90 sm:w-[62px]" />
+              <Carta carta={laMuestra} className="carta-acostada mx-auto w-[52px] rotate-90 sm:w-[62px]" />
               <p className="mt-4 font-[family-name:var(--font-ui)] text-[10px] uppercase tracking-widest text-tinta/55">
                 muestra
               </p>

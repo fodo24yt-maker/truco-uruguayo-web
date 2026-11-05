@@ -124,6 +124,15 @@ export const SOMBRAS_MESA = {
     ...sinDesenfoque({ y: 3, radio: 10, spread: -1, ...NEGRO, a: 0.85 }),
     "inset 0 1px 0 rgba(255,255,255,0.28)",
   ],
+  /* La de `carta`, para la muestra ACOSTADA de las lecciones (`rotate-90`,
+     29/10/2026). El giro se lleva la sombra con la carta: `rotate: 90deg`
+     manda el (x,y) de adentro a (−y,x) en pantalla, así que la de siempre
+     (0,10) caía en (−10,0), una mancha a la IZQUIERDA y nada abajo. Corrida
+     en x, (10,0) cae en (0,10): abajo, como la de las cartas paradas. */
+  "carta-acostada": [
+    ...sinDesenfoque({ x: 10, radio: 15, spread: -3, ...NEGRO, a: 0.5 }),
+    ...sinDesenfoque({ x: 4, radio: 6, spread: -4, ...NEGRO, a: 0.5 }),
+  ],
 };
 
 // ── Escribirlas en `app/globals.css` ──────────────────────────────────────
@@ -132,12 +141,17 @@ export const SOMBRAS_MESA = {
    de `globals.css` y no se editan a mano: igual que las texturas de la mesa,
    si hay que cambiar una sombra se cambia acá y se vuelve a correr. */
 export const EN_USO = ["mano", "carta", "halo", "baza", "medallon", "globo", "canto"];
+/* Las que usan SÓLO las lecciones van atadas a `[data-leccion]` y no a
+   `:root`: una variable en `:root` la hereda cada elemento de cada pantalla,
+   y `herramientas/mirar-aprender.mjs` (que vuelca también las `--*`) vería
+   cambiar la mesa y el menú por algo que es de Aprender. */
+export const EN_LECCIONES = ["carta-acostada"];
 const DESDE = "/* ── generado por `node herramientas/sombras-duras.mjs --escribir`: no editar a mano ── */";
 const HASTA = "/* ── fin de lo generado por sombras-duras.mjs ── */";
 
 export function bloqueCss() {
-  const vars = EN_USO.map((n) => `  --sombra-${n}:\n    ${SOMBRAS_MESA[n].join(",\n    ")};`);
-  return `${DESDE}\n:root {\n${vars.join("\n")}\n}\n${HASTA}`;
+  const variables = (nombres) => nombres.map((n) => `  --sombra-${n}:\n    ${SOMBRAS_MESA[n].join(",\n    ")};`).join("\n");
+  return `${DESDE}\n:root {\n${variables(EN_USO)}\n}\n[data-leccion] {\n${variables(EN_LECCIONES)}\n}\n${HASTA}`;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -151,7 +165,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       process.exit(1);
     }
     writeFileSync(ruta, css.slice(0, i) + bloqueCss() + css.slice(j + HASTA.length));
-    console.log(`✓ app/globals.css: ${EN_USO.map((n) => `--sombra-${n} (${SOMBRAS_MESA[n].length} capas)`).join(", ")}`);
+    console.log(`✓ app/globals.css: ${[...EN_USO, ...EN_LECCIONES].map((n) => `--sombra-${n} (${SOMBRAS_MESA[n].length} capas)`).join(", ")}`);
   } else {
     for (const [nombre, capas] of Object.entries(SOMBRAS_MESA)) {
       console.log(`/* ${nombre}: ${capas.length} capas */\n${capas.join(",\n")};\n`);

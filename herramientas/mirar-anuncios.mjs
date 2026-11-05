@@ -57,6 +57,10 @@ async function telefono({ ancho = 390, alto = 844, control = {}, guardado = {} }
       window.CapacitorCustomPlatform = { name: "android", plugins: {} };
       window.Capacitor = { isNativePlatform: () => true };
       window.__trucoAnunciosSimulados = { registro: [], ...control };
+      /* El tutorial de la mesa (29/10/2026) sale la primera vez que se entra
+         a Jugar y taparía los botones que se tocan acá. Lo mira
+         `mirar-tutorial.mjs`. */
+      localStorage.setItem("truco-uy:tutorial-mesa", JSON.stringify({ version: 1, visto: true }));
       // Lo guardado se siembra UNA vez: si no, cada recarga lo volvería a pisar
       if (!sessionStorage.getItem("sembrado")) {
         for (const [k, v] of Object.entries(guardado)) localStorage.setItem(k, JSON.stringify(v));

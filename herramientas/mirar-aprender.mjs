@@ -43,11 +43,36 @@ const despues = (bandera) => { const i = args.indexOf(bandera); return i === -1 
 const LECCIONES = ["la-baraja", "jerarquia", "la-muestra", "la-mano", "el-envido", "la-flor", "el-truco", "puntos-y-partida"];
 const OTRAS = ["/", "/jugar/", "/jugar/mesa/", "/jugar/gira/", "/anotador/", "/aprender/", "/legales/privacidad/", "/legales/terminos/"];
 
-/* Lo que tiene que valer en las lecciones, y en ningún otro lado:
-   [selector, propiedad, valor]. Es el arreglo de `app/globals.css` (cada
-   carta de la lección en su propia capa), medido en `Historial.md`. El de
-   antes (el artículo en su búfer) estaba mal y se sacó. */
-export const ARREGLO = [["[data-leccion] .carta", "will-change", "transform"]];
+/* Lo que tiene que valer en las lecciones, y en ningún otro lado. Son los
+   arreglos de `app/globals.css`, medidos en `Historial.md`:
+   - cada carta de la lección en su propia capa (28/10/2026; el de antes, el
+     artículo en su búfer, estaba mal y se sacó);
+   - la muestra acostada con la sombra cayendo abajo y no al costado
+     (29/10/2026): cada capa del `box-shadow` calculado corrida en x, nunca
+     en y, que el `rotate-90` vuelve "abajo".
+   `cuales` son los elementos que se miran: se mira cada uno, no el selector
+   del arreglo, que sin el gancho no encontraría nada y "pasaría". */
+const capasDeSombra = (v) => {
+  const capas = [];
+  let hondo = 0, desde = 0;
+  for (let i = 0; i < v.length; i++) {
+    if (v[i] === "(") hondo++;
+    else if (v[i] === ")") hondo--;
+    else if (v[i] === "," && hondo === 0) { capas.push(v.slice(desde, i)); desde = i + 1; }
+  }
+  capas.push(v.slice(desde));
+  // "rgba(0, 0, 0, 0.013) 10px 0px 0px 11.55px" → [10, 0, 0, 11.55]
+  return capas.map((c) => c.replace(/rgba?\([^)]*\)/, "").trim().split(/\s+/).map(parseFloat));
+};
+export const ARREGLO = [
+  { cuales: "article.prosa .carta", prop: "will-change", dice: "will-change = transform", cumple: (v) => v === "transform" },
+  {
+    cuales: "article.prosa .carta-acostada",
+    prop: "box-shadow",
+    dice: "la sombra cae abajo (capas corridas en x, no en y)",
+    cumple: (v) => { const c = capasDeSombra(v); return c.length > 1 && c.every(([x, y]) => x > 0 && y === 0); },
+  },
+];
 
 /* Todos los estilos calculados de cada elemento, con un camino estable
    (etiqueta y posición entre hermanos) para encontrarlo del otro lado. */
@@ -93,15 +118,14 @@ async function volcar(carpeta, base) {
     await pag.screenshot({ path: path.join(carpeta, `${nombre}.png`), fullPage: !ruta.startsWith("/jugar") && ruta !== "/" });
     resumen[ruta] = hashes;
     if (ruta.startsWith("/aprender/") && ruta !== "/aprender/") {
-      /* Se mira cada carta de la lección (no el selector del arreglo, que
-         sin el gancho no encontraría nada y "pasaría"). Una lección sin
-         cartas no tiene nada que revisar. */
-      for (const [sel, prop, valor] of ARREGLO) {
-        const v = await pag.evaluate(([p]) => [...document.querySelectorAll("article.prosa .carta")].map((e) => getComputedStyle(e).getPropertyValue(p)), [prop]);
-        if (!v.length) { console.log(`   —     ${ruta} sin cartas`); continue; }
-        const mal = v.filter((x) => x !== valor).length;
+      /* Una lección sin cartas (o sin muestra acostada) no tiene nada que
+         revisar en ese arreglo. */
+      for (const { cuales, prop, dice, cumple } of ARREGLO) {
+        const v = await pag.evaluate(([c, p]) => [...document.querySelectorAll(c)].map((e) => getComputedStyle(e).getPropertyValue(p)), [cuales, prop]);
+        if (!v.length) { console.log(`   —     ${ruta} sin ${cuales}`); continue; }
+        const mal = v.filter((x) => !cumple(x)).length;
         if (mal) fallas++;
-        console.log(`   ${mal ? "FALLA" : "ok   "} ${ruta} ${v.length} cartas, ${prop}${mal ? `: ${mal} sin ${valor} (${sel})` : ` = ${valor}`}`);
+        console.log(`   ${mal ? "FALLA" : "ok   "} ${ruta} ${v.length} × ${cuales}: ${mal ? `${mal} SIN ${dice}` : dice}`);
       }
     }
     console.log(`   ${ruta.padEnd(28)} ${Object.keys(hashes).length} elementos`);

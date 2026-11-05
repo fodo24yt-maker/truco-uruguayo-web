@@ -67,6 +67,11 @@ async function telefono({ js = true, desbloqueos = null, progreso = null } = {})
       window.Capacitor = { isNativePlatform: () => true };
       if (d.desbloqueos) localStorage.setItem("truco-uy:desbloqueos", JSON.stringify(d.desbloqueos));
       if (d.progreso) localStorage.setItem("truco-uy:progreso", JSON.stringify(d.progreso));
+      /* El tutorial de la mesa sale la primera vez que se entra a Jugar
+         (29/10/2026) y taparía el camino portada → Jugar → mesa que se mide
+         acá. Lo suyo, incluido que NO salga durante el ensayo, lo comprueba
+         `mirar-tutorial.mjs`. */
+      localStorage.setItem("truco-uy:tutorial-mesa", JSON.stringify({ version: 1, visto: true }));
 
       // Cada imagen de escena que entra al DOM (o cambia de `src`): ¿estaba lista?
       window.__escenas = [];

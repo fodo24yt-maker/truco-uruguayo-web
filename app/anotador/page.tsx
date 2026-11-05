@@ -37,16 +37,22 @@ import { portero } from "@/lib/entrada";
 import {
   CUENTA_VACIA,
   type Cuenta,
-  GRUPOS_POR_MITAD,
   type Lado,
+  MAX_GRUPOS_POR_MITAD,
   META,
+  type Meta,
+  avisoMetaVisto,
   buenasDe,
   comoSeDice,
   ganador,
-  guardarCuenta,
-  leerCuenta,
+  gruposPorMitad,
+  guardarAnotador,
+  leerAnotador,
   malasDe,
+  marcarAvisoMeta,
+  otraMeta,
   palitosDelGrupo,
+  puedeCambiarA,
   sumar,
 } from "@/lib/anotador";
 
@@ -63,8 +69,8 @@ const NOMBRE: Record<Lado, string> = { nosotros: "Nosotros", ellos: "Ellos" };
    palitos que ya estaban. Además de verse mal, es repintar la pantalla entera
    cada vez que apretás `+`.
 
-   Se calcula UNA vez al cargar el módulo —doce grupos, cuatro esquinas cada
-   uno— así que dibujar no cuesta ni una multiplicación. */
+   Se calcula UNA vez al cargar el módulo —dieciséis grupos, cuatro esquinas
+   cada uno— así que dibujar no cuesta ni una multiplicación. */
 
 /** Un "azar" que siempre devuelve lo mismo para el mismo número, entre -1 y 1. */
 const pulso = (n: number): number => {
@@ -81,11 +87,12 @@ const ESQUINAS_RECTAS = [
 ];
 
 /**
- * Las esquinas ya torcidas de los doce grupos que puede haber en pantalla:
- * seis por lado, dos lados. El índice es la semilla, así que el mismo grupo
- * sale siempre igual.
+ * Las esquinas ya torcidas de los grupos que puede haber en pantalla: a 40 son
+ * ocho por lado, dos lados. El índice es la semilla, así que el mismo grupo
+ * sale siempre igual, y como cada grupo sale de su propio índice los doce de
+ * la partida a 30 quedaron idénticos a cuando sólo se jugaba a 30.
  */
-const ESQUINAS = Array.from({ length: 12 }, (_, g) =>
+const ESQUINAS = Array.from({ length: 2 * 2 * MAX_GRUPOS_POR_MITAD }, (_, g) =>
   ESQUINAS_RECTAS.map((p, i) => ({
     x: p.x + pulso(g * 8 + i * 2) * 1.15,
     y: p.y + pulso(g * 8 + i * 2 + 1) * 1.15,
@@ -156,10 +163,13 @@ function Grupo({ semilla, palitos }: { semilla: number; palitos: number }) {
  */
 function Mitad({
   puntos,
+  grupos,
   desdeSemilla,
   className = "",
 }: {
   puntos: number;
+  /** Tres a 30, cuatro a 40. */
+  grupos: number;
   desdeSemilla: number;
   className?: string;
 }) {
@@ -169,12 +179,11 @@ function Mitad({
          de relleno que se saca es un píxel más de cuadradito. En un celular de
          568 de alto el renglón entero mide 49px. */
       className={`grid min-h-0 place-items-center gap-y-0.5 px-2 py-1 ${className}`}
-      /* Los renglones se reparten el alto en partes iguales. Sale de
-         GRUPOS_POR_MITAD y no de un 3 escrito a mano: el día que la partida sea
-         a 40, esto se acomoda solo. */
-      style={{ gridTemplateRows: `repeat(${GRUPOS_POR_MITAD}, minmax(0, 1fr))` }}
+      /* Los renglones se reparten el alto en partes iguales. Sale de la meta y
+         no de un 3 escrito a mano: a 40 son cuatro y esto se acomoda solo. */
+      style={{ gridTemplateRows: `repeat(${grupos}, minmax(0, 1fr))` }}
     >
-      {Array.from({ length: GRUPOS_POR_MITAD }, (_, i) => (
+      {Array.from({ length: grupos }, (_, i) => (
         <Grupo key={i} semilla={desdeSemilla + i} palitos={palitosDelGrupo(puntos, i)} />
       ))}
     </div>
@@ -189,19 +198,31 @@ function Mitad({
  * de que la raya de malas/buenas quede alineada entre las dos columnas sin que
  * nadie mida nada: las dos columnas parten el mismo alto por la mitad.
  */
-function Columna({ lado, puntos, onSumar }: { lado: Lado; puntos: number; onSumar: () => void }) {
-  const semilla = lado === "nosotros" ? 0 : 6;
+function Columna({
+  lado,
+  puntos,
+  meta,
+  onSumar,
+}: {
+  lado: Lado;
+  puntos: number;
+  meta: Meta;
+  onSumar: () => void;
+}) {
+  const grupos = gruposPorMitad(meta);
+  // Ellos arranca después de los de Nosotros: a 30 es el 6 de siempre
+  const semilla = lado === "nosotros" ? 0 : 2 * grupos;
 
   return (
     <button
       type="button"
       onClick={onSumar}
       // Con la columna llena ya no suma: un palito que no se dibuja no suena.
-      data-sonido={puntos < META ? "palito" : "no"}
-      aria-label={`${NOMBRE[lado]}: ${comoSeDice(puntos)}. Tocá para sumar un punto`}
+      data-sonido={puntos < meta ? "palito" : "no"}
+      aria-label={`${NOMBRE[lado]}: ${comoSeDice(puntos, meta)}. Tocá para sumar un punto`}
       className="grid min-h-0 grid-rows-2 text-left text-bordo transition-colors hover:bg-tinta/5"
     >
-      <Mitad puntos={malasDe(puntos)} desdeSemilla={semilla} />
+      <Mitad puntos={malasDe(puntos, meta)} grupos={grupos} desdeSemilla={semilla} />
       {/* LA RAYA DEL MEDIO VA EN LA PROPIA MITAD, y no en un <div> alrededor.
           Hasta acá las malas, de acá para abajo las buenas.
 
@@ -216,8 +237,9 @@ function Columna({ lado, puntos, onSumar }: { lado: Lado; puntos: number; onSuma
           Sin el envoltorio, la mitad es el hijo directo de la grilla, hereda el
           alto del renglón y los seis cuadraditos miden lo mismo. */}
       <Mitad
-        puntos={buenasDe(puntos)}
-        desdeSemilla={semilla + GRUPOS_POR_MITAD}
+        puntos={buenasDe(puntos, meta)}
+        grupos={grupos}
+        desdeSemilla={semilla + grupos}
         className="border-t-2 border-tinta/25"
       />
     </button>
@@ -228,11 +250,13 @@ function Columna({ lado, puntos, onSumar }: { lado: Lado; puntos: number; onSuma
 function Controles({
   lado,
   puntos,
+  meta,
   espejado,
   onCambiar,
 }: {
   lado: Lado;
   puntos: number;
+  meta: Meta;
   /** El lado de Ellos va al revés, para que cada `+` quede bajo su columna. */
   espejado?: boolean;
   onCambiar: (cuánto: number) => void;
@@ -255,7 +279,7 @@ function Controles({
       key="mas"
       type="button"
       onClick={() => onCambiar(1)}
-      disabled={puntos === META}
+      disabled={puntos === meta}
       data-sonido="palito"
       aria-label={`Sumarle un punto a ${NOMBRE[lado]}`}
       className="h-11 min-w-0 flex-1 rounded-full bg-quiero font-[family-name:var(--font-ui)] text-2xl leading-none text-crema transition-colors hover:brightness-110 disabled:bg-quiero/25 disabled:text-crema/40"
@@ -269,9 +293,43 @@ function Controles({
   );
 }
 
+/**
+ * El cartelito de la primera vez: "tocá el número". Cuelga debajo del número,
+ * con la flechita apuntándole, y se va tocándolo a él o al número.
+ *
+ * Bordo y crema, como el botón de "Borrar": es lo único que habla desde fuera
+ * del papel. La sombra va en `box-shadow`, por las prohibiciones de arriba, y
+ * no se anima: aparece y se queda quieto hasta que lo tocás.
+ */
+function AvisoMeta({ onCerrar }: { onCerrar: () => void }) {
+  return (
+    <button
+      type="button"
+      data-aviso-meta
+      data-sonido="volver"
+      onClick={onCerrar}
+      className="absolute left-1/2 top-full z-10 mt-1 flex w-52 -translate-x-1/2 flex-col items-center text-crema"
+    >
+      {/* La flecha: un piquito pegado al globo, apuntando para arriba. Mismo
+          bordo, así se lee como una sola pieza. */}
+      <svg viewBox="0 0 20 10" className="-mb-px h-2.5 w-5 shrink-0 text-bordo" aria-hidden="true">
+        <path d="M0 10 L10 0 L20 10 Z" fill="currentColor" />
+      </svg>
+      <span className="block w-full rounded-lg bg-bordo px-3 py-2 text-center font-[family-name:var(--font-ui)] text-sm leading-snug shadow-lg shadow-black/40">
+        {/* "a 30 o a 40" no se corta: un 40 solo en el renglón de abajo se lee
+            como otra cosa */}
+        Tocá el número para jugar <span className="whitespace-nowrap">a 30 o a 40</span>
+        <span className="mt-1 block text-xs uppercase tracking-wide text-crema/70">Entendido</span>
+      </span>
+    </button>
+  );
+}
+
 export default function Anotador() {
   const [cuenta, setCuenta] = useState<Cuenta>(CUENTA_VACIA);
+  const [meta, setMeta] = useState<Meta>(META);
   const [confirmando, setConfirmando] = useState(false);
+  const [aviso, setAviso] = useState(false);
 
   /* `cargado` existe para que el primer guardado no le pise la cuenta al que
      vuelve. Sin él, el efecto de guardar corre en el primer dibujo —cuando el
@@ -290,20 +348,32 @@ export default function Anotador() {
 
   // El `localStorage` sólo existe del lado del navegador, igual que en la gira
   useEffect(() => {
-    setCuenta(leerCuenta());
+    const guardado = leerAnotador();
+    setCuenta(guardado.cuenta);
+    setMeta(guardado.meta);
+    setAviso(!avisoMetaVisto());
     setCargado(true);
   }, []);
 
   useEffect(() => {
-    if (cargado) guardarCuenta(cuenta);
-  }, [cuenta, cargado]);
+    if (cargado) guardarAnotador(cuenta, meta);
+  }, [cuenta, meta, cargado]);
 
   const cambiar = (lado: Lado, cuánto: number) => {
     setConfirmando(false);
-    setCuenta((c) => sumar(c, lado, cuánto));
+    setCuenta((c) => sumar(c, lado, cuánto, meta));
   };
 
-  const ganó = ganador(cuenta);
+  const cerrarAviso = () => {
+    setAviso(false);
+    marcarAvisoMeta();
+  };
+
+  // De 40 a 30 no se pasa con alguien arriba de 30: se le borrarían puntos
+  const siguienteMeta = otraMeta(meta);
+  const puedeCambiar = puedeCambiarA(cuenta, siguienteMeta);
+
+  const ganó = ganador(cuenta, meta);
   const vacía = cuenta.nosotros === 0 && cuenta.ellos === 0;
 
   return (
@@ -318,17 +388,43 @@ export default function Anotador() {
             Papel apoyado sobre la mesa del boliche. Los botones quedan FUERA:
             en un anotador de verdad no hay botones sobre el papel. */}
         <div className="papel flex min-h-0 flex-1 flex-col rounded-sm px-2 py-2 shadow-xl shadow-black/50">
-          {/* Los dos nombres y, en el medio, a cuánto se juega */}
+          {/* Los dos nombres y, en el medio, a cuánto se juega. El número se
+              toca: va y viene entre 30 y 40. */}
           <div className="grid shrink-0 grid-cols-3 items-center gap-1 border-b-2 border-tinta/25 px-1 pb-1.5">
             <p className="truncate text-center font-[family-name:var(--font-ui)] text-sm uppercase tracking-wide text-tinta">
               {NOMBRE.nosotros}
             </p>
-            <p
-              className="text-center font-[family-name:var(--font-display)] text-2xl leading-none text-tinta/70"
-              aria-label={`Se juega a ${META} puntos`}
-            >
-              {META}
-            </p>
+            <div className="relative flex justify-center">
+              <button
+                type="button"
+                data-meta
+                onClick={() => {
+                  if (aviso) cerrarAviso();
+                  if (puedeCambiar) {
+                    setConfirmando(false);
+                    setMeta(siguienteMeta);
+                  }
+                }}
+                /* `aria-disabled` y no `disabled`: trabado igual tiene que poder
+                   cerrar el cartelito. Lo que no hace es sonar, porque no cambia
+                   nada. */
+                aria-disabled={!puedeCambiar}
+                data-sonido={puedeCambiar ? undefined : "no"}
+                aria-label={
+                  puedeCambiar
+                    ? `Se juega a ${meta} puntos. Tocá para jugar a ${siguienteMeta}`
+                    : `Se juega a ${meta} puntos. No se puede pasar a ${siguienteMeta}: hay más de ${siguienteMeta} anotados`
+                }
+                /* Subrayado de puntitos: lo justo para que se note que se toca,
+                   como lo que se marca con lápiz en un papel. */
+                className={`rounded px-1.5 text-center font-[family-name:var(--font-display)] text-2xl leading-none text-tinta/70 underline decoration-tinta/30 decoration-dotted decoration-2 underline-offset-4 transition-colors ${
+                  puedeCambiar ? "hover:bg-tinta/5 hover:text-tinta" : "cursor-default"
+                }`}
+              >
+                {meta}
+              </button>
+              {aviso && <AvisoMeta onCerrar={cerrarAviso} />}
+            </div>
             <p className="truncate text-center font-[family-name:var(--font-ui)] text-sm uppercase tracking-wide text-tinta">
               {NOMBRE.ellos}
             </p>
@@ -342,7 +438,7 @@ export default function Anotador() {
                 key={lado}
                 className="truncate text-center font-[family-name:var(--font-ui)] text-xs uppercase tracking-widest text-tinta/55"
               >
-                {comoSeDice(cuenta[lado])}
+                {comoSeDice(cuenta[lado], meta)}
               </p>
             ))}
           </div>
@@ -360,10 +456,16 @@ export default function Anotador() {
             <Columna
               lado="nosotros"
               puntos={cuenta.nosotros}
+              meta={meta}
               onSumar={() => cambiar("nosotros", 1)}
             />
             <div className="grid min-h-0 grid-rows-1 border-l-2 border-tinta/25">
-              <Columna lado="ellos" puntos={cuenta.ellos} onSumar={() => cambiar("ellos", 1)} />
+              <Columna
+                lado="ellos"
+                puntos={cuenta.ellos}
+                meta={meta}
+                onSumar={() => cambiar("ellos", 1)}
+              />
             </div>
           </div>
 
@@ -385,6 +487,7 @@ export default function Anotador() {
           <Controles
             lado="nosotros"
             puntos={cuenta.nosotros}
+            meta={meta}
             onCambiar={(c) => cambiar("nosotros", c)}
           />
 
@@ -434,6 +537,7 @@ export default function Anotador() {
           <Controles
             lado="ellos"
             puntos={cuenta.ellos}
+            meta={meta}
             espejado
             onCambiar={(c) => cambiar("ellos", c)}
           />

@@ -10,6 +10,7 @@ import { gestor } from "@/lib/anuncios";
 import { tocarEfecto } from "@/lib/audio";
 import { RUTA_ANOTADOR, portero } from "@/lib/entrada";
 import { seccionDe, type Seccion } from "@/lib/navegacion";
+import { EVENTO_TUTORIAL } from "@/lib/tutorial";
 import {
   BARRAS,
   PASO,
@@ -308,6 +309,28 @@ export function MenuAjustes() {
                   </Link>
                 );
               })}
+
+              {/* ── EL TUTORIAL DE LA MESA (29/10/2026) ───────────────────
+                  Sale solo la primera vez que entrás a Jugar; ésta es la
+                  forma de volver a verlo. No es un destino: no te lleva a
+                  ningún lado, abre la hoja del tutorial encima de donde
+                  estés (`components/TutorialMesa.tsx`). Este panel se cierra
+                  antes, para que no queden dos diálogos apilados. */}
+              <button
+                type="button"
+                onClick={() => {
+                  setAbierto(false);
+                  window.dispatchEvent(new Event(EVENTO_TUTORIAL));
+                }}
+                className="rounded border-2 border-crema/15 bg-black/25 px-4 py-3 text-left transition-colors hover:border-dorado/60 hover:bg-black/40"
+              >
+                <span className="block font-[family-name:var(--font-ui)] text-base uppercase tracking-wide text-crema">
+                  Cómo se usa la mesa
+                </span>
+                <span className="mt-0.5 block text-sm leading-snug text-crema/60">
+                  Dónde está cada cosa en una partida
+                </span>
+              </button>
 
               {/* ── EL SONIDO ──────────────────────────────────────────────
                   Hasta el 10/9/2026 acá había un botón apagado que decía
